@@ -1,12 +1,10 @@
-import { GitBranch, GitCommitHorizontal, GitMerge, Unplug } from "lucide-react";
+import { GitBranch, GitCommitHorizontal, GitMerge, MousePointerClick, Unplug } from "lucide-react";
 import type { ReactNode } from "react";
 import { Badge } from "../../components/Badge";
-import { StatusLetter } from "../../components/StatusLetter";
-import { displayPath, relativeTime, splitPath } from "../../lib/format";
+import { displayPath, relativeTime } from "../../lib/format";
 import type { RepositoryInfo } from "../../types/git";
-import { headLabel, OPERATION_LABEL } from "../repository/headLabel";
-import { AREA_LABEL, CONFLICT_LABEL, STATUS_META, type ChangeEntry } from "./changeModel";
-import "./DetailsPanel.css";
+import { headLabel, OPERATION_LABEL } from "./headLabel";
+import "./RepositoryOverview.css";
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -17,53 +15,16 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function FileDetails({ entry }: { entry: ChangeEntry }) {
-  const { name, dir } = splitPath(entry.path);
-  return (
-    <>
-      <div className="bl-details__title">
-        <StatusLetter status={entry.status} />
-        <h2 className="text-h3 truncate selectable" title={entry.path}>
-          {name}
-        </h2>
-      </div>
-      <dl className="bl-details__fields">
-        <Field label="Status">
-          {STATUS_META[entry.status].label}
-          {entry.conflict && (
-            <span className="text-secondary"> · {CONFLICT_LABEL[entry.conflict]}</span>
-          )}
-        </Field>
-        <Field label="Area">{AREA_LABEL[entry.area]}</Field>
-        <Field label="Path">
-          <span className="mono selectable bl-details__path">{entry.path}</span>
-        </Field>
-        {dir && <Field label="Folder">{dir}</Field>}
-        {entry.originalPath && (
-          <Field label="Renamed from">
-            <span className="mono selectable bl-details__path">{entry.originalPath}</span>
-          </Field>
-        )}
-        {entry.isSubmodule && <Field label="Type">Submodule</Field>}
-      </dl>
-      <p className="bl-details__note text-small text-muted">
-        Diff viewing, staging and discarding are not available yet.
-      </p>
-    </>
-  );
-}
-
-function RepositoryOverview({ repo }: { repo: RepositoryInfo }) {
+/** Summary of the repository, shown when no file is selected. */
+export function RepositoryOverview({ repo }: { repo: RepositoryInfo }) {
   const head = headLabel(repo.head);
   const commit = repo.headCommit;
   return (
-    <>
-      <div className="bl-details__title">
-        <h2 className="text-h3 truncate">{repo.name}</h2>
-      </div>
-      <dl className="bl-details__fields">
+    <section className="bl-overview" aria-label="Repository details">
+      <h2 className="text-h2 truncate">{repo.name}</h2>
+      <dl className="bl-overview__fields">
         <Field label="Location">
-          <span className="mono selectable bl-details__path">{displayPath(repo.path)}</span>
+          <span className="mono selectable bl-overview__path">{displayPath(repo.path)}</span>
         </Field>
         <Field label="HEAD">
           <Badge
@@ -103,7 +64,7 @@ function RepositoryOverview({ repo }: { repo: RepositoryInfo }) {
         )}
       </dl>
 
-      <h3 className="bl-details__section">Last commit</h3>
+      <h3 className="bl-overview__section">Last commit</h3>
       {commit ? (
         <div className="bl-commit-card">
           <p className="bl-commit-card__summary selectable">{commit.summary}</p>
@@ -125,26 +86,12 @@ function RepositoryOverview({ repo }: { repo: RepositoryInfo }) {
       ) : (
         <p className="text-secondary text-small">This branch has no commits yet.</p>
       )}
-    </>
-  );
-}
 
-export function DetailsPanel({
-  repo,
-  selected,
-  width,
-}: {
-  repo: RepositoryInfo;
-  selected: ChangeEntry | null;
-  width: number;
-}) {
-  return (
-    <aside
-      className="bl-details"
-      style={{ width }}
-      aria-label={selected ? "File details" : "Repository details"}
-    >
-      {selected ? <FileDetails entry={selected} /> : <RepositoryOverview repo={repo} />}
-    </aside>
+      {repo.totalChanges > 0 && (
+        <p className="bl-overview__hint text-small text-muted">
+          <MousePointerClick size={14} aria-hidden /> Select a file to see its changes.
+        </p>
+      )}
+    </section>
   );
 }

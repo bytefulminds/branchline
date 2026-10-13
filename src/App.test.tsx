@@ -1,87 +1,11 @@
-import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { clearMocks, mockIPC, mockWindows } from "@tauri-apps/api/mocks";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import App from "./App";
+import { openButton, REPO, setup, installTauriTestEnvironment } from "./test/harness";
 import type { GitError, RepositoryInfo } from "./types/git";
 
-const REPO: RepositoryInfo = {
-  path: "/Users/dev/projects/demo",
-  name: "demo",
-  gitDir: "/Users/dev/projects/demo/.git",
-  head: { kind: "branch", name: "main", oid: "a".repeat(40) },
-  upstream: { name: "origin/main", ahead: 2, behind: 1, gone: false },
-  headCommit: {
-    oid: "a".repeat(40),
-    shortOid: "aaaaaaa",
-    summary: "Initial commit",
-    authorName: "Dev",
-    authorDate: new Date().toISOString(),
-  },
-  operation: null,
-  changes: [
-    {
-      path: "src/app.ts",
-      originalPath: null,
-      indexStatus: null,
-      worktreeStatus: "modified",
-      conflict: null,
-      isSubmodule: false,
-    },
-    {
-      path: "notes/new file.md",
-      originalPath: null,
-      indexStatus: null,
-      worktreeStatus: "untracked",
-      conflict: null,
-      isSubmodule: false,
-    },
-    {
-      path: "lib/b.rs",
-      originalPath: "lib/a.rs",
-      indexStatus: "renamed",
-      worktreeStatus: null,
-      conflict: null,
-      isSubmodule: false,
-    },
-  ],
-  totalChanges: 3,
-  truncated: false,
-  inspectedAt: Date.now(),
-  durationMs: 12,
-};
-
-/** The primary "Open repository" button in the workspace (title bar and sidebar have their own). */
-const openButton = () =>
-  within(screen.getByRole("main")).getAllByRole("button", { name: /open repository/i })[0]!;
-
-type Handler = (cmd: string, args: Record<string, unknown>) => unknown;
-
-function setup(handler: Handler) {
-  const calls: { cmd: string; args: Record<string, unknown> }[] = [];
-  mockWindows("main");
-  mockIPC(
-    (cmd, args) => {
-      calls.push({ cmd, args: (args ?? {}) as Record<string, unknown> });
-      if (cmd.startsWith("plugin:window|")) return cmd.endsWith("is_maximized") ? false : null;
-      if (cmd === "git_version")
-        return { version: "2.45.0", major: 2, minor: 45, path: "/usr/bin/git" };
-      return handler(cmd, (args ?? {}) as Record<string, unknown>);
-    },
-    { shouldMockEvents: true },
-  );
-  return calls;
-}
-
-beforeEach(() => {
-  (globalThis as unknown as { isTauri: boolean }).isTauri = true;
-});
-afterEach(() => {
-  // Unmount while the IPC mocks still exist so listeners unregister cleanly.
-  cleanup();
-  clearMocks();
-  delete (globalThis as unknown as { isTauri?: boolean }).isTauri;
-});
+installTauriTestEnvironment();
 
 describe("App", () => {
   it("opens a repository from the folder picker and shows real backend data", async () => {
@@ -131,16 +55,12 @@ describe("App", () => {
     expect(within(list).queryAllByRole("option", { selected: true })).toHaveLength(0);
     await user.keyboard("{ArrowDown}");
     expect(within(list).getAllByRole("option")[0]).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByRole("complementary", { name: "File details" })).toHaveTextContent(
-      "src/app.ts",
-    );
+    await screen.findByRole("region", { name: "Changes in src/app.ts" });
 
     await user.keyboard("{ArrowDown}{ArrowDown}");
     const options = within(list).getAllByRole("option");
     expect(options[2]).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByRole("complementary", { name: "File details" })).toHaveTextContent(
-      "lib/a.rs",
-    );
+    await screen.findByRole("region", { name: "Changes in lib/b.rs" });
   });
 
   it("shows a specific error for a folder that is not a repository", async () => {

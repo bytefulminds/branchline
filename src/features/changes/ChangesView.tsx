@@ -1,31 +1,163 @@
 import { CircleCheck, GitMerge, Search, TriangleAlert, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
+import { useConfirm } from "../../components/ConfirmDialog";
 import { EmptyState } from "../../components/EmptyState";
 import { Splitter } from "../../components/Splitter";
-import { plural } from "../../lib/format";
+import { useToast } from "../../components/Toast";
+import { plural, splitPath } from "../../lib/format";
 import { usePersistentNumber } from "../../lib/usePersistentNumber";
-import type { RepositoryInfo } from "../../types/git";
+import { gitService } from "../../services/git";
+import type {
+  FileDiff,
+  GitError,
+  HunkSelection,
+  LineAction,
+  RepositoryInfo,
+} from "../../types/git";
 import { OPERATION_LABEL } from "../repository/headLabel";
+import { RepositoryOverview } from "../repository/RepositoryOverview";
+import type { RepositoryController } from "../repository/useRepository";
 import { filterGroups, groupChanges, type ChangeEntry } from "./changeModel";
-import { DetailsPanel } from "./DetailsPanel";
-import { FileList } from "./FileList";
+import { DiffView } from "./DiffView";
+import { FileList, type FileAction } from "./FileList";
 import "./ChangesView.css";
 
-export function ChangesView({ repo }: { repo: RepositoryInfo }) {
+const ERROR_TITLE: Partial<Record<GitError["kind"], string>> = {
+  stale: "The file changed",
+  locked: "Repository is busy",
+  applyFailed: "Could not apply the selection",
+  unsupported: "Not possible",
+};
+
+/** Paths Git needs for an entry; renames involve both the old and the new path. */
+function pathsOf(entries: ChangeEntry[]): string[] {
+  const paths = entries.flatMap((e) => (e.originalPath ? [e.originalPath, e.path] : [e.path]));
+  return [...new Set(paths)];
+}
+
+/**
+ * When the selected entry disappears (for example after staging it), select the
+ * next entry of the same area, else the same file in another area, else nothing.
+ */
+export function nextSelection(
+  before: ChangeEntry[],
+  after: ChangeEntry[],
+  selectedId: string,
+): string | null {
+  const ids = new Set(after.map((e) => e.id));
+  const index = before.findIndex((e) => e.id === selectedId);
+  const old = before[index];
+  if (!old) return null;
+  const sameArea = before.filter((e) => e.area === old.area);
+  const pos = sameArea.indexOf(old);
+  const candidate =
+    sameArea.slice(pos + 1).find((e) => ids.has(e.id)) ??
+    sameArea
+      .slice(0, pos)
+      .reverse()
+      .find((e) => ids.has(e.id)) ??
+    after.find((e) => e.path === old.path);
+  return candidate?.id ?? null;
+}
+
+export function ChangesView({
+  repo,
+  controller,
+}: {
+  repo: RepositoryInfo;
+  controller: Pick<RepositoryController, "run" | "operation">;
+}) {
+  const confirm = useConfirm();
+  const toast = useToast();
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [detailsWidth, setDetailsWidth] = usePersistentNumber(
-    "branchline.layout.detailsWidth",
-    320,
-  );
+  const [listWidth, setListWidth] = usePersistentNumber("branchline.layout.fileListWidth", 380);
 
   const groups = useMemo(() => groupChanges(repo.changes), [repo.changes]);
   const filtered = useMemo(() => filterGroups(groups, query), [groups, query]);
   const all = useMemo(() => [...groups.conflicted, ...groups.unstaged, ...groups.staged], [groups]);
-  // Selection survives refreshes as long as the same file/area still exists.
-  const selected: ChangeEntry | null = all.find((e) => e.id === selectedId) ?? null;
+
+  // Follow the selection when the list changes underneath it (adjusting state during render).
+  const [previousAll, setPreviousAll] = useState(all);
+  if (previousAll !== all) {
+    setPreviousAll(all);
+    if (selectedId && !all.some((e) => e.id === selectedId)) {
+      setSelectedId(nextSelection(previousAll, all, selectedId));
+    }
+  }
+
+  const selected = all.find((e) => e.id === selectedId) ?? null;
   const filteredCount =
     filtered.conflicted.length + filtered.unstaged.length + filtered.staged.length;
+  const busy = controller.operation !== null;
+
+  const reportError = useCallback(
+    (title: string, error: GitError) =>
+      toast({
+        tone: error.kind === "stale" ? "info" : "error",
+        title: ERROR_TITLE[error.kind] ?? title,
+        description: error.detail ?? error.message,
+      }),
+    [toast],
+  );
+
+  const onFileAction = useCallback(
+    async (action: FileAction, entries: ChangeEntry[]) => {
+      if (entries.length === 0) return;
+      const paths = pathsOf(entries);
+      if (action === "discard") {
+        const untracked = entries.every((e) => e.status === "untracked");
+        const one = entries.length === 1 ? splitPath(entries[0]!.path).name : null;
+        const ok = await confirm({
+          title: one
+            ? `${untracked ? "Delete" : "Discard changes to"} ${one}?`
+            : `Discard changes to ${entries.length} files?`,
+          description: untracked
+            ? "The untracked file is deleted from disk. This cannot be undone."
+            : "Unstaged changes are lost; staged changes are kept. This cannot be undone.",
+          confirmLabel: untracked ? "Delete file" : "Discard changes",
+          destructive: true,
+        });
+        if (!ok) return;
+      }
+      const ops = {
+        stage: ["Staging", gitService.stageFiles],
+        unstage: ["Unstaging", gitService.unstageFiles],
+        discard: ["Discarding", gitService.discardFiles],
+      } as const;
+      const [label, fn] = ops[action];
+      const error = await controller.run(label, (repoPath) => fn(repoPath, paths));
+      if (error) reportError(`${label} failed`, error);
+    },
+    [confirm, controller, reportError],
+  );
+
+  const onLineAction = useCallback(
+    async (action: LineAction, diff: FileDiff, selections: HunkSelection[]) => {
+      if (action === "discard") {
+        const ok = await confirm({
+          title: "Discard the selected changes?",
+          description: `They are removed from ${splitPath(diff.path).name} in your working tree. This cannot be undone.`,
+          confirmLabel: "Discard",
+          destructive: true,
+        });
+        if (!ok) return false;
+      }
+      const label =
+        action === "stage" ? "Staging" : action === "unstage" ? "Unstaging" : "Discarding";
+      const error = await controller.run(label, (repoPath) =>
+        gitService.applyLines(repoPath, {
+          path: diff.path,
+          action,
+          fingerprint: diff.fingerprint,
+          selections,
+        }),
+      );
+      if (error) reportError(`${label} failed`, error);
+      return !error;
+    },
+    [confirm, controller, reportError],
+  );
 
   const summary = [
     groups.conflicted.length && plural(groups.conflicted.length, "conflict"),
@@ -35,11 +167,11 @@ export function ChangesView({ repo }: { repo: RepositoryInfo }) {
 
   return (
     <div className="bl-changes">
-      <div className="bl-changes__main">
+      <div className="bl-changes__list" style={{ width: listWidth }}>
         <div className="bl-changes__header">
           <div className="bl-changes__heading">
             <h1 className="text-h2">Changes</h1>
-            <span className="text-small text-secondary">
+            <span className="text-small text-secondary truncate">
               {summary.length ? summary.join(" · ") : "Nothing to commit"}
             </span>
           </div>
@@ -109,19 +241,36 @@ export function ChangesView({ repo }: { repo: RepositoryInfo }) {
             groups={filtered}
             selectedId={selected?.id ?? null}
             onSelect={(e) => setSelectedId(e.id)}
+            onAction={(action, entries) => void onFileAction(action, entries)}
+            busy={busy}
           />
         )}
       </div>
 
       <Splitter
-        label="Resize details panel"
-        value={detailsWidth}
+        label="Resize file list"
+        value={listWidth}
         min={260}
-        max={560}
-        side="right"
-        onChange={setDetailsWidth}
+        max={720}
+        side="left"
+        onChange={setListWidth}
       />
-      <DetailsPanel repo={repo} selected={selected} width={detailsWidth} />
+
+      <div className="bl-changes__detail">
+        {selected ? (
+          <DiffView
+            key={selected.id}
+            repoPath={repo.path}
+            revision={repo.inspectedAt}
+            entry={selected}
+            busy={busy}
+            onFileAction={(action, entries) => void onFileAction(action, entries)}
+            onLineAction={onLineAction}
+          />
+        ) : (
+          <RepositoryOverview repo={repo} />
+        )}
+      </div>
     </div>
   );
 }

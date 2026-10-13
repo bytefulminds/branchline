@@ -1,28 +1,39 @@
 .bl-file-list {
+  position: relative;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: var(--space-1) var(--space-2) var(--space-4);
+  padding: 0 var(--space-2);
 }
 .bl-file-list:focus-visible {
   border-radius: 0;
   box-shadow: inset 0 0 0 2px var(--focus-ring-color);
 }
-.bl-file-group + .bl-file-group {
-  margin-top: var(--space-2);
+.bl-file-list__canvas {
+  position: relative;
+  margin: var(--space-1) 0 var(--space-4);
 }
-.bl-file-group__header {
-  position: sticky;
-  top: calc(-1 * var(--space-1));
-  z-index: 1;
+
+/* Section header row */
+.bl-file-group {
+  position: absolute;
+  inset: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: var(--row-height);
+  padding-right: var(--space-1);
+}
+.bl-file-group__toggle {
   display: flex;
   align-items: center;
   gap: var(--space-1);
-  width: 100%;
-  height: var(--row-height);
+  flex: 1;
+  min-width: 0;
+  height: 100%;
   padding: 0 var(--space-1);
   border: 0;
-  background: var(--color-background);
+  background: transparent;
   color: var(--color-text-secondary);
   font-size: var(--text-small-size);
   font-weight: var(--weight-semibold);
@@ -30,27 +41,53 @@
   text-align: left;
   cursor: pointer;
 }
-.bl-file-group__header:hover {
+.bl-file-group__toggle:hover {
   color: var(--color-text-primary);
 }
 .bl-file-group__label {
-  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .bl-file-group--conflicted .bl-file-group__label {
   color: var(--color-error-text);
 }
+.bl-file-group__action {
+  flex: none;
+  height: 22px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
+}
+.bl-file-group__action:hover:not(:disabled) {
+  background: var(--color-accent-subtle);
+  border-color: rgb(0 209 160 / 40%);
+  color: var(--color-accent);
+}
+.bl-file-group__action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* File row */
 .bl-file-row {
+  position: absolute;
+  inset: 0 0 auto;
   display: flex;
   align-items: center;
   gap: var(--space-2);
   height: var(--row-height);
-  padding: 0 var(--space-2);
+  padding: 0 var(--space-1) 0 var(--space-2);
   border-radius: var(--radius-md);
   cursor: pointer;
-  content-visibility: auto;
-  contain-intrinsic-size: auto var(--row-height);
-  /* Keep keyboard-selected rows clear of the sticky section header. */
-  scroll-margin-top: var(--row-height);
 }
 .bl-file-row:hover {
   background: var(--color-hover);
@@ -71,4 +108,39 @@
   flex: 1 1 0;
   color: var(--color-text-muted);
   font-size: var(--text-small-size);
+}
+.bl-file-row__actions {
+  display: flex;
+  gap: 2px;
+  margin-left: auto;
+  flex: none;
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-standard);
+}
+.bl-file-row:hover .bl-file-row__actions,
+.bl-file-row[aria-selected="true"] .bl-file-row__actions {
+  opacity: 1;
+}
+.bl-row-action {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+.bl-row-action:hover:not(:disabled) {
+  background: var(--color-accent-subtle-strong);
+  color: var(--color-accent);
+}
+.bl-row-action--danger:hover:not(:disabled) {
+  background: var(--color-error-subtle);
+  color: var(--color-error-text);
+}
+.bl-row-action:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }

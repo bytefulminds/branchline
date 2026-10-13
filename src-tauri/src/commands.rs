@@ -2,6 +2,8 @@
 //! runtime with `spawn_blocking`, so the webview and event loop stay responsive.
 
 use crate::error::GitError;
+use crate::git::diff::{self, DiffArea, FileDiff};
+use crate::git::ops::{self, LineRequest};
 use crate::git::repository::{self, RepositoryInfo};
 use crate::git::runner::{self, GitVersion};
 
@@ -25,6 +27,78 @@ pub async fn git_version() -> Result<GitVersion, GitError> {
 #[tauri::command]
 pub async fn inspect_repository(path: String) -> Result<RepositoryInfo, GitError> {
     blocking(move || repository::inspect(&path)).await
+}
+
+/// Diff of one file. `force` loads diffs above the soft size limit.
+#[tauri::command]
+pub async fn file_diff(
+    repo: String,
+    path: String,
+    original_path: Option<String>,
+    area: DiffArea,
+    force: Option<bool>,
+) -> Result<FileDiff, GitError> {
+    blocking(move || {
+        let root = repository::resolve_root(&repo)?;
+        diff::file_diff(
+            &root,
+            &path,
+            original_path.as_deref(),
+            area,
+            force.unwrap_or(false),
+        )
+    })
+    .await
+}
+
+/// Run a write operation, then return the refreshed repository state.
+async fn write_then_inspect<F>(repo: String, op: F) -> Result<RepositoryInfo, GitError>
+where
+    F: FnOnce(&str) -> Result<(), GitError> + Send + 'static,
+{
+    blocking(move || {
+        op(&repo)?;
+        repository::inspect(&repo)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn stage_files(repo: String, paths: Vec<String>) -> Result<RepositoryInfo, GitError> {
+    write_then_inspect(repo, move |r| ops::stage_files(r, &paths)).await
+}
+
+#[tauri::command]
+pub async fn unstage_files(repo: String, paths: Vec<String>) -> Result<RepositoryInfo, GitError> {
+    write_then_inspect(repo, move |r| ops::unstage_files(r, &paths)).await
+}
+
+#[tauri::command]
+pub async fn discard_files(repo: String, paths: Vec<String>) -> Result<RepositoryInfo, GitError> {
+    write_then_inspect(repo, move |r| ops::discard_files(r, &paths)).await
+}
+
+/// Stage, unstage or discard selected hunks or lines.
+#[tauri::command]
+pub async fn apply_lines(repo: String, request: LineRequest) -> Result<RepositoryInfo, GitError> {
+    write_then_inspect(repo, move |r| ops::apply_lines(r, &request)).await
+}
+
+/// Watch `repo` for changes; emits `repository-changed` events.
+/// Setting up a recursive watch can take a moment on large trees, so it runs off the main thread.
+#[tauri::command]
+pub async fn watch_repository(app: tauri::AppHandle, repo: String) -> Result<(), GitError> {
+    blocking(move || {
+        use tauri::Manager;
+        let state = app.state::<crate::watcher::WatcherState>();
+        crate::watcher::watch(app.clone(), &state, &repo)
+    })
+    .await
+}
+
+#[tauri::command]
+pub fn unwatch_repository(state: tauri::State<'_, crate::watcher::WatcherState>) {
+    crate::watcher::unwatch(&state);
 }
 
 /// Repository path passed on the command line (`branchline <path>`), if any.

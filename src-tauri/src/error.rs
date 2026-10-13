@@ -45,6 +45,24 @@ pub enum GitError {
     #[error("Git exited with status {code}.")]
     GitFailed { code: i32, stderr: String },
 
+    #[error("Another Git process is using this repository. Wait for it to finish and try again.")]
+    Locked { detail: String },
+
+    #[error("The output is larger than {limit_bytes} bytes.")]
+    OutputTooLarge { limit_bytes: u64 },
+
+    #[error("Invalid file path: {0}")]
+    InvalidPath(String),
+
+    #[error("The file changed since it was displayed. Review the updated changes and try again.")]
+    Stale,
+
+    #[error("{0}")]
+    Unsupported(String),
+
+    #[error("Git could not apply the selected changes.")]
+    ApplyFailed { detail: String },
+
     #[error("Unexpected Git output: {0}")]
     Parse(String),
 
@@ -67,6 +85,12 @@ impl GitError {
             GitError::GitTooOld { .. } => "gitTooOld",
             GitError::Timeout { .. } => "timeout",
             GitError::GitFailed { .. } => "gitFailed",
+            GitError::Locked { .. } => "locked",
+            GitError::OutputTooLarge { .. } => "outputTooLarge",
+            GitError::InvalidPath(_) => "invalidPath",
+            GitError::Stale => "stale",
+            GitError::Unsupported(_) => "unsupported",
+            GitError::ApplyFailed { .. } => "applyFailed",
             GitError::Parse(_) => "parse",
             GitError::Internal(_) => "internal",
         }
@@ -75,9 +99,10 @@ impl GitError {
     /// Raw diagnostic output that may help the user (Git's stderr).
     pub fn detail(&self) -> Option<&str> {
         match self {
-            GitError::NotARepository { detail } | GitError::UnsafeRepository { detail } => {
-                Some(detail.as_str())
-            }
+            GitError::NotARepository { detail }
+            | GitError::UnsafeRepository { detail }
+            | GitError::Locked { detail }
+            | GitError::ApplyFailed { detail } => Some(detail.as_str()),
             GitError::GitFailed { stderr, .. } => Some(stderr.as_str()),
             _ => None,
         }

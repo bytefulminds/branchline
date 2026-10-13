@@ -16,9 +16,11 @@ import "./StatusBar.css";
 
 export function StatusBar({
   state,
+  operation,
   gitVersion,
 }: {
   state: RepositoryState;
+  operation?: string | null;
   gitVersion: GitVersion | GitError | null;
 }) {
   const repo = state.status === "ready" ? state.repo : null;
@@ -88,7 +90,13 @@ export function StatusBar({
       </div>
 
       <div className="bl-statusbar__group">
+        {operation ? (
+          <span className="bl-statusbar__item" role="status">
+            <Spinner size={12} /> {operation}…
+          </span>
+        ) : null}
         {state.status === "ready" &&
+          !operation &&
           (state.refreshing ? (
             <span className="bl-statusbar__item" role="status">
               <Spinner size={12} /> Refreshing…

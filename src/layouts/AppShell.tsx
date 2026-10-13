@@ -39,7 +39,11 @@ export function AppShell({
         />
         <main className="bl-app__workspace">{children}</main>
       </div>
-      <StatusBar state={controller.state} gitVersion={gitVersion} />
+      <StatusBar
+        state={controller.state}
+        operation={controller.operation}
+        gitVersion={gitVersion}
+      />
     </div>
   );
 }

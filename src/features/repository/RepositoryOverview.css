@@ -1,18 +1,14 @@
-.bl-details {
-  flex: none;
+.bl-overview {
+  flex: 1;
   min-width: 0;
-  padding: var(--space-4);
+  max-width: 640px;
+  padding: var(--space-6);
   overflow-y: auto;
-  background: var(--color-surface-subtle);
 }
-.bl-details__title {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-width: 0;
+.bl-overview > h2 {
   margin-bottom: var(--space-4);
 }
-.bl-details__fields {
+.bl-overview__fields {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
@@ -34,10 +30,10 @@
   min-width: 0;
   overflow-wrap: anywhere;
 }
-.bl-details__path {
+.bl-overview__path {
   color: var(--color-text-secondary);
 }
-.bl-details__section {
+.bl-overview__section {
   margin: var(--space-6) 0 var(--space-2);
   color: var(--color-text-muted);
   font-size: 11px;
@@ -46,16 +42,17 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
-.bl-details__note {
+.bl-overview__hint {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   margin-top: var(--space-6);
-  padding-top: var(--space-3);
-  border-top: 1px solid var(--color-border);
 }
 .bl-commit-card {
   padding: var(--space-3);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  background: var(--color-background);
+  background: var(--color-surface-subtle);
 }
 .bl-commit-card__summary {
   margin-bottom: var(--space-2);

@@ -9,8 +9,9 @@ Branchline is a fast, local-first, open-source Git desktop client for Windows, m
 It is built with Tauri 2, React, TypeScript and Rust, and drives the native Git CLI instead of
 reimplementing Git.
 
-> **Status:** early development. Milestones 0 and 1 are complete: Branchline opens a local
-> repository and shows its real working-tree state. See [ROADMAP.md](ROADMAP.md).
+> **Status:** early development. Milestones 0 to 2 are complete: Branchline opens a local
+> repository, shows its working-tree state and diffs, and stages, unstages and discards files,
+> hunks and individual lines. See [ROADMAP.md](ROADMAP.md).
 
 ## What works today
 
@@ -23,12 +24,18 @@ reimplementing Git.
   type changes, untracked and conflicted files, split into conflicts, unstaged and staged.
 - In-progress merge, rebase, cherry-pick, revert and bisect detection.
 - Last commit summary, author and date.
-- File filter, keyboard navigation in the file list, resizable panels.
-- Refresh with `Ctrl+R` / `⌘R` / `F5`, plus an automatic (throttled) refresh when the window
-  regains focus. No polling.
+- Diff viewer for unstaged, staged and untracked files, with line numbers, hunk headers, CRLF and
+  "no newline at end of file" handling, binary detection and a guard for very large diffs.
+- Stage, unstage and discard whole files, single hunks or selected lines (click, shift-click for
+  a range). Discarding always asks for confirmation; staged content is never discarded.
+- Conflicted files show their conflict markers and can be marked as resolved.
+- File filter, keyboard navigation in the file list (`Space`/`Enter` stages or unstages, `Delete`
+  discards), resizable panels, a virtualized list that stays fast with thousands of files.
+- Automatic refresh through a file-system watcher (changes made in your editor or terminal show up
+  within a second), plus `Ctrl+R` / `⌘R` / `F5`. No polling.
 - Clear loading, empty, error and "Git not installed" states.
 
-Diffs, staging, commits, history and the commit graph follow in the next milestones.
+Commits, history and the commit graph follow in the next milestones.
 
 ## Prerequisites
 
@@ -99,12 +106,18 @@ See [docs/architecture.md](docs/architecture.md) for how the layers fit together
 
 ## Security
 
-- Git runs as a subprocess with an argument vector, never through a shell.
+- Git runs as a subprocess with an argument vector, never through a shell. Paths are passed as
+  literal pathspecs, so a file called `*.txt` never matches other files.
 - Interactive prompts are disabled (`GIT_TERMINAL_PROMPT=0`, empty askpass), so commands cannot hang.
 - `core.fsmonitor` is forced off for every command, because a cloned repository could otherwise
   make `git status` execute an arbitrary program. A test proves the hook does not run.
 - Environment variables that redirect Git (`GIT_DIR`, `GIT_WORK_TREE`, ...) are removed.
 - Paths from the UI are validated and canonicalized before use; every command has a timeout.
+  Paths that escape the repository (`..`, absolute paths) or point into `.git` are rejected.
+- Diffs ignore external diff drivers and textconv filters configured in the repository.
+- Partial staging never trusts line content sent by the UI: the backend recomputes the diff,
+  checks a fingerprint of the version the user saw, and rebuilds the patch itself.
+- Discard re-reads the repository state first and only touches unstaged changes.
 - The webview has a strict CSP and only the Tauri permissions it needs (window controls and the
   folder picker).
 
@@ -129,13 +142,19 @@ is still to do.
 
 ## Known limitations
 
-- Diffs, staging, committing, history, graph, branches and remotes are not implemented yet; their
-  navigation entries are visible but disabled.
-- The changed-file list renders all rows (with `content-visibility`), capped at 10,000 entries.
-  Real virtualization is planned with the commit list.
+- Commits, history, graph, branches and remotes are not implemented yet; their navigation entries
+  are visible but disabled.
+- The diff view is unified only (no side-by-side view yet) and has no syntax highlighting yet.
+- Hunk and line operations are not available for untracked files, renames, copies and binary
+  files; those are staged as a whole.
+- Conflicts can be inspected and marked as resolved, but not edited inside Branchline yet.
+- The watcher only applies the root `.gitignore` and `.git/info/exclude` when filtering events;
+  changes in folders ignored by nested `.gitignore` files cause an extra (cheap) refresh.
+- The changed-file list is capped at 10,000 entries.
 - Bare repositories are not supported.
 - Paths that are not valid UTF-8 are shown with replacement characters.
-- Runs on macOS and Linux; Windows has not been run yet. Automated tests and measurements so far ran on Linux.
+- Runs on macOS and Linux; Windows has not been run yet. Automated tests and measurements so far
+  ran on Linux.
 
 ## License
 

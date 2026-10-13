@@ -215,6 +215,18 @@ pub fn detect_operation(git_dir: &Path) -> Option<RepoOperation> {
     }
 }
 
+/// Validate a user-supplied repository path and return its root and Git directory.
+pub fn resolve_paths(raw_path: &str) -> Result<(PathBuf, PathBuf), GitError> {
+    let dir = validate_path(raw_path)?;
+    resolve(&dir)
+}
+
+/// Validate a user-supplied repository path and return its working-tree root.
+pub fn resolve_root(raw_path: &str) -> Result<PathBuf, GitError> {
+    let dir = validate_path(raw_path)?;
+    Ok(resolve(&dir)?.0)
+}
+
 /// Inspect the repository containing `raw_path`.
 pub fn inspect(raw_path: &str) -> Result<RepositoryInfo, GitError> {
     let started = Instant::now();

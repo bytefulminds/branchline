@@ -23,13 +23,17 @@ Milestones are only marked complete when the behavior works against real Git and
 - [x] Runs on macOS and Linux
 - [ ] Run and verify on Windows
 
-## Milestone 2: Working tree and diffs
+## Milestone 2: Working tree and diffs (done)
 
-- [ ] Diff viewer (unified and split, syntax-aware, large-diff safe)
-- [ ] Stage and unstage files and hunks/lines
-- [ ] Discard with confirmation
-- [ ] File-system watcher replacing focus-based refresh
-- [ ] Virtualized file list
+- [x] Unified diff viewer, large-diff safe (virtualized rows, size guard)
+- [x] Stage and unstage files, hunks and individual lines
+- [x] Discard files, hunks and lines with confirmation
+- [x] File-system watcher (focus refresh kept as a fallback)
+- [x] Virtualized file list
+- [x] Randomized test that checks partial staging, unstaging and discarding byte-for-byte
+- [ ] Side-by-side diff view
+- [ ] Syntax highlighting in diffs
+- [ ] Line staging for untracked files (via intent-to-add)
 
 ## Milestone 3: Commits and history
 

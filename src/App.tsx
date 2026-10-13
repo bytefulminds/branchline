@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { ConfirmProvider } from "./components/ConfirmDialog";
 import { ToastProvider, useToast } from "./components/Toast";
 import { ChangesView } from "./features/changes/ChangesView";
 import {
@@ -90,7 +91,7 @@ function Workspace() {
       );
       break;
     case "ready":
-      content = <ChangesView key={state.repo.path} repo={state.repo} />;
+      content = <ChangesView key={state.repo.path} repo={state.repo} controller={controller} />;
       break;
   }
 
@@ -104,7 +105,9 @@ function Workspace() {
 export default function App() {
   return (
     <ToastProvider>
-      <Workspace />
+      <ConfirmProvider>
+        <Workspace />
+      </ConfirmProvider>
     </ToastProvider>
   );
 }

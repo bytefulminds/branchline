@@ -8,15 +8,24 @@
 pub mod commands;
 pub mod error;
 pub mod git;
+pub mod watcher;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .manage(watcher::WatcherState::default())
         .invoke_handler(tauri::generate_handler![
             commands::git_version,
             commands::inspect_repository,
             commands::launch_repository_path,
+            commands::file_diff,
+            commands::stage_files,
+            commands::unstage_files,
+            commands::discard_files,
+            commands::apply_lines,
+            commands::watch_repository,
+            commands::unwatch_repository,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Branchline");

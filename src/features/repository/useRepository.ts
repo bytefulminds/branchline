@@ -30,11 +30,27 @@ const FOCUS_REFRESH_MIN_INTERVAL_MS = 2000;
 export interface RepositoryController {
   state: RepositoryState;
   recent: RecentRepository[];
+  /** Label of the write operation in progress (for example "Staging"), or null. */
+  operation: string | null;
   open: (path: string) => Promise<void>;
   refresh: () => Promise<void>;
+  /**
+   * Run a write operation that returns the refreshed repository. Resolves to the
+   * error on failure (already reflected in state where relevant), or null.
+   */
+  run: (
+    label: string,
+    op: (repoPath: string) => Promise<RepositoryInfo>,
+  ) => Promise<GitError | null>;
   close: () => void;
   forgetRecent: (path: string) => void;
 }
+
+const BUSY: GitError = {
+  kind: "locked",
+  message: "Another operation is still running.",
+  detail: null,
+};
 
 export function useRepository(onRefreshError?: (e: GitError) => void): RepositoryController {
   const [state, setStateRaw] = useState<RepositoryState>({ status: "idle" });
@@ -48,6 +64,11 @@ export function useRepository(onRefreshError?: (e: GitError) => void): Repositor
     setStateRaw(next);
   }, []);
   const lastRefresh = useRef(0);
+  const [operation, setOperation] = useState<string | null>(null);
+  const operationRef = useRef<string | null>(null);
+  // A refresh was requested while another refresh or an operation was running.
+  const pendingRefresh = useRef(false);
+  const refreshRef = useRef<() => Promise<void>>(async () => {});
   const onErrorRef = useRef(onRefreshError);
   useEffect(() => {
     onErrorRef.current = onRefreshError;
@@ -84,7 +105,12 @@ export function useRepository(onRefreshError?: (e: GitError) => void): Repositor
     if (current.status === "error" || current.status === "loading") {
       return open(current.path);
     }
-    if (current.status !== "ready" || current.refreshing) return;
+    if (current.status !== "ready") return;
+    if (current.refreshing || operationRef.current) {
+      pendingRefresh.current = true;
+      return;
+    }
+    pendingRefresh.current = false;
     const id = ++requestId.current;
     lastRefresh.current = Date.now();
     setState({ ...current, refreshing: true });
@@ -102,7 +128,48 @@ export function useRepository(onRefreshError?: (e: GitError) => void): Repositor
         onErrorRef.current?.(error);
       }
     }
+    if (pendingRefresh.current) void refreshRef.current();
   }, [open, setState]);
+
+  useEffect(() => {
+    refreshRef.current = refresh;
+  }, [refresh]);
+
+  const run = useCallback(
+    async (label: string, op: (repoPath: string) => Promise<RepositoryInfo>) => {
+      const current = stateRef.current;
+      if (current.status !== "ready") return BUSY;
+      if (operationRef.current) return BUSY;
+      const path = current.repo.path;
+      operationRef.current = label;
+      setOperation(label);
+      // Responses of refreshes started before this operation are now outdated.
+      const id = ++requestId.current;
+      if (current.refreshing) setState({ ...current, refreshing: false });
+      let failure: GitError | null = null;
+      try {
+        const repo = await op(path);
+        if (id === requestId.current) {
+          lastRefresh.current = Date.now();
+          setState({ status: "ready", repo, refreshing: false });
+        }
+      } catch (err) {
+        failure = err as GitError;
+        if (id === requestId.current && FATAL_ON_REFRESH.has(failure.kind)) {
+          setState({ status: "error", path, error: failure });
+        } else {
+          // Whatever happened, show the repository as it is now.
+          pendingRefresh.current = true;
+        }
+      } finally {
+        operationRef.current = null;
+        setOperation(null);
+      }
+      if (pendingRefresh.current) void refreshRef.current();
+      return failure;
+    },
+    [setState],
+  );
 
   const close = useCallback(() => {
     requestId.current++;
@@ -130,7 +197,35 @@ export function useRepository(onRefreshError?: (e: GitError) => void): Repositor
     return () => window.removeEventListener("focus", onFocus);
   }, [refresh]);
 
-  return { state, recent, open, refresh, close, forgetRecent };
+  // Watch the open repository so external edits refresh the view without polling.
+  const watchedPath = state.status === "ready" ? state.repo.path : null;
+  useEffect(() => {
+    if (!watchedPath) return;
+    gitService.watchRepository(watchedPath).catch(() => {
+      // Watching is best effort (for example inotify limits); focus refresh still works.
+    });
+    return () => {
+      gitService.unwatchRepository().catch(() => {});
+    };
+  }, [watchedPath]);
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    let cancelled = false;
+    gitService
+      .onRepositoryChanged((repo) => {
+        const s = stateRef.current;
+        if (s.status === "ready" && s.repo.path === repo) void refreshRef.current();
+      })
+      .then((u) => (cancelled ? u() : (unlisten = u)))
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, []);
+
+  return { state, recent, operation, open, refresh, run, close, forgetRecent };
 }
 
 /** Path of the repository the user is looking at (or trying to open), if any. */
