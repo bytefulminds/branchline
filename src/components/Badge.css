@@ -1,0 +1,70 @@
+.bl-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  max-width: 100%;
+  height: 22px;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  font-size: var(--text-small-size);
+  line-height: var(--text-small-line);
+  font-weight: var(--weight-medium);
+  white-space: nowrap;
+}
+.bl-badge svg {
+  flex: none;
+}
+.bl-badge--mono {
+  font-family: var(--font-mono);
+  font-weight: var(--weight-regular);
+}
+.bl-badge--accent {
+  background: var(--color-accent-subtle);
+  border-color: rgb(0 209 160 / 35%);
+  color: var(--color-accent);
+}
+.bl-badge--success {
+  background: var(--color-success-subtle);
+  border-color: rgb(16 185 129 / 35%);
+  color: var(--color-success);
+}
+.bl-badge--warning {
+  background: var(--color-warning-subtle);
+  border-color: rgb(245 158 11 / 35%);
+  color: var(--color-warning);
+}
+.bl-badge--error {
+  background: var(--color-error-subtle);
+  border-color: rgb(239 68 68 / 40%);
+  color: var(--color-error-text);
+}
+.bl-badge--info {
+  background: var(--color-info-subtle);
+  border-color: rgb(96 165 250 / 35%);
+  color: var(--color-info);
+}
+
+.bl-count {
+  min-width: 20px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-elevated);
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  line-height: 18px;
+  font-weight: var(--weight-semibold);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.bl-count--accent {
+  background: var(--color-accent);
+  color: var(--color-text-on-accent);
+}
+.bl-count--error {
+  background: var(--color-error);
+  color: var(--color-text-primary);
+}

@@ -1,0 +1,74 @@
+.bl-file-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-1) var(--space-2) var(--space-4);
+}
+.bl-file-list:focus-visible {
+  border-radius: 0;
+  box-shadow: inset 0 0 0 2px var(--focus-ring-color);
+}
+.bl-file-group + .bl-file-group {
+  margin-top: var(--space-2);
+}
+.bl-file-group__header {
+  position: sticky;
+  top: calc(-1 * var(--space-1));
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  width: 100%;
+  height: var(--row-height);
+  padding: 0 var(--space-1);
+  border: 0;
+  background: var(--color-background);
+  color: var(--color-text-secondary);
+  font-size: var(--text-small-size);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.02em;
+  text-align: left;
+  cursor: pointer;
+}
+.bl-file-group__header:hover {
+  color: var(--color-text-primary);
+}
+.bl-file-group__label {
+  flex: 1;
+}
+.bl-file-group--conflicted .bl-file-group__label {
+  color: var(--color-error-text);
+}
+.bl-file-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: var(--row-height);
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  content-visibility: auto;
+  contain-intrinsic-size: auto var(--row-height);
+  /* Keep keyboard-selected rows clear of the sticky section header. */
+  scroll-margin-top: var(--row-height);
+}
+.bl-file-row:hover {
+  background: var(--color-hover);
+}
+.bl-file-row[aria-selected="true"] {
+  background: var(--color-selected);
+  box-shadow: inset 2px 0 0 var(--color-accent);
+}
+.bl-file-row__sub {
+  flex: none;
+  color: var(--color-text-secondary);
+}
+.bl-file-row__name {
+  flex: 0 1 auto;
+  color: var(--color-text-primary);
+}
+.bl-file-row__dir {
+  flex: 1 1 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-small-size);
+}

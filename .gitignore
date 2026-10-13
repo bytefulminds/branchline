@@ -1,0 +1,28 @@
+# Dependencies and build output
+node_modules/
+dist/
+src-tauri/target/
+src-tauri/gen/
+coverage/
+*.log
+
+# Local, private folders (any top-level or nested folder starting with "_")
+_*/
+
+# AI assistant context and local settings
+CLAUDE.md
+CLAUDE.local.md
+.claude/
+.mcp.json
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Editors and OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db

@@ -1,0 +1,20 @@
+.bl-splitter {
+  position: relative;
+  flex: none;
+  width: 1px;
+  background: var(--color-border);
+  cursor: col-resize;
+  touch-action: none;
+  z-index: var(--z-sticky);
+}
+.bl-splitter::before {
+  content: "";
+  position: absolute;
+  inset: 0 -3px;
+}
+.bl-splitter:hover,
+.bl-splitter:focus-visible {
+  background: var(--color-accent);
+  box-shadow: none;
+  border-radius: 0;
+}

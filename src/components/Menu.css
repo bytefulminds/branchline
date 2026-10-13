@@ -1,0 +1,99 @@
+.bl-menu-anchor {
+  position: relative;
+  min-width: 0;
+}
+.bl-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  z-index: var(--z-popover);
+  max-width: 420px;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: var(--space-1);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-elevated);
+  box-shadow: var(--shadow-popover);
+  animation: bl-menu-in var(--duration-fast) var(--ease-standard);
+}
+.bl-menu--start {
+  left: 0;
+}
+.bl-menu--end {
+  right: 0;
+}
+.bl-menu__header {
+  padding: var(--space-2) var(--space-2) var(--space-1);
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.bl-menu__separator {
+  height: 1px;
+  margin: var(--space-1) var(--space-1);
+  background: var(--color-border-strong);
+}
+.bl-menu__empty {
+  padding: var(--space-2);
+  color: var(--color-text-muted);
+}
+.bl-menu__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: var(--control-height);
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+.bl-menu__item:hover:not(:disabled),
+.bl-menu__item:focus-visible {
+  background: var(--color-hover);
+  box-shadow: none;
+}
+.bl-menu__item:focus-visible {
+  outline: 2px solid var(--focus-ring-color);
+  outline-offset: -2px;
+}
+.bl-menu__item[aria-checked="true"] {
+  background: var(--color-selected);
+}
+.bl-menu__item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.bl-menu__icon {
+  display: inline-flex;
+  flex: none;
+  width: 16px;
+  color: var(--color-text-secondary);
+}
+.bl-menu__text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+.bl-menu__description {
+  color: var(--color-text-muted);
+  font-size: var(--text-small-size);
+  line-height: var(--text-small-line);
+}
+.bl-menu__kbd {
+  margin-left: auto;
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+@keyframes bl-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}

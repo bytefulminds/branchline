@@ -1,0 +1,97 @@
+.bl-titlebar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: var(--titlebar-height);
+  padding: 0 var(--space-2) 0 var(--space-3);
+  background: var(--color-chrome);
+  border-bottom: 1px solid var(--color-border);
+  -webkit-user-select: none;
+  user-select: none;
+}
+.bl-titlebar--macos {
+  padding-left: var(--mac-traffic-light-inset);
+}
+.bl-titlebar--windows,
+.bl-titlebar--linux {
+  padding-right: 0;
+}
+.bl-titlebar__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: none;
+}
+.bl-titlebar__name {
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.01em;
+}
+.bl-titlebar__divider {
+  width: 1px;
+  height: 20px;
+  margin: 0 var(--space-2);
+  background: var(--color-border-strong);
+  flex: none;
+}
+.bl-titlebar__spacer {
+  flex: 1;
+  align-self: stretch;
+  min-width: var(--space-6);
+}
+.bl-titlebar__busy {
+  display: inline-flex;
+  padding: 0 var(--space-1);
+}
+
+.bl-repo-selector {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: 280px;
+  height: var(--control-height);
+  padding: 0 var(--space-2) 0 var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-subtle);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard);
+}
+.bl-repo-selector:hover,
+.bl-repo-selector[aria-expanded="true"] {
+  background: var(--color-surface);
+  border-color: var(--color-border-strong);
+}
+.bl-repo-selector__icon {
+  flex: none;
+  color: var(--color-accent);
+}
+.bl-repo-selector__chevron {
+  flex: none;
+  color: var(--color-text-muted);
+}
+
+.bl-branch-pill {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  max-width: 260px;
+  height: 26px;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-md);
+  background: var(--color-accent-subtle);
+  color: var(--color-accent);
+  font-weight: var(--weight-medium);
+}
+.bl-branch-pill svg {
+  flex: none;
+}
+.bl-branch-pill__qualifier {
+  flex: none;
+  color: var(--color-text-secondary);
+  font-size: var(--text-small-size);
+  font-weight: var(--weight-regular);
+}

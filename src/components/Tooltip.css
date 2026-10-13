@@ -1,0 +1,51 @@
+/*
+ * Lightweight tooltips: any element with `data-tooltip` shows a styled label on
+ * hover and keyboard focus. The accessible name must be set separately
+ * (aria-label) because pseudo-element content is not reliably announced.
+ */
+[data-tooltip] {
+  position: relative;
+}
+[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 6px);
+  transform: translateX(-50%) translateY(-2px);
+  z-index: var(--z-popover);
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-elevated);
+  box-shadow: var(--shadow-popover);
+  color: var(--color-text-primary);
+  font-family: var(--font-ui);
+  font-size: var(--text-small-size);
+  line-height: var(--text-small-line);
+  font-weight: var(--weight-regular);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition:
+    opacity var(--duration-fast) var(--ease-standard),
+    transform var(--duration-fast) var(--ease-standard);
+}
+[data-tooltip][data-tooltip-side="top"]::after {
+  top: auto;
+  bottom: calc(100% + 6px);
+  transform: translateX(-50%) translateY(2px);
+}
+[data-tooltip][data-tooltip-align="end"]::after {
+  left: auto;
+  right: 0;
+  transform: translateY(-2px);
+}
+[data-tooltip]:hover::after,
+[data-tooltip]:focus-visible::after {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+  transition-delay: 350ms;
+}
+[data-tooltip][data-tooltip-align="end"]:hover::after,
+[data-tooltip][data-tooltip-align="end"]:focus-visible::after {
+  transform: translateY(0);
+}

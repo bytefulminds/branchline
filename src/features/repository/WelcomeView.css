@@ -1,0 +1,108 @@
+.bl-welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-6);
+  width: 100%;
+  max-width: 560px;
+  margin: auto;
+  padding: var(--space-10) var(--space-6);
+}
+.bl-welcome__hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  text-align: center;
+}
+.bl-welcome__hero svg {
+  margin-bottom: var(--space-2);
+}
+.bl-welcome__tagline {
+  color: var(--color-text-secondary);
+}
+.bl-welcome__alert {
+  display: flex;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
+  border: 1px solid rgb(239 68 68 / 40%);
+  background: var(--color-error-subtle);
+  color: var(--color-error-text);
+}
+.bl-welcome__alert .text-h3 {
+  color: var(--color-text-primary);
+}
+.bl-welcome__recent {
+  width: 100%;
+}
+.bl-welcome__heading {
+  margin-bottom: var(--space-2);
+  color: var(--color-text-muted);
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.bl-welcome__empty {
+  padding: var(--space-4);
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-lg);
+  text-align: center;
+}
+.bl-welcome__list {
+  margin: 0;
+  padding: var(--space-1);
+  list-style: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-subtle);
+}
+.bl-welcome__row {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.bl-welcome__repo {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-2) 40px var(--space-2) var(--space-3);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+.bl-welcome__repo:hover {
+  background: var(--color-hover);
+}
+.bl-welcome__repo-icon {
+  flex: none;
+  color: var(--color-text-secondary);
+}
+.bl-welcome__repo-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+.bl-welcome__repo-name {
+  font-weight: var(--weight-medium);
+}
+.bl-welcome__repo-time {
+  flex: none;
+}
+.bl-welcome__remove {
+  position: absolute;
+  right: var(--space-2);
+  opacity: 0;
+}
+.bl-welcome__row:hover .bl-welcome__remove,
+.bl-welcome__remove:focus-visible {
+  opacity: 1;
+}
