@@ -21,7 +21,8 @@ use crate::error::GitError;
 
 static WRITE_LOCK: Mutex<()> = Mutex::new(());
 
-fn write_lock() -> std::sync::MutexGuard<'static, ()> {
+/// Serializes every index- or HEAD-changing operation in the process.
+pub(crate) fn write_lock() -> std::sync::MutexGuard<'static, ()> {
     // A panic while holding the lock leaves no partial state we track; continue.
     WRITE_LOCK.lock().unwrap_or_else(|e| e.into_inner())
 }

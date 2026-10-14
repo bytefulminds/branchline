@@ -45,6 +45,16 @@ Native Git CLI
 | `apply_lines(repo, request)` | `RepositoryInfo` | Stage, unstage or discard hunks or lines |
 | `watch_repository(repo)` / `unwatch_repository` | none | Emits `repository-changed` events |
 
+| `log_page(repo, skip, limit)` | `LogPage` | History in `--date-order`, paged from a cached topology |
+| `list_refs(repo)` | `RefInfo[]` | Branches, remote branches and tags (annotated tags peeled) |
+| `commit_details(repo, oid)` | `CommitDetails` | Message, people, parents, files against the first parent |
+| `commit_file_diff(repo, oid, path, originalPath, force)` | `FileDiff` | Read-only diff of one file in a commit |
+| `commit_draft(repo)` | `CommitDraft` | Author identity, HEAD message (for amend), prepared merge message |
+| `create_commit(repo, request)` | `RepositoryInfo` | `git commit --file=- --cleanup=whitespace [--amend]` |
+
+Commit ids from the UI are accepted only as hexadecimal strings, so they can never be read as
+options or revision expressions.
+
 Write commands return the refreshed repository so the UI updates in one round trip. All write
 operations go through one process-wide lock, so Branchline never runs two index-changing Git
 commands at the same time.
@@ -75,3 +85,19 @@ reads would trigger the next refresh, forever. `tests/watcher.rs` guards against
 Coding-agent integration is out of scope for now. Because every Git operation already goes through
 `git::runner` and is exposed as an explicit command, an agent can later be added as another client
 of the same service layer (with its own permission set) without changing the UI architecture.
+
+## History and graph
+
+Correct graph drawing needs children before parents, which only `--date-order` (or
+`--topo-order`) guarantees, and that requires Git to walk the whole history. Branchline walks it
+once per repository state with `git rev-list --date-order` (commit ids only) and keeps the order
+in memory, keyed by a fingerprint of all refs plus HEAD. Each page then asks
+`git log --no-walk=unsorted --stdin` for the metadata of exactly its commits, so later pages cost
+the same at any depth. `RepositoryInfo.refsFingerprint` tells the UI when history must reload;
+working-tree refreshes do not reload it.
+
+The graph layout (`src/features/history/graph.ts`) is a pure, incremental function: each lane
+"expects" the next commit id that continues it, branch tips open new lanes, merge parents open
+lanes to the right, and lanes that expect the same commit converge at its row. The state carries
+over between pages. A randomized test lays out 500 random histories in random page sizes and
+checks that every line leaving a row enters the next one and that all lanes close.

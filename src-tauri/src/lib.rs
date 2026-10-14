@@ -24,6 +24,12 @@ pub fn run() {
             commands::unstage_files,
             commands::discard_files,
             commands::apply_lines,
+            commands::log_page,
+            commands::list_refs,
+            commands::commit_details,
+            commands::commit_file_diff,
+            commands::commit_draft,
+            commands::create_commit,
             commands::watch_repository,
             commands::unwatch_repository,
         ])

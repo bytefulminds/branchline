@@ -81,6 +81,8 @@ pub struct RepositoryInfo {
     pub inspected_at: u64,
     /// Wall-clock time the inspection took, in milliseconds.
     pub duration_ms: u64,
+    /// Changes when any branch, remote branch or tag moves (history must reload).
+    pub refs_fingerprint: String,
 }
 
 /// Validate a user-supplied path before handing it to Git.
@@ -299,6 +301,7 @@ pub fn inspect(raw_path: &str) -> Result<RepositoryInfo, GitError> {
         changes,
         total_changes,
         truncated,
+        refs_fingerprint: super::log::refs_fingerprint(&root)?,
         inspected_at: now_ms(),
         duration_ms: started.elapsed().as_millis() as u64,
     })

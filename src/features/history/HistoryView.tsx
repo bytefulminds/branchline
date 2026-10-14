@@ -1,0 +1,140 @@
+import { CircleAlert, GitCommitHorizontal } from "lucide-react";
+import { useCallback, useState } from "react";
+import { EmptyState } from "../../components/EmptyState";
+import { Spinner } from "../../components/Spinner";
+import { Splitter } from "../../components/Splitter";
+import { usePersistentNumber } from "../../lib/usePersistentNumber";
+import type { CommitFile, RepositoryInfo } from "../../types/git";
+import { CommitDetailsPanel } from "./CommitDetailsPanel";
+import { CommitDiffView } from "./CommitDiffView";
+import { CommitList, graphColumnWidth, WorkInProgressRow } from "./CommitList";
+import { useHistory } from "./useHistory";
+import "./HistoryView.css";
+
+export function HistoryView({
+  repo,
+  onShowChanges,
+}: {
+  repo: RepositoryInfo;
+  onShowChanges: () => void;
+}) {
+  const history = useHistory(repo);
+  const [selectedOid, setSelectedOid] = useState<string | null>(null);
+  const [openFile, setOpenFile] = useState<{ oid: string; file: CommitFile } | null>(null);
+  const [detailsWidth, setDetailsWidth] = usePersistentNumber(
+    "branchline.layout.commitDetailsWidth",
+    400,
+  );
+  const { data, loadMore } = history;
+
+  const select = useCallback((oid: string) => {
+    setSelectedOid(oid);
+    setOpenFile(null);
+  }, []);
+
+  const selected = selectedOid ?? data?.commits[0]?.oid ?? null;
+
+  let list;
+  if (history.error && !data) {
+    list = (
+      <EmptyState
+        role="alert"
+        tone="error"
+        icon={<CircleAlert size={22} aria-hidden />}
+        title="Could not load history"
+        description={history.error.detail ?? history.error.message}
+      />
+    );
+  } else if (!data) {
+    list = (
+      <div className="bl-history__loading" role="status">
+        <Spinner size={18} /> Loading history…
+      </div>
+    );
+  } else if (data.commits.length === 0) {
+    list = (
+      <EmptyState
+        icon={<GitCommitHorizontal size={22} aria-hidden />}
+        title="No commits yet"
+        description="Stage your changes and create the first commit to start the history."
+      />
+    );
+  } else {
+    list = (
+      <CommitList
+        data={data}
+        head={repo.head}
+        selectedOid={selected}
+        onSelect={select}
+        onNearEnd={loadMore}
+        loadingMore={history.loadingMore}
+      />
+    );
+  }
+
+  return (
+    <div className="bl-history">
+      <div
+        className="bl-history__main"
+        style={{ "--graph-width": graphColumnWidth(data) } as React.CSSProperties}
+      >
+        {openFile ? (
+          <CommitDiffView
+            key={`${openFile.oid}:${openFile.file.path}`}
+            repoPath={repo.path}
+            oid={openFile.oid}
+            file={openFile.file}
+            onBack={() => setOpenFile(null)}
+          />
+        ) : (
+          <>
+            <div className="bl-history__header">
+              <h1 className="text-h2">History</h1>
+              <span className="text-small text-secondary">
+                {data
+                  ? `${data.total.toLocaleString()} ${data.total === 1 ? "commit" : "commits"}`
+                  : ""}
+              </span>
+              {history.loading && data && <Spinner size={14} label="Updating history" />}
+            </div>
+            {repo.totalChanges > 0 && (
+              <WorkInProgressRow count={repo.totalChanges} onOpen={onShowChanges} />
+            )}
+            <div className="bl-history__columns text-small" aria-hidden>
+              <span className="bl-history__col-graph">Graph</span>
+              <span className="bl-history__col-message">Description</span>
+              <span className="bl-history__col-author">Author</span>
+              <span className="bl-history__col-date">Date</span>
+              <span className="bl-history__col-sha">Commit</span>
+            </div>
+            {list}
+          </>
+        )}
+      </div>
+      {selected && data && (
+        <>
+          <Splitter
+            label="Resize commit details"
+            value={detailsWidth}
+            min={300}
+            max={640}
+            side="right"
+            onChange={setDetailsWidth}
+          />
+          <aside className="bl-history__details" style={{ width: detailsWidth }}>
+            <CommitDetailsPanel
+              key={selected}
+              repoPath={repo.path}
+              oid={selected}
+              refs={data.refsByOid.get(selected)}
+              head={repo.head}
+              selectedFile={openFile?.oid === selected ? openFile.file.path : null}
+              onOpenFile={(file, details) => setOpenFile({ oid: details.oid, file })}
+              onSelectCommit={select}
+            />
+          </aside>
+        </>
+      )}
+    </div>
+  );
+}

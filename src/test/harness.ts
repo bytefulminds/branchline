@@ -47,8 +47,31 @@ export const REPO: RepositoryInfo = {
   totalChanges: 3,
   truncated: false,
   inspectedAt: Date.now(),
+  refsFingerprint: "refs-1",
   durationMs: 12,
 };
+
+export const DRAFT = {
+  author: { name: "Dev", email: "dev@example.com" },
+  headMessage: "Initial commit\n\nWith details.",
+  preparedMessage: null,
+  canAmend: true,
+};
+
+/** A linear history of `n` commits, newest first, plus `merge` at the top when requested. */
+export function makeHistory(n: number, offset = 0) {
+  return Array.from({ length: n }, (_, i) => {
+    const k = offset + i;
+    return {
+      oid: k.toString(16).padStart(40, "0"),
+      parents: [(k + 1).toString(16).padStart(40, "0")],
+      authorName: k % 2 ? "Ada Lovelace" : "Grace Hopper",
+      authorEmail: k % 2 ? "ada@example.com" : "grace@example.com",
+      authorTime: 1_700_000_000 - k * 3600,
+      summary: `Commit number ${k}`,
+    };
+  });
+}
 
 export function diffFor({ path, area }: { path: string; area: DiffArea }): FileDiff {
   return {
@@ -117,13 +140,19 @@ export function setup(handler: Handler) {
   mockWindows("main");
   mockIPC(
     (cmd, args) => {
-      calls.push({ cmd, args: (args ?? {}) as Record<string, unknown> });
+      const a = (args ?? {}) as Record<string, unknown>;
+      calls.push({ cmd, args: a });
+      // The test's handler wins; these defaults cover everything else.
+      const answer = handler(cmd, a);
+      if (answer !== undefined) return answer;
       if (cmd.startsWith("plugin:window|")) return cmd.endsWith("is_maximized") ? false : null;
       if (cmd === "git_version")
         return { version: "2.45.0", major: 2, minor: 45, path: "/usr/bin/git" };
       if (cmd === "watch_repository" || cmd === "unwatch_repository") return null;
-      if (cmd === "file_diff") return diffFor(args as { path: string; area: DiffArea });
-      return handler(cmd, (args ?? {}) as Record<string, unknown>);
+      if (cmd === "launch_repository_path") return null;
+      if (cmd === "file_diff") return diffFor(a as { path: string; area: DiffArea });
+      if (cmd === "commit_draft") return DRAFT;
+      return undefined;
     },
     { shouldMockEvents: true },
   );

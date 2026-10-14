@@ -35,12 +35,15 @@ Milestones are only marked complete when the behavior works against real Git and
 - [ ] Syntax highlighting in diffs
 - [ ] Line staging for untracked files (via intent-to-add)
 
-## Milestone 3: Commits and history
+## Milestone 3: Commits and history (done)
 
-- [ ] Commit (with amend), validation and error feedback
-- [ ] Incremental history loading, virtualized commit list
-- [ ] Commit details and changed files per commit
-- [ ] Initial commit graph with lane tokens
+- [x] Commit (with amend), validation and error feedback
+- [x] Incremental history loading, virtualized commit list
+- [x] Commit details and changed files per commit, read-only file diffs
+- [x] Initial commit graph with lane tokens (randomized continuity test)
+- [x] macOS app icon on Apple's icon grid
+- [ ] History search and filters
+- [ ] Graph: click a lane to follow a branch, collapse merged branches
 
 ## Milestone 4: Branches and remotes
 

@@ -9,9 +9,9 @@ Branchline is a fast, local-first, open-source Git desktop client for Windows, m
 It is built with Tauri 2, React, TypeScript and Rust, and drives the native Git CLI instead of
 reimplementing Git.
 
-> **Status:** early development. Milestones 0 to 2 are complete: Branchline opens a local
-> repository, shows its working-tree state and diffs, and stages, unstages and discards files,
-> hunks and individual lines. See [ROADMAP.md](ROADMAP.md).
+> **Status:** early development. Milestones 0 to 3 are complete: Branchline opens a local
+> repository, stages files, hunks and lines, creates and amends commits, and shows the full
+> history with a commit graph. See [ROADMAP.md](ROADMAP.md).
 
 ## What works today
 
@@ -35,7 +35,15 @@ reimplementing Git.
   within a second), plus `Ctrl+R` / `⌘R` / `F5`. No polling.
 - Clear loading, empty, error and "Git not installed" states.
 
-Commits, history and the commit graph follow in the next milestones.
+- Commit and amend from the Changes view: summary and description, a length hint, merge
+  messages prefilled, `Ctrl+Enter` / `⌘↵`, and clear errors for missing identity or failing hooks.
+- History of all branches, remote branches and tags with a commit graph, ref badges, authors and
+  dates. Fast on large repositories: the list is virtualized and loads page by page.
+- Commit details: full message, author and committer, parents, changed files with line counts,
+  and a read-only diff per file.
+- `Ctrl+1` / `⌘1` for Changes and `Ctrl+2` / `⌘2` for History.
+
+Branches, remotes (fetch, pull, push) and advanced workflows follow in the next milestones.
 
 ## Prerequisites
 
@@ -132,7 +140,18 @@ Measured, not assumed. Inspection runs `rev-parse` twice, `status` once and `sho
 | Synthetic, 12,000 untracked files | 12,000 (10,000 returned) | 34 ms |
 
 Release build, Linux x86_64 container, warm file cache, 10 runs each
-(`examples/inspect.rs`). Numbers on your machine will differ; macOS and Windows have not been
+(`examples/inspect.rs`).
+
+History on git/git (85,000 commits, 1,021 refs), `examples/history.rs`:
+
+| | First page (300 commits) | Every later page, at any depth |
+|---|---|---|
+| Without a commit-graph file (fresh clone) | 1.03 s | about 30 ms |
+| With a commit-graph file (`git commit-graph write --reachable`) | 0.30 s | about 33 ms |
+
+The first page includes one walk over the whole history to get the correct order (children
+before parents), which Git can only do quickly with a commit-graph file. Git writes that file
+during `git gc` and `git maintenance`; Branchline does not write it for you. Numbers on your machine will differ; macOS and Windows have not been
 measured yet.
 
 Startup (release build, same container, Xvfb with software rendering and no GPU): the window maps
@@ -142,8 +161,11 @@ is still to do.
 
 ## Known limitations
 
-- Commits, history, graph, branches and remotes are not implemented yet; their navigation entries
+- Branches, tags, remotes, stashes and worktrees are not implemented yet; their navigation entries
   are visible but disabled.
+- The graph shows up to 12 lanes; further lanes are clipped. Merge commits list the files changed
+  relative to their first parent.
+- History cannot be searched or filtered yet.
 - The diff view is unified only (no side-by-side view yet) and has no syntax highlighting yet.
 - Hunk and line operations are not available for untracked files, renames, copies and binary
   files; those are staged as a whole.

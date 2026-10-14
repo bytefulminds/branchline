@@ -27,6 +27,7 @@ import type { FileAction } from "./FileList";
 import "./DiffView.css";
 
 export const DIFF_ROW_HEIGHT = 22;
+export { formatBytes };
 const EMPTY: LineSelection = new Map();
 
 export interface DiffViewProps {
@@ -262,7 +263,8 @@ export function DiffView({
         rows={rows}
         error={error}
         loading={loading}
-        entry={entry}
+        conflict={entry.area === "conflicted"}
+        binaryNote={`${STATUS_META[entry.status].label}. Binary files can be staged or discarded as a whole.`}
         selection={selection}
         partial={partial}
         lineActions={lineActions}
@@ -275,32 +277,36 @@ export function DiffView({
   );
 }
 
-function DiffBody({
+/** Scrollable, virtualized diff content. Also used read-only for commit diffs. */
+export function DiffBody({
   diff,
   rows,
   error,
   loading,
-  entry,
-  selection,
-  partial,
-  lineActions,
-  onLineClick,
-  onHunkAction,
+  conflict = false,
+  binaryNote = "Binary files are not shown as text.",
+  selection = EMPTY,
+  partial = false,
+  lineActions = [],
+  onLineClick = () => {},
+  onHunkAction = () => {},
   onShowLarge,
-  onClearSelection,
+  onClearSelection = () => {},
 }: {
   diff: FileDiff | null;
   rows: DiffRow[];
   error: GitError | null;
   loading: boolean;
-  entry: ChangeEntry;
-  selection: LineSelection;
-  partial: boolean;
-  lineActions: LineAction[];
-  onLineClick: (e: React.MouseEvent, hunk: number, line: number) => void;
-  onHunkAction: (action: LineAction, hunk: number) => void;
+  /** Highlight conflict markers. */
+  conflict?: boolean;
+  binaryNote?: string;
+  selection?: LineSelection;
+  partial?: boolean;
+  lineActions?: LineAction[];
+  onLineClick?: (e: React.MouseEvent, hunk: number, line: number) => void;
+  onHunkAction?: (action: LineAction, hunk: number) => void;
   onShowLarge: () => void;
-  onClearSelection: () => void;
+  onClearSelection?: () => void;
 }) {
   const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
   const virtual = useVirtualRows(scrollEl, rows.length, DIFF_ROW_HEIGHT, 20);
@@ -338,7 +344,7 @@ function DiffBody({
       <EmptyState
         icon={<FileWarning size={22} aria-hidden />}
         title="Binary file"
-        description={`${STATUS_META[entry.status].label}. Binary files can be staged or discarded as a whole.`}
+        description={binaryNote}
       />
     );
   if (diff.hunks.length === 0)
@@ -413,7 +419,7 @@ function DiffBody({
           }
           const selectable = partial && line.kind !== "context";
           const selected = selection.get(row.hunk)?.has(row.line) ?? false;
-          const conflict = entry.area === "conflicted" && CONFLICT_MARKER.test(line.content);
+          const isMarker = conflict && CONFLICT_MARKER.test(line.content);
           return (
             <div
               key={`l${row.hunk}-${row.line}`}
@@ -422,7 +428,7 @@ function DiffBody({
                 `bl-diff-row--${line.kind}`,
                 selectable && "bl-diff-row--selectable",
                 selected && "bl-diff-row--selected",
-                conflict && "bl-diff-row--conflict",
+                isMarker && "bl-diff-row--conflict",
               ]
                 .filter(Boolean)
                 .join(" ")}

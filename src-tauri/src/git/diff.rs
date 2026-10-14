@@ -30,6 +30,8 @@ pub enum DiffArea {
     Untracked,
     /// An unmerged path; shown as the working-tree content with conflict markers.
     Conflicted,
+    /// A file changed by a commit, relative to the commit's first parent.
+    Commit,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -275,7 +277,7 @@ fn new_side_path(file: &ParsedFile) -> Option<String> {
     v.strip_prefix("b/").map(str::to_string)
 }
 
-const DIFF_FLAGS: &[&str] = &[
+pub const DIFF_FLAGS: &[&str] = &[
     "--no-color",
     "--no-ext-diff",
     "--no-textconv",
@@ -394,7 +396,11 @@ pub fn file_diff(
             }
             args.push(path);
         }
-        DiffArea::Conflicted => unreachable!(),
+        DiffArea::Conflicted | DiffArea::Commit => {
+            return Err(GitError::Unsupported(
+                "Use the conflict or commit diff functions for this area.".into(),
+            ))
+        }
     }
 
     let limit = if force {
@@ -424,7 +430,43 @@ pub fn file_diff(
         Err(e) => return Err(e),
     };
 
-    let raw = out.stdout;
+    diff_from_raw(out.stdout, path, original_path, area, force)
+}
+
+/// Load the diff of `path` in commit `oid` (relative to its first parent).
+pub fn commit_diff(
+    root: &Path,
+    oid: &str,
+    path: &str,
+    original_path: Option<&str>,
+    force: bool,
+) -> Result<FileDiff, GitError> {
+    let limit = if force {
+        HARD_LIMIT_BYTES
+    } else {
+        SOFT_LIMIT_BYTES
+    };
+    match super::log::commit_file_diff_raw(root, oid, path, original_path, limit) {
+        Ok(raw) => diff_from_raw(raw, path, original_path, DiffArea::Commit, force),
+        Err(GitError::OutputTooLarge { .. }) if !force => Ok(empty_diff(
+            path,
+            original_path,
+            DiffArea::Commit,
+            true,
+            limit as u64,
+        )),
+        Err(e) => Err(e),
+    }
+}
+
+/// Turn raw `git diff` output for one file into a [`FileDiff`].
+fn diff_from_raw(
+    raw: Vec<u8>,
+    path: &str,
+    original_path: Option<&str>,
+    area: DiffArea,
+    force: bool,
+) -> Result<FileDiff, GitError> {
     let line_count = raw.iter().filter(|b| **b == b'\n').count();
     if !force && line_count > SOFT_LIMIT_LINES {
         return Ok(empty_diff(
@@ -435,7 +477,6 @@ pub fn file_diff(
             raw.len() as u64,
         ));
     }
-
     let sections = parse_unified(&raw)?;
     let parsed = if sections.len() > 1 {
         sections

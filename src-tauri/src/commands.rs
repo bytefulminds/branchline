@@ -2,7 +2,9 @@
 //! runtime with `spawn_blocking`, so the webview and event loop stay responsive.
 
 use crate::error::GitError;
+use crate::git::commit::{self, CommitDraft, CommitRequest};
 use crate::git::diff::{self, DiffArea, FileDiff};
+use crate::git::log::{self, CommitDetails, LogPage, RefInfo};
 use crate::git::ops::{self, LineRequest};
 use crate::git::repository::{self, RepositoryInfo};
 use crate::git::runner::{self, GitVersion};
@@ -82,6 +84,57 @@ pub async fn discard_files(repo: String, paths: Vec<String>) -> Result<Repositor
 #[tauri::command]
 pub async fn apply_lines(repo: String, request: LineRequest) -> Result<RepositoryInfo, GitError> {
     write_then_inspect(repo, move |r| ops::apply_lines(r, &request)).await
+}
+
+/// One page of history (newest first).
+#[tauri::command]
+pub async fn log_page(repo: String, skip: usize, limit: usize) -> Result<LogPage, GitError> {
+    blocking(move || log::log_page(&repository::resolve_root(&repo)?, skip, limit)).await
+}
+
+#[tauri::command]
+pub async fn list_refs(repo: String) -> Result<Vec<RefInfo>, GitError> {
+    blocking(move || log::list_refs(&repository::resolve_root(&repo)?)).await
+}
+
+#[tauri::command]
+pub async fn commit_details(repo: String, oid: String) -> Result<CommitDetails, GitError> {
+    blocking(move || log::commit_details(&repository::resolve_root(&repo)?, &oid)).await
+}
+
+#[tauri::command]
+pub async fn commit_file_diff(
+    repo: String,
+    oid: String,
+    path: String,
+    original_path: Option<String>,
+    force: Option<bool>,
+) -> Result<FileDiff, GitError> {
+    blocking(move || {
+        let root = repository::resolve_root(&repo)?;
+        diff::commit_diff(
+            &root,
+            &oid,
+            &path,
+            original_path.as_deref(),
+            force.unwrap_or(false),
+        )
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn commit_draft(repo: String) -> Result<CommitDraft, GitError> {
+    blocking(move || commit::commit_draft(&repo)).await
+}
+
+/// Create (or amend) a commit, then return the refreshed repository.
+#[tauri::command]
+pub async fn create_commit(
+    repo: String,
+    request: CommitRequest,
+) -> Result<RepositoryInfo, GitError> {
+    write_then_inspect(repo, move |r| commit::commit(r, &request).map(|_| ())).await
 }
 
 /// Watch `repo` for changes; emits `repository-changed` events.

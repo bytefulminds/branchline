@@ -63,6 +63,12 @@ pub enum GitError {
     #[error("Git could not apply the selected changes.")]
     ApplyFailed { detail: String },
 
+    #[error("Git does not know who you are. Set your name and email to commit.")]
+    IdentityMissing { detail: String },
+
+    #[error("The commit was not created.")]
+    CommitFailed { detail: String },
+
     #[error("Unexpected Git output: {0}")]
     Parse(String),
 
@@ -91,6 +97,8 @@ impl GitError {
             GitError::Stale => "stale",
             GitError::Unsupported(_) => "unsupported",
             GitError::ApplyFailed { .. } => "applyFailed",
+            GitError::IdentityMissing { .. } => "identityMissing",
+            GitError::CommitFailed { .. } => "commitFailed",
             GitError::Parse(_) => "parse",
             GitError::Internal(_) => "internal",
         }
@@ -102,7 +110,9 @@ impl GitError {
             GitError::NotARepository { detail }
             | GitError::UnsafeRepository { detail }
             | GitError::Locked { detail }
-            | GitError::ApplyFailed { detail } => Some(detail.as_str()),
+            | GitError::ApplyFailed { detail }
+            | GitError::IdentityMissing { detail }
+            | GitError::CommitFailed { detail } => Some(detail.as_str()),
             GitError::GitFailed { stderr, .. } => Some(stderr.as_str()),
             _ => None,
         }

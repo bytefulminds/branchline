@@ -59,6 +59,18 @@
   --git-untracked: #2dd4bf;
   --git-conflict: var(--color-error-text);
 
+  /* Commit graph lanes (see docs/design-system.md) */
+  --graph-0: #00d1a0;
+  --graph-1: #a78bfa;
+  --graph-2: #f59e0b;
+  --graph-3: #f472b6;
+  --graph-4: #60a5fa;
+  --graph-5: #22d3ee;
+  --graph-6: #fb923c;
+  --graph-7: #a3e635;
+  --graph-lane-width: 14px;
+  --history-row-height: 30px;
+
   /* Interaction */
   --color-hover: rgb(148 163 184 / 8%);
   --color-pressed: rgb(148 163 184 / 14%);

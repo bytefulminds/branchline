@@ -3,7 +3,7 @@ import { Splitter } from "../components/Splitter";
 import type { RepositoryController } from "../features/repository/useRepository";
 import { usePersistentNumber } from "../lib/usePersistentNumber";
 import type { GitError, GitVersion } from "../types/git";
-import { Sidebar } from "./Sidebar";
+import { Sidebar, type WorkspaceView } from "./Sidebar";
 import { StatusBar } from "./StatusBar";
 import { TitleBar } from "./TitleBar";
 import "./AppShell.css";
@@ -13,11 +13,15 @@ export function AppShell({
   controller,
   gitVersion,
   onOpen,
+  view,
+  onView,
   children,
 }: {
   controller: RepositoryController;
   gitVersion: GitVersion | GitError | null;
   onOpen: () => void;
+  view: WorkspaceView;
+  onView: (view: WorkspaceView) => void;
   children: ReactNode;
 }) {
   const [sidebarWidth, setSidebarWidth] = usePersistentNumber(
@@ -28,7 +32,13 @@ export function AppShell({
     <div className="bl-app">
       <TitleBar controller={controller} onOpen={onOpen} />
       <div className="bl-app__body">
-        <Sidebar controller={controller} onOpen={onOpen} width={sidebarWidth} />
+        <Sidebar
+          controller={controller}
+          onOpen={onOpen}
+          width={sidebarWidth}
+          view={view}
+          onView={onView}
+        />
         <Splitter
           label="Resize sidebar"
           value={sidebarWidth}

@@ -14,6 +14,15 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   shortcut?: string;
 }
 
+/** "⌘O" / "Ctrl+O" / "Ctrl+↵" to the aria-keyshortcuts format ("Meta+O", "Control+Enter"). */
+export function toAriaShortcut(label: string): string {
+  return label
+    .replace("⌘", "Meta+")
+    .replace("Ctrl+", "Control+")
+    .replace("↵", "Enter")
+    .replace(/\+\+/g, "+");
+}
+
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
   {
     variant = "secondary",
@@ -37,11 +46,17 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
         .join(" ")}
       disabled={disabled || loading}
       aria-busy={loading || undefined}
+      aria-keyshortcuts={shortcut ? toAriaShortcut(shortcut) : undefined}
       {...rest}
     >
       {loading ? <Spinner size={14} /> : icon}
       {children && <span className="bl-button__label">{children}</span>}
-      {shortcut && <kbd className="bl-button__kbd">{shortcut}</kbd>}
+      {/* The hint is visual; the shortcut is announced through aria-keyshortcuts. */}
+      {shortcut && (
+        <kbd className="bl-button__kbd" aria-hidden>
+          {shortcut}
+        </kbd>
+      )}
     </button>
   );
 });

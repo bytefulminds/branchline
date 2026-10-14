@@ -18,6 +18,7 @@ import { OPERATION_LABEL } from "../repository/headLabel";
 import { RepositoryOverview } from "../repository/RepositoryOverview";
 import type { RepositoryController } from "../repository/useRepository";
 import { filterGroups, groupChanges, type ChangeEntry } from "./changeModel";
+import { CommitBox } from "./CommitBox";
 import { DiffView } from "./DiffView";
 import { FileList, type FileAction } from "./FileList";
 import "./ChangesView.css";
@@ -245,6 +246,7 @@ export function ChangesView({
             busy={busy}
           />
         )}
+        <CommitBox repo={repo} controller={controller} />
       </div>
 
       <Splitter

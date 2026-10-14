@@ -1,0 +1,143 @@
+import { render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { beforeEach, describe, expect, it } from "vitest";
+import App from "../../App";
+import { toAriaShortcut } from "../../components/Button";
+import { DRAFT, installTauriTestEnvironment, openButton, REPO, setup } from "../../test/harness";
+import type { RepositoryInfo } from "../../types/git";
+import { commitBlocker, joinMessage, resetCommitDrafts, splitMessage } from "./CommitBox";
+
+installTauriTestEnvironment();
+beforeEach(resetCommitDrafts);
+
+/** REPO has one staged rename (lib/b.rs). */
+const CLEAN: RepositoryInfo = { ...REPO, changes: [], totalChanges: 0 };
+
+async function openRepo(
+  repo: RepositoryInfo,
+  extra: (cmd: string, args: Record<string, unknown>) => unknown = () => undefined,
+) {
+  const user = userEvent.setup();
+  const calls = setup((cmd, args) => {
+    if (cmd === "plugin:dialog|open") return repo.path;
+    if (cmd === "inspect_repository") return repo;
+    return extra(cmd, args);
+  });
+  render(<App />);
+  await user.click(openButton());
+  const form = await screen.findByRole("form", { name: "Commit" });
+  return { user, calls, form };
+}
+
+describe("commit message helpers", () => {
+  it("maps shortcut hints to aria-keyshortcuts", () => {
+    expect(toAriaShortcut("Ctrl+↵")).toBe("Control+Enter");
+    expect(toAriaShortcut("⌘↵")).toBe("Meta+Enter");
+    expect(toAriaShortcut("⌘O")).toBe("Meta+O");
+  });
+
+  it("splits and joins summary and description", () => {
+    expect(splitMessage("Title\r\n\r\nBody\nmore")).toEqual({
+      summary: "Title",
+      description: "Body\nmore",
+    });
+    expect(joinMessage({ summary: " Title ", description: "\n Body \n" })).toBe("Title\n\nBody");
+    expect(joinMessage({ summary: "Only", description: "  " })).toBe("Only");
+  });
+
+  it("explains why committing is blocked", () => {
+    const msg = { summary: "x", description: "" };
+    expect(commitBlocker(CLEAN, msg, false)).toBe("Stage changes to commit.");
+    expect(commitBlocker(CLEAN, msg, true)).toBeNull();
+    expect(commitBlocker(REPO, { summary: " ", description: "" }, false)).toBe("Enter a summary.");
+    const conflicted = {
+      ...REPO,
+      changes: [{ ...REPO.changes[0]!, conflict: "bothModified" as const }],
+    };
+    expect(commitBlocker(conflicted, msg, false)).toBe("Resolve the conflict first.");
+    expect(commitBlocker({ ...CLEAN, operation: "merge" }, msg, false)).toBeNull();
+  });
+});
+
+describe("commit box", () => {
+  it("commits staged changes with summary and description", async () => {
+    const { user, calls, form } = await openRepo(REPO, (cmd) =>
+      cmd === "create_commit" ? CLEAN : undefined,
+    );
+    const submit = within(form).getByRole("button", { name: /Commit 1 file/ });
+    expect(submit).toBeDisabled();
+    expect(within(form).getByText("Enter a summary.")).toBeInTheDocument();
+
+    await user.type(within(form).getByLabelText("Commit summary"), "Add parser");
+    await user.type(within(form).getByLabelText("Commit description"), "Handles CRLF.");
+    expect(within(form).getByText("As Dev <dev@example.com>")).toBeInTheDocument();
+    await user.click(submit);
+
+    await waitFor(() =>
+      expect(calls.find((c) => c.cmd === "create_commit")?.args).toEqual({
+        repo: REPO.path,
+        request: { message: "Add parser\n\nHandles CRLF.", amend: false },
+      }),
+    );
+    expect(await screen.findByText("Commit created")).toBeInTheDocument();
+    expect(within(form).getByLabelText("Commit summary")).toHaveValue("");
+  });
+
+  it("submits with Ctrl+Enter", async () => {
+    const { user, calls, form } = await openRepo(REPO, (cmd) =>
+      cmd === "create_commit" ? CLEAN : undefined,
+    );
+    await user.type(
+      within(form).getByLabelText("Commit summary"),
+      "Quick fix{Control>}{Enter}{/Control}",
+    );
+    await waitFor(() => expect(calls.some((c) => c.cmd === "create_commit")).toBe(true));
+  });
+
+  it("prefills the previous message when amending", async () => {
+    const { user, calls, form } = await openRepo(CLEAN, (cmd) =>
+      cmd === "create_commit" ? CLEAN : undefined,
+    );
+    expect(within(form).getByRole("button", { name: "Commit" })).toBeDisabled();
+    expect(within(form).getByText("Stage changes to commit.")).toBeInTheDocument();
+    const amend = within(form).getByRole("checkbox", { name: "Amend last commit" });
+    await waitFor(() => expect(amend).toBeEnabled());
+    await user.click(amend);
+    expect(within(form).getByLabelText("Commit summary")).toHaveValue("Initial commit");
+    expect(within(form).getByLabelText("Commit description")).toHaveValue("With details.");
+    await user.click(within(form).getByRole("button", { name: "Amend last commit" }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.cmd === "create_commit")?.args.request).toEqual({
+        message: "Initial commit\n\nWith details.",
+        amend: true,
+      }),
+    );
+  });
+
+  it("shows a missing identity clearly", async () => {
+    const { user, form } = await openRepo(REPO, (cmd) => {
+      if (cmd === "create_commit")
+        throw {
+          kind: "identityMissing",
+          message: "Git does not know who you are.",
+          detail: "*** Please tell me who you are.",
+        };
+    });
+    await user.type(within(form).getByLabelText("Commit summary"), "x");
+    await user.click(within(form).getByRole("button", { name: /Commit 1 file/ }));
+    const alert = await within(form).findByRole("alert");
+    expect(alert).toHaveTextContent("Git does not know who you are.");
+    expect(alert).toHaveTextContent('git config --global user.name "Your Name"');
+  });
+
+  it("prefills a prepared merge message", async () => {
+    const merging: RepositoryInfo = { ...CLEAN, operation: "merge" };
+    const { form } = await openRepo(merging, (cmd) =>
+      cmd === "commit_draft" ? { ...DRAFT, preparedMessage: "Merge branch 'feature'" } : undefined,
+    );
+    await waitFor(() =>
+      expect(within(form).getByLabelText("Commit summary")).toHaveValue("Merge branch 'feature'"),
+    );
+    expect(within(form).getByRole("button", { name: "Commit merge" })).toBeEnabled();
+  });
+});

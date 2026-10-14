@@ -59,6 +59,8 @@ export interface RepositoryInfo {
   truncated: boolean;
   inspectedAt: number;
   durationMs: number;
+  /** Changes when any branch, remote branch or tag moves. */
+  refsFingerprint: string;
 }
 
 export interface GitVersion {
@@ -87,6 +89,8 @@ export type GitErrorKind =
   | "stale"
   | "unsupported"
   | "applyFailed"
+  | "identityMissing"
+  | "commitFailed"
   | "parse"
   | "internal"
   /** Frontend-only: the app is not running inside the Tauri shell. */
@@ -98,7 +102,7 @@ export interface GitError {
   detail: string | null;
 }
 
-export type DiffArea = "unstaged" | "staged" | "untracked" | "conflicted";
+export type DiffArea = "unstaged" | "staged" | "untracked" | "conflicted" | "commit";
 export type LineKind = "context" | "add" | "delete";
 
 export interface DiffLine {
@@ -151,4 +155,62 @@ export interface LineRequest {
   action: LineAction;
   fingerprint: string;
   selections: HunkSelection[];
+}
+
+export interface LogCommit {
+  oid: string;
+  parents: string[];
+  authorName: string;
+  authorEmail: string;
+  /** Seconds since the Unix epoch. */
+  authorTime: number;
+  summary: string;
+}
+
+export interface LogPage {
+  commits: LogCommit[];
+  hasMore: boolean;
+  total: number;
+}
+
+export type RefKind = "branch" | "remote" | "tag";
+
+export interface RefInfo {
+  name: string;
+  kind: RefKind;
+  oid: string;
+}
+
+export interface CommitFile {
+  path: string;
+  originalPath: string | null;
+  status: "A" | "M" | "D" | "R" | "C" | "T" | string;
+  additions: number | null;
+  deletions: number | null;
+  binary: boolean;
+}
+
+export interface CommitDetails {
+  oid: string;
+  parents: string[];
+  authorName: string;
+  authorEmail: string;
+  authorDate: string;
+  committerName: string;
+  committerEmail: string;
+  committerDate: string;
+  message: string;
+  files: CommitFile[];
+}
+
+export interface Identity {
+  name: string;
+  email: string;
+}
+
+export interface CommitDraft {
+  author: Identity | null;
+  headMessage: string | null;
+  preparedMessage: string | null;
+  canAmend: boolean;
 }

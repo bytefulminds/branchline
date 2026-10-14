@@ -72,10 +72,15 @@ Fontsource, so the app works offline.
    `--color-info #60A5FA`; untracked uses teal `#2DD4BF`. Every status also shows a letter and an
    accessible label.
 6. **Commit graph lane colors.** The mockup uses purple, yellow and pink lanes that are not in the
-   palette. These will be defined as graph tokens in Milestone 3 and recorded here.
+   palette. They are defined as `--graph-0` to `--graph-7` (mint, purple, amber, pink, blue, cyan,
+   orange, lime), starting with the primary accent. The same colors tint author avatars, which
+   are generated locally from initials (no network lookups).
 7. **Reference image labeling slip.** The components panel shows a checked checkbox labeled
    "Radio optie". Treated as a typo.
 8. **Folder structure panel.** The reference image suggests `src/assets`, `pages` and `services`;
    `app_structure.txt` suggests `components`, `features`, `layouts`, `styles`. The implementation
    follows `app_structure.txt` (plus `services`, `types`, `lib`) and keeps design references in
    `_assets/`.
+9. **macOS app icon.** The supplied icon fills its canvas edge to edge, which makes it larger than
+   other apps in the Dock. `icons/icon.icns` places the artwork at 824 of 1024 pixels with a soft
+   shadow, following Apple's macOS icon grid. Windows and Linux icons stay full-bleed.

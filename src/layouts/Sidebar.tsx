@@ -19,6 +19,8 @@ import { displayPath } from "../lib/format";
 import { modKeyLabel } from "../services/platform";
 import "./Sidebar.css";
 
+export type WorkspaceView = "changes" | "history";
+
 const MAX_SIDEBAR_RECENT = 6;
 
 function NavItem({
@@ -60,7 +62,6 @@ function NavItem({
 
 /** Repository areas planned for later milestones. Shown disabled, never with fake data. */
 const UPCOMING: { label: string; icon: ReactNode }[] = [
-  { label: "Commits", icon: <GitCommitHorizontal size={16} /> },
   { label: "Branches", icon: <GitBranch size={16} /> },
   { label: "Tags", icon: <Tag size={16} /> },
   { label: "Remotes", icon: <Cloud size={16} /> },
@@ -72,10 +73,14 @@ export function Sidebar({
   controller,
   onOpen,
   width,
+  view,
+  onView,
 }: {
   controller: RepositoryController;
   onOpen: () => void;
   width: number;
+  view: WorkspaceView;
+  onView: (view: WorkspaceView) => void;
 }) {
   const { state, recent } = controller;
   const repo = state.status === "ready" ? state.repo : null;
@@ -117,9 +122,18 @@ export function Sidebar({
             <NavItem
               icon={<FileDiff size={16} />}
               label="Changes"
-              active
+              title={`Changes (${modKeyLabel}1)`}
+              active={view === "changes"}
+              onClick={() => onView("changes")}
               count={repo.totalChanges}
               countTone={conflicts > 0 ? "error" : repo.totalChanges > 0 ? "accent" : "neutral"}
+            />
+            <NavItem
+              icon={<GitCommitHorizontal size={16} />}
+              label="History"
+              title={`History (${modKeyLabel}2)`}
+              active={view === "history"}
+              onClick={() => onView("history")}
             />
             {UPCOMING.map((item) => (
               <NavItem

@@ -1,11 +1,15 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
+  CommitDetails,
+  CommitDraft,
   DiffArea,
   FileDiff,
   GitError,
   GitVersion,
   LineRequest,
+  LogPage,
+  RefInfo,
   RepositoryInfo,
 } from "../types/git";
 
@@ -64,6 +68,21 @@ export const gitService = {
     call<RepositoryInfo>("discard_files", { repo, paths }),
   applyLines: (repo: string, request: LineRequest) =>
     call<RepositoryInfo>("apply_lines", { repo, request }),
+  logPage: (repo: string, skip: number, limit: number) =>
+    call<LogPage>("log_page", { repo, skip, limit }),
+  listRefs: (repo: string) => call<RefInfo[]>("list_refs", { repo }),
+  commitDetails: (repo: string, oid: string) =>
+    call<CommitDetails>("commit_details", { repo, oid }),
+  commitFileDiff: (
+    repo: string,
+    oid: string,
+    path: string,
+    originalPath: string | null,
+    force = false,
+  ) => call<FileDiff>("commit_file_diff", { repo, oid, path, originalPath, force }),
+  commitDraft: (repo: string) => call<CommitDraft>("commit_draft", { repo }),
+  createCommit: (repo: string, message: string, amend: boolean) =>
+    call<RepositoryInfo>("create_commit", { repo, request: { message, amend } }),
   watchRepository: (repo: string) => call<void>("watch_repository", { repo }),
   unwatchRepository: () => call<void>("unwatch_repository"),
   /** Subscribe to file-system changes of the watched repository. */
