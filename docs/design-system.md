@@ -45,7 +45,10 @@ Fontsource, so the app works offline.
 ## Window
 
 - **macOS:** native traffic lights over a custom title bar (`titleBarStyle: Overlay`,
-  `tauri.macos.conf.json`). The bar reserves space on the left for them.
+  `tauri.macos.conf.json`). The bar reserves space on the left for them. The buttons are
+  vertically centered in the 44 px bar: at startup `src-tauri/src/window.rs` reads AppKit's
+  button layout (which differs between macOS versions) and creates the window with the
+  matching offset.
 - **Windows and Linux:** undecorated window with Branchline's own minimize, maximize/restore and
   close buttons on the right, following those platforms' placement.
 - The title bar is also the application toolbar (brand, repository selector, branch, refresh,
@@ -83,4 +86,7 @@ Fontsource, so the app works offline.
    `_assets/`.
 9. **macOS app icon.** The supplied icon fills its canvas edge to edge, which makes it larger than
    other apps in the Dock. `icons/icon.icns` places the artwork at 824 of 1024 pixels with a soft
-   shadow, following Apple's macOS icon grid. Windows and Linux icons stay full-bleed.
+   shadow, following Apple's macOS icon grid. For depth, like Apple's own icons, the tile has a
+   gentle top-to-bottom gradient, a light sheen at the top and a shining inner edge that is
+   brightest along the top. The source is `icons/macos/icon.svg`; rebuild the `.icns` with
+   `python3 src-tauri/icons/macos/build.py`. Windows and Linux icons stay full-bleed.

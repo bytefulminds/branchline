@@ -9,12 +9,14 @@ pub mod commands;
 pub mod error;
 pub mod git;
 pub mod watcher;
+pub mod window;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(watcher::WatcherState::default())
+        .setup(|app| Ok(window::create_main(app)?))
         .invoke_handler(tauri::generate_handler![
             commands::git_version,
             commands::inspect_repository,
