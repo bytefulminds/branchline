@@ -1,4 +1,13 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { useConfirm } from "../../components/ConfirmDialog";
 import { useToast } from "../../components/Toast";
 import { gitService } from "../../services/git";
@@ -58,13 +67,24 @@ export function BranchActionsProvider({
   const [dialog, setDialog] = useState<DialogState>(null);
   const { run } = controller;
 
+  // Set below; lets a toast action start "stash and switch" without a dependency cycle.
+  const stashAndSwitchRef = useRef<(name: string) => void>(() => {});
+
   const report = useCallback(
-    (title: string, error: GitError) => {
+    (title: string, error: GitError, switchTarget?: string) => {
       if (error.kind === "checkoutConflict") {
         toast({
           tone: "error",
           title: "Switch blocked by local changes",
           description: "Commit or stash your changes to these files first. " + (error.detail ?? ""),
+          actions: switchTarget
+            ? [
+                {
+                  label: "Stash and switch",
+                  onClick: () => stashAndSwitchRef.current(switchTarget),
+                },
+              ]
+            : undefined,
         });
         return;
       }
@@ -76,10 +96,31 @@ export function BranchActionsProvider({
   const switchTo = useCallback(
     async (name: string) => {
       const error = await run("Switching branch", (path) => gitService.switchBranch(path, name));
-      if (error) report(`Could not switch to ${name}`, error);
+      if (error) report(`Could not switch to ${name}`, error, name);
     },
     [run, report],
   );
+
+  /** Stash everything (untracked files too), then switch. The stash stays in the list. */
+  const stashAndSwitch = useCallback(
+    async (name: string) => {
+      const error = await run("Stashing and switching", async (path) => {
+        await gitService.saveStash(path, `Before switching to ${name}`, true);
+        return gitService.switchBranch(path, name);
+      });
+      if (error) report(`Could not switch to ${name}`, error);
+      else
+        toast({
+          tone: "success",
+          title: `Switched to ${name}`,
+          description: "Your changes are in Stashes. Pop them where you want them back.",
+        });
+    },
+    [run, report, toast],
+  );
+  useEffect(() => {
+    stashAndSwitchRef.current = (n) => void stashAndSwitch(n);
+  }, [stashAndSwitch]);
 
   const checkoutRemote = useCallback(
     async (remoteBranch: string) => {

@@ -12,6 +12,8 @@ import { BranchActionsProvider } from "./features/branches/BranchActions";
 import { BranchesView } from "./features/branches/BranchesView";
 import { HistoryView } from "./features/history/HistoryView";
 import { RemoteActionsProvider } from "./features/remote/RemoteActions";
+import { StashActionsProvider } from "./features/stash/StashActions";
+import { StashesView } from "./features/stash/StashesView";
 import { ContextMenuProvider } from "./components/ContextMenu";
 import { AppShell } from "./layouts/AppShell";
 import type { WorkspaceView } from "./layouts/Sidebar";
@@ -68,10 +70,12 @@ function Workspace() {
         isPrimaryModifier(e) &&
         !e.shiftKey &&
         !e.altKey &&
-        (key === "1" || key === "2" || key === "3")
+        (key === "1" || key === "2" || key === "3" || key === "4")
       ) {
         e.preventDefault();
-        setView(key === "1" ? "changes" : key === "2" ? "history" : "branches");
+        setView(
+          key === "1" ? "changes" : key === "2" ? "history" : key === "3" ? "branches" : "stashes",
+        );
       } else if ((isPrimaryModifier(e) && key === "r") || e.key === "F5") {
         // Also suppresses the webview's own page reload.
         e.preventDefault();
@@ -115,6 +119,12 @@ function Workspace() {
           />
         ) : view === "branches" ? (
           <BranchesView key={state.repo.path} repo={state.repo} />
+        ) : view === "stashes" ? (
+          <StashesView
+            key={state.repo.path}
+            repo={state.repo}
+            busy={controller.operation !== null}
+          />
         ) : (
           <ChangesView key={state.repo.path} repo={state.repo} controller={controller} />
         );
@@ -131,15 +141,21 @@ function Workspace() {
         controller={controller}
         onShowChanges={() => setView("changes")}
       >
-        <AppShell
+        <StashActionsProvider
+          repo={state.status === "ready" ? state.repo : null}
           controller={controller}
-          gitVersion={gitVersion}
-          onOpen={openPicker}
-          view={view}
-          onView={setView}
+          onShowChanges={() => setView("changes")}
         >
-          {content}
-        </AppShell>
+          <AppShell
+            controller={controller}
+            gitVersion={gitVersion}
+            onOpen={openPicker}
+            view={view}
+            onView={setView}
+          >
+            {content}
+          </AppShell>
+        </StashActionsProvider>
       </RemoteActionsProvider>
     </BranchActionsProvider>
   );

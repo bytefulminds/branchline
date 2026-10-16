@@ -28,6 +28,7 @@ const outcome = (over: Partial<RemoteOutcome> = {}): RemoteOutcome => ({
   updatedRefs: 0,
   conflicts: false,
   upToDate: false,
+  stashKept: false,
   target: null,
   ...over,
 });

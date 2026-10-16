@@ -83,6 +83,11 @@ pub struct RepositoryInfo {
     pub duration_ms: u64,
     /// Changes when any branch, remote branch or tag moves (history must reload).
     pub refs_fingerprint: String,
+    pub stash_count: u32,
+    /// Changes whenever a stash is added, applied with pop, or dropped.
+    pub stash_fingerprint: String,
+    /// Uncommitted changes are held by Git until the operation in progress ends.
+    pub held_changes: bool,
 }
 
 /// Validate a user-supplied path before handing it to Git.
@@ -217,6 +222,15 @@ pub fn detect_operation(git_dir: &Path) -> Option<RepoOperation> {
     }
 }
 
+/// Uncommitted changes that Git put aside for an operation with `--autostash`
+/// (pull, merge or rebase). Git restores them when the operation is committed,
+/// continued to the end, or aborted.
+pub fn detect_held_changes(git_dir: &Path) -> bool {
+    git_dir.join("MERGE_AUTOSTASH").is_file()
+        || git_dir.join("rebase-merge").join("autostash").is_file()
+        || git_dir.join("rebase-apply").join("autostash").is_file()
+}
+
 /// Validate a user-supplied repository path and return its root and Git directory.
 pub fn resolve_paths(raw_path: &str) -> Result<(PathBuf, PathBuf), GitError> {
     let dir = validate_path(raw_path)?;
@@ -280,6 +294,7 @@ pub fn inspect(raw_path: &str) -> Result<RepositoryInfo, GitError> {
         _ => Some(head_commit(&root)?),
     };
 
+    let (stash_count, stash_fingerprint) = super::stash::stash_summary(&root)?;
     let total_changes = summary.changes.len();
     let mut changes = summary.changes;
     let truncated = total_changes > MAX_CHANGES;
@@ -295,6 +310,7 @@ pub fn inspect(raw_path: &str) -> Result<RepositoryInfo, GitError> {
         name,
         git_dir: git_dir.display().to_string(),
         operation: detect_operation(&git_dir),
+        held_changes: detect_held_changes(&git_dir),
         head,
         upstream,
         head_commit,
@@ -302,6 +318,8 @@ pub fn inspect(raw_path: &str) -> Result<RepositoryInfo, GitError> {
         total_changes,
         truncated,
         refs_fingerprint: super::log::refs_fingerprint(&root)?,
+        stash_count,
+        stash_fingerprint,
         inspected_at: now_ms(),
         duration_ms: started.elapsed().as_millis() as u64,
     })

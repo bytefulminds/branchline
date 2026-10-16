@@ -113,3 +113,9 @@
 .bl-banner--warning svg {
   color: var(--color-warning);
 }
+
+.bl-changes__stash {
+  margin-left: auto;
+  align-self: center;
+  flex: none;
+}

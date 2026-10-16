@@ -61,6 +61,11 @@ export interface RepositoryInfo {
   durationMs: number;
   /** Changes when any branch, remote branch or tag moves. */
   refsFingerprint: string;
+  stashCount: number;
+  /** Git holds uncommitted changes (autostash) until the operation in progress ends. */
+  heldChanges: boolean;
+  /** Changes whenever a stash is added or removed. */
+  stashFingerprint: string;
 }
 
 export interface GitVersion {
@@ -284,9 +289,37 @@ export interface RemoteOutcome {
   upToDate: boolean;
   /** "origin" for a fetch, "origin/main" for a pull or push. */
   target: string | null;
+  /** Pull with autostash: local changes conflicted and are kept in the stash list. */
+  stashKept: boolean;
 }
 
 export interface RemoteResult {
   outcome: RemoteOutcome;
+  repo: RepositoryInfo;
+}
+
+export interface StashInfo {
+  /** Position in the list (`stash@{index}`); 0 is the newest. */
+  index: number;
+  oid: string;
+  message: string;
+  /** Branch it was made on; null for a detached HEAD. */
+  branch: string | null;
+  /** Git generated the message; the user gave none. */
+  autoMessage: boolean;
+  /** Seconds since the Unix epoch. */
+  time: number;
+  /** Commit with the untracked files, when included. */
+  untrackedOid: string | null;
+}
+
+export interface StashOutcome {
+  conflicts: boolean;
+  /** Pop with conflicts keeps the stash. */
+  kept: boolean;
+}
+
+export interface StashResult {
+  outcome: StashOutcome;
   repo: RepositoryInfo;
 }

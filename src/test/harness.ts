@@ -48,6 +48,9 @@ export const REPO: RepositoryInfo = {
   truncated: false,
   inspectedAt: Date.now(),
   refsFingerprint: "refs-1",
+  stashCount: 0,
+  heldChanges: false,
+  stashFingerprint: "stash-0",
   durationMs: 12,
 };
 
@@ -153,6 +156,7 @@ export function setup(handler: Handler) {
       if (cmd === "file_diff") return diffFor(a as { path: string; area: DiffArea });
       if (cmd === "commit_draft") return DRAFT;
       if (cmd === "list_remotes") return [];
+      if (cmd === "list_stashes") return [];
       return undefined;
     },
     { shouldMockEvents: true },

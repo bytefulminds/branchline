@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useBranchActions } from "../features/branches/BranchActions";
 import { RemoteToolbar } from "../features/remote/RemoteToolbar";
+import { StashToolbar } from "../features/stash/StashToolbar";
 import { IconButton } from "../components/Button";
 import { LogoMark } from "../components/Logo";
 import { Menu, type MenuEntry } from "../components/Menu";
@@ -169,6 +170,7 @@ export function TitleBar({
 
       <div className="bl-titlebar__spacer" data-tauri-drag-region />
 
+      {repo && <StashToolbar repo={repo} busy={controller.operation !== null} />}
       {repo && <RemoteToolbar repo={repo} busy={controller.operation !== null} />}
       {repo && <div className="bl-titlebar__divider" aria-hidden />}
 

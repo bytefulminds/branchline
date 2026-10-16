@@ -43,6 +43,10 @@ pub fn run() {
             commands::pull_branch,
             commands::push_branch,
             commands::cancel_remote_operation,
+            commands::list_stashes,
+            commands::save_stash,
+            commands::apply_stash,
+            commands::drop_stash,
             commands::watch_repository,
             commands::unwatch_repository,
         ])

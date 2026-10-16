@@ -19,7 +19,7 @@ import { displayPath } from "../lib/format";
 import { modKeyLabel } from "../services/platform";
 import "./Sidebar.css";
 
-export type WorkspaceView = "changes" | "history" | "branches";
+export type WorkspaceView = "changes" | "history" | "branches" | "stashes";
 
 const MAX_SIDEBAR_RECENT = 6;
 
@@ -64,7 +64,6 @@ function NavItem({
 const UPCOMING: { label: string; icon: ReactNode }[] = [
   { label: "Tags", icon: <Tag size={16} /> },
   { label: "Remotes", icon: <Cloud size={16} /> },
-  { label: "Stashes", icon: <Archive size={16} /> },
   { label: "Worktrees", icon: <FolderTree size={16} /> },
 ];
 
@@ -140,6 +139,14 @@ export function Sidebar({
               title={`Branches (${modKeyLabel}3)`}
               active={view === "branches"}
               onClick={() => onView("branches")}
+            />
+            <NavItem
+              icon={<Archive size={16} />}
+              label="Stashes"
+              title={`Stashes (${modKeyLabel}4)`}
+              active={view === "stashes"}
+              onClick={() => onView("stashes")}
+              count={repo.stashCount || undefined}
             />
             {UPCOMING.map((item) => (
               <NavItem

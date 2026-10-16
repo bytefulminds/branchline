@@ -128,13 +128,27 @@ fn pull_fast_forwards_and_reports_up_to_date() {
     let tip = commit(&t.b, "b.txt", "b\n", "teammate work");
     git(&t.b, &["push", "-q"]);
 
-    let outcome = pull(&s(&t.a), PullMode::FastForward, "p1", &mut no_progress()).unwrap();
+    let outcome = pull(
+        &s(&t.a),
+        PullMode::FastForward,
+        false,
+        "p1",
+        &mut no_progress(),
+    )
+    .unwrap();
     assert!(!outcome.up_to_date);
     assert!(!outcome.conflicts);
     assert_eq!(outcome.target.as_deref(), Some("origin/main"));
     assert_eq!(git(&t.a, &["rev-parse", "HEAD"]), tip);
 
-    let again = pull(&s(&t.a), PullMode::FastForward, "p2", &mut no_progress()).unwrap();
+    let again = pull(
+        &s(&t.a),
+        PullMode::FastForward,
+        false,
+        "p2",
+        &mut no_progress(),
+    )
+    .unwrap();
     assert!(again.up_to_date);
 }
 
@@ -145,7 +159,14 @@ fn diverged_branches_need_merge_or_rebase() {
     git(&t.b, &["push", "-q"]);
     commit(&t.a, "c.txt", "c\n", "my work");
 
-    let err = pull(&s(&t.a), PullMode::FastForward, "p", &mut no_progress()).unwrap_err();
+    let err = pull(
+        &s(&t.a),
+        PullMode::FastForward,
+        false,
+        "p",
+        &mut no_progress(),
+    )
+    .unwrap_err();
     assert_eq!(err.kind(), "diverged");
     assert_eq!(
         upstream_counts(&t.a),
@@ -153,7 +174,7 @@ fn diverged_branches_need_merge_or_rebase() {
         "nothing changed after a refused pull"
     );
 
-    let outcome = pull(&s(&t.a), PullMode::Merge, "p", &mut no_progress()).unwrap();
+    let outcome = pull(&s(&t.a), PullMode::Merge, false, "p", &mut no_progress()).unwrap();
     assert!(!outcome.conflicts);
     let parents = git(&t.a, &["rev-list", "--parents", "-n1", "HEAD"]);
     assert_eq!(parents.split(' ').count(), 3, "a merge commit was created");
@@ -167,7 +188,7 @@ fn pull_with_rebase_keeps_history_linear() {
     git(&t.b, &["push", "-q"]);
     commit(&t.a, "c.txt", "c\n", "my work");
 
-    pull(&s(&t.a), PullMode::Rebase, "p", &mut no_progress()).unwrap();
+    pull(&s(&t.a), PullMode::Rebase, false, "p", &mut no_progress()).unwrap();
     assert_eq!(git(&t.a, &["rev-list", "--merges", "--count", "HEAD"]), "0");
     assert_eq!(upstream_counts(&t.a), (1, 0));
     assert_eq!(git(&t.a, &["log", "-1", "--format=%s"]), "my work");
@@ -180,14 +201,14 @@ fn pull_conflicts_are_reported_not_failed() {
     git(&t.b, &["push", "-q"]);
     commit(&t.a, "a.txt", "one\nMINE\nthree\n", "my edit");
 
-    let outcome = pull(&s(&t.a), PullMode::Merge, "p", &mut no_progress()).unwrap();
+    let outcome = pull(&s(&t.a), PullMode::Merge, false, "p", &mut no_progress()).unwrap();
     assert!(outcome.conflicts);
     let info = inspect(&s(&t.a)).unwrap();
     assert!(info.operation.is_some());
     assert!(info.changes.iter().any(|c| c.conflict.is_some()));
 
     // While the merge is in progress, another pull is refused up front.
-    let err = pull(&s(&t.a), PullMode::Merge, "p", &mut no_progress()).unwrap_err();
+    let err = pull(&s(&t.a), PullMode::Merge, false, "p", &mut no_progress()).unwrap_err();
     assert_eq!(err.kind(), "unsupported");
 }
 
@@ -198,7 +219,14 @@ fn pull_refuses_to_overwrite_local_changes() {
     git(&t.b, &["push", "-q"]);
     fs::write(t.a.join("a.txt"), "one\nuncommitted\nthree\n").unwrap();
 
-    let err = pull(&s(&t.a), PullMode::FastForward, "p", &mut no_progress()).unwrap_err();
+    let err = pull(
+        &s(&t.a),
+        PullMode::FastForward,
+        false,
+        "p",
+        &mut no_progress(),
+    )
+    .unwrap_err();
     assert_eq!(err.kind(), "checkoutConflict");
     assert_eq!(
         fs::read_to_string(t.a.join("a.txt")).unwrap(),
@@ -211,16 +239,28 @@ fn pull_needs_a_branch_with_an_upstream() {
     let t = setup();
     git(&t.a, &["switch", "-q", "-c", "local-only"]);
     assert_eq!(
-        pull(&s(&t.a), PullMode::FastForward, "p", &mut no_progress())
-            .unwrap_err()
-            .kind(),
+        pull(
+            &s(&t.a),
+            PullMode::FastForward,
+            false,
+            "p",
+            &mut no_progress()
+        )
+        .unwrap_err()
+        .kind(),
         "noUpstream"
     );
     git(&t.a, &["switch", "-q", "--detach", "main"]);
     assert_eq!(
-        pull(&s(&t.a), PullMode::FastForward, "p", &mut no_progress())
-            .unwrap_err()
-            .kind(),
+        pull(
+            &s(&t.a),
+            PullMode::FastForward,
+            false,
+            "p",
+            &mut no_progress()
+        )
+        .unwrap_err()
+        .kind(),
         "unsupported"
     );
 }
@@ -422,4 +462,94 @@ fn a_hanging_fetch_can_be_cancelled() {
 
     // The next operation is not blocked by the cancelled one.
     fetch(&s(&t.a), Some("origin"), "next", &mut no_progress()).unwrap();
+}
+
+#[test]
+fn pull_with_autostash_reapplies_local_changes() {
+    let t = setup();
+    commit(&t.b, "a.txt", "one\ntwo\nthree\nfour\n", "teammate appends");
+    git(&t.b, &["push", "-q"]);
+    let tip = git(&t.b, &["rev-parse", "HEAD"]);
+    fs::write(t.a.join("a.txt"), "ONE\ntwo\nthree\n").unwrap();
+    fs::write(t.a.join("notes.txt"), "untracked\n").unwrap();
+
+    // Without autostash Git refuses, because the pull would overwrite a.txt.
+    let err = pull(&s(&t.a), PullMode::Merge, false, "p", &mut no_progress()).unwrap_err();
+    assert_eq!(err.kind(), "checkoutConflict");
+
+    let outcome = pull(&s(&t.a), PullMode::Merge, true, "p", &mut no_progress()).unwrap();
+    assert!(!outcome.conflicts && !outcome.stash_kept);
+    assert_eq!(git(&t.a, &["rev-parse", "HEAD"]), tip);
+    assert_eq!(
+        fs::read_to_string(t.a.join("a.txt")).unwrap(),
+        "ONE\ntwo\nthree\nfour\n",
+        "both the pulled and the local change are there"
+    );
+    assert!(t.a.join("notes.txt").exists());
+    assert_eq!(
+        git(&t.a, &["stash", "list"]),
+        "",
+        "the temporary stash is gone"
+    );
+}
+
+#[test]
+fn autostash_that_cannot_be_reapplied_is_kept() {
+    let t = setup();
+    commit(&t.b, "a.txt", "one\nTEAMMATE\nthree\n", "teammate edit");
+    git(&t.b, &["push", "-q"]);
+    fs::write(t.a.join("a.txt"), "one\nMINE\nthree\n").unwrap();
+
+    let outcome = pull(
+        &s(&t.a),
+        PullMode::FastForward,
+        true,
+        "p",
+        &mut no_progress(),
+    )
+    .unwrap();
+    assert!(outcome.stash_kept, "{outcome:?}");
+    assert!(outcome.conflicts);
+    assert_eq!(
+        git(&t.a, &["stash", "list"]).lines().count(),
+        1,
+        "nothing is lost"
+    );
+}
+
+#[test]
+fn autostash_during_a_conflicted_merge_is_held_until_the_merge_is_committed() {
+    let t = setup();
+    commit(&t.b, "a.txt", "one\nTEAMMATE\nthree\n", "teammate edit");
+    git(&t.b, &["push", "-q"]);
+    commit(&t.a, "a.txt", "one\nMINE\nthree\n", "my edit");
+    fs::write(t.a.join("other.txt"), "work in progress\n").unwrap();
+    git(&t.a, &["add", "other.txt"]);
+
+    let outcome = pull(&s(&t.a), PullMode::Merge, true, "p", &mut no_progress()).unwrap();
+    assert!(outcome.conflicts);
+    let info = inspect(&s(&t.a)).unwrap();
+    assert!(
+        info.held_changes,
+        "Git holds the local changes during the merge"
+    );
+    assert!(!t.a.join("other.txt").exists());
+
+    fs::write(t.a.join("a.txt"), "one\nBOTH\nthree\n").unwrap();
+    git(&t.a, &["add", "a.txt"]);
+    branchline_lib::git::commit::commit(
+        &s(&t.a),
+        &branchline_lib::git::commit::CommitRequest {
+            message: "Merge".into(),
+            amend: false,
+        },
+    )
+    .unwrap();
+    let info = inspect(&s(&t.a)).unwrap();
+    assert!(!info.held_changes);
+    assert_eq!(
+        fs::read_to_string(t.a.join("other.txt")).unwrap(),
+        "work in progress\n",
+        "committing the merge in Branchline brings the changes back"
+    );
 }

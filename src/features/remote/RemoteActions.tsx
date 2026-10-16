@@ -37,8 +37,8 @@ export interface RemoteActions {
   remotes: RemoteInfo[];
   activity: NetworkActivity | null;
   fetchAll: () => void;
-  /** Pull the current branch. */
-  pull: (mode?: PullMode) => void;
+  /** Pull the current branch; `autostash` puts local changes aside and reapplies them. */
+  pull: (mode?: PullMode, autostash?: boolean) => void;
   /** Push the current branch to its upstream, or publish it when it has none. */
   push: () => void;
   forcePush: () => void;
@@ -195,21 +195,45 @@ export function RemoteActionsProvider({
   }, [runRemote, report, toast, remotes.length]);
 
   const pull = useCallback(
-    async (mode: PullMode = "fastForward") => {
+    async (mode: PullMode = "fastForward", autostash = false) => {
       const label = `${MODE_LABEL[mode]}${upstream ? ` ${upstream.name}` : ""}`;
       const { result, error } = await runRemote("pull", label, (path, opId, onProgress) =>
-        gitService.pullBranch(path, mode, opId, onProgress),
+        gitService.pullBranch(path, mode, autostash, opId, onProgress),
       );
       if (error) {
-        return report("Pull failed", error, error.kind === "diverged" ? pullActions() : undefined);
+        return report(
+          "Pull failed",
+          error,
+          error.kind === "diverged"
+            ? pullActions()
+            : error.kind === "checkoutConflict" && !autostash
+              ? [
+                  {
+                    label: "Stash, pull and reapply",
+                    onClick: () => actionsRef.current?.pull(mode, true),
+                  },
+                ]
+              : undefined,
+        );
       }
       const outcome = result?.outcome;
       if (!outcome) return;
-      if (outcome.conflicts) {
+      if (outcome.stashKept) {
+        toast({
+          tone: "error",
+          title: "Pulled, but your changes conflict",
+          description: `Your stashed changes conflict with ${outcome.target ?? "the pulled commits"}. Resolve the conflicts in Changes; a copy of your changes is kept in Stashes.`,
+          actions: [{ label: "Show changes", onClick: onShowChanges }],
+        });
+      } else if (outcome.conflicts) {
         toast({
           tone: "error",
           title: "Pulled with conflicts",
-          description: `Resolve the conflicts with ${outcome.target ?? "the upstream"} in Changes, then commit.`,
+          description:
+            `Resolve the conflicts with ${outcome.target ?? "the upstream"} in Changes, then commit.` +
+            (result?.repo.heldChanges
+              ? " Your uncommitted changes are put aside and come back when you commit the merge."
+              : ""),
           actions: [{ label: "Show changes", onClick: onShowChanges }],
         });
       } else {
@@ -330,7 +354,7 @@ export function RemoteActionsProvider({
           }
         : null,
       fetchAll: () => void fetchAll(),
-      pull: (mode) => void pull(mode),
+      pull: (mode, autostash) => void pull(mode, autostash),
       push,
       forcePush: () => void forcePush(),
       pushBranch,

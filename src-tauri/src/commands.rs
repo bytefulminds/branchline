@@ -12,6 +12,7 @@ use crate::git::ops::{self, LineRequest};
 use crate::git::remote::{self, Progress, PullMode, PushRequest, RemoteInfo, RemoteOutcome};
 use crate::git::repository::{self, RepositoryInfo};
 use crate::git::runner::{self, GitVersion};
+use crate::git::stash::{self, StashInfo, StashOutcome};
 
 async fn blocking<T, F>(f: F) -> Result<T, GitError>
 where
@@ -252,11 +253,12 @@ pub async fn fetch_remote(
 pub async fn pull_branch(
     repo: String,
     mode: PullMode,
+    autostash: Option<bool>,
     op_id: String,
     on_progress: Channel<Progress>,
 ) -> Result<RemoteResult, GitError> {
     blocking(move || {
-        let outcome = remote::pull(&repo, mode, &op_id, &mut |p| {
+        let outcome = remote::pull(&repo, mode, autostash.unwrap_or(false), &op_id, &mut |p| {
             let _ = on_progress.send(p);
         })?;
         Ok(RemoteResult {
@@ -284,6 +286,51 @@ pub async fn push_branch(
         })
     })
     .await
+}
+
+#[tauri::command]
+pub async fn list_stashes(repo: String) -> Result<Vec<StashInfo>, GitError> {
+    blocking(move || stash::list_stashes(&repo)).await
+}
+
+#[tauri::command]
+pub async fn save_stash(
+    repo: String,
+    message: String,
+    include_untracked: bool,
+) -> Result<RepositoryInfo, GitError> {
+    write_then_inspect(repo, move |r| stash::save(r, &message, include_untracked)).await
+}
+
+/// Result of applying a stash, plus the refreshed repository.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StashResult {
+    pub outcome: StashOutcome,
+    pub repo: RepositoryInfo,
+}
+
+/// Apply `stash@{index}` (which must still be `oid`); `pop` also removes it when it applies cleanly.
+#[tauri::command]
+pub async fn apply_stash(
+    repo: String,
+    index: u32,
+    oid: String,
+    pop: bool,
+) -> Result<StashResult, GitError> {
+    blocking(move || {
+        let outcome = stash::apply(&repo, index, &oid, pop)?;
+        Ok(StashResult {
+            outcome,
+            repo: repository::inspect(&repo)?,
+        })
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn drop_stash(repo: String, index: u32, oid: String) -> Result<RepositoryInfo, GitError> {
+    write_then_inspect(repo, move |r| stash::drop(r, index, &oid)).await
 }
 
 /// Cancel a running fetch, pull or push. Unknown ids are ignored.

@@ -11,4 +11,5 @@ pub mod paths;
 pub mod remote;
 pub mod repository;
 pub mod runner;
+pub mod stash;
 pub mod status;

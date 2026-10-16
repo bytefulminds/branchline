@@ -54,7 +54,12 @@ Milestones are only marked complete when the behavior works against real Git and
 
 ## Milestone 5: Advanced workflows
 
-- [ ] Stash, merge, rebase, cherry-pick, revert, conflict resolution, tags, worktrees
+- [x] Stash: save (with or without untracked files), apply, pop, delete, browse files and diffs
+- [x] Stash, pull and reapply; stash and switch
+- [ ] Tags
+- [ ] Merge, rebase, cherry-pick and revert, with continue and abort
+- [ ] Conflict resolution
+- [ ] Worktrees
 
 ## Milestone 6: Quality and release readiness
 

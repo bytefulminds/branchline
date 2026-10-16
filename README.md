@@ -9,9 +9,10 @@ Branchline is a fast, local-first, open-source Git desktop client for Windows, m
 It is built with Tauri 2, React, TypeScript and Rust, and drives the native Git CLI instead of
 reimplementing Git.
 
-> **Status:** early development. Milestones 0 to 4 are complete: Branchline opens a local
-> repository, stages files, hunks and lines, creates and amends commits, shows the full history
-> with a commit graph, manages branches, and fetches, pulls and pushes. See [ROADMAP.md](ROADMAP.md).
+> **Status:** early development. Milestones 0 to 4 are complete and Milestone 5 is in progress:
+> Branchline opens a local repository, stages files, hunks and lines, creates and amends commits,
+> shows the full history with a commit graph, manages branches, fetches, pulls and pushes, and
+> manages stashes. See [ROADMAP.md](ROADMAP.md).
 
 ## What works today
 
@@ -53,9 +54,15 @@ reimplementing Git.
   push.
 - Clear messages for failed sign-in, unknown SSH hosts, unreachable or missing remotes, rejected
   pushes and diverged branches, with the next step offered where there is one.
-- `Ctrl+1` / `⌘1` Changes, `Ctrl+2` / `⌘2` History, `Ctrl+3` / `⌘3` Branches.
+- Stashes: stash changes with a message (untracked files included by choice), then apply, pop or
+  delete them. The Stashes view shows every stash with its files and diffs. Stash and Pop are
+  also in the title bar.
+- When local changes block a pull or a branch switch, Branchline offers "Stash, pull and
+  reapply" or "Stash and switch" instead of leaving you stuck.
+- `Ctrl+1` / `⌘1` Changes, `Ctrl+2` / `⌘2` History, `Ctrl+3` / `⌘3` Branches, `Ctrl+4` / `⌘4`
+  Stashes.
 
-Advanced workflows (stash, tags, merge and rebase tools) follow next.
+Tags, merge and rebase tools, and conflict resolution follow next.
 
 ## Prerequisites
 
@@ -111,6 +118,7 @@ src/                     React + TypeScript frontend
   features/history/      Commit list, graph and commit details
   features/branches/     Branch list, switcher and branch dialogs
   features/remote/       Fetch, pull and push toolbar and actions
+  features/stash/        Stashes view, stash dialog and actions
   layouts/               Window shell: title bar, sidebar, status bar, window controls
   services/              IPC wrappers, dialog, platform, local preferences
   styles/                Design tokens and base styles
@@ -120,6 +128,7 @@ src-tauri/               Rust backend
   src/git/status.rs      `git status --porcelain=v2 -z` parser
   src/git/repository.rs  Repository inspection and models
   src/git/remote.rs      Remotes, fetch, pull and push
+  src/git/stash.rs       Stash save, apply, pop and drop
   src/commands.rs        Tauri IPC commands (async, off the UI thread)
   src/error.rs           Error model shared with the frontend
   tests/                 Integration tests against real temporary repositories
@@ -182,8 +191,12 @@ is still to do.
 
 ## Known limitations
 
-- Tags, stashes and worktrees are not implemented yet, and remotes cannot be added or edited
-  in Branchline yet; their navigation entries are visible but disabled.
+- Tags and worktrees are not implemented yet, and remotes cannot be added or edited in
+  Branchline yet; their navigation entries are visible but disabled.
+- A merge or rebase in progress can be committed in Branchline but not aborted or continued yet.
+- Applying a stash restores staged and unstaged changes separately when Git can; when it
+  cannot, everything comes back unstaged. A staged rename that Git puts aside during a pull
+  returns as a deleted and an added file.
 - Branchline does not ask for passwords. HTTPS remotes need a credential helper (macOS Keychain
   and Git Credential Manager work), SSH keys need an agent or no passphrase, and a new SSH host
   has to be verified once from a terminal.

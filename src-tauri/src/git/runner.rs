@@ -61,6 +61,9 @@ pub struct RunOptions<'a> {
     pub ok_codes: &'a [i32],
     /// Kill the process and fail with [`GitError::OutputTooLarge`] beyond this many stdout bytes.
     pub max_output: Option<usize>,
+    /// Let Git interpret pathspec magic. Only for commands that receive no paths
+    /// from the UI: `git stash --include-untracked` relies on it internally.
+    pub pathspec_magic: bool,
 }
 
 impl Default for RunOptions<'_> {
@@ -70,6 +73,7 @@ impl Default for RunOptions<'_> {
             stdin: None,
             ok_codes: &[0],
             max_output: None,
+            pathspec_magic: false,
         }
     }
 }
@@ -174,6 +178,9 @@ pub fn run_git_with(
     opts: &RunOptions<'_>,
 ) -> Result<GitOutput, GitError> {
     let mut cmd = git_command(cwd, args)?;
+    if opts.pathspec_magic {
+        cmd.env_remove("GIT_LITERAL_PATHSPECS");
+    }
     cmd.stdin(if opts.stdin.is_some() {
         Stdio::piped()
     } else {

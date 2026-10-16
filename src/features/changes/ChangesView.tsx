@@ -1,4 +1,6 @@
-import { CircleCheck, GitMerge, Search, TriangleAlert, X } from "lucide-react";
+import { Archive, CircleCheck, GitMerge, Search, TriangleAlert, X } from "lucide-react";
+import { IconButton } from "../../components/Button";
+import { useStashActions } from "../stash/StashActions";
 import { useCallback, useMemo, useState } from "react";
 import { useConfirm } from "../../components/ConfirmDialog";
 import { EmptyState } from "../../components/EmptyState";
@@ -70,6 +72,7 @@ export function ChangesView({
 }) {
   const confirm = useConfirm();
   const toast = useToast();
+  const stash = useStashActions();
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [listWidth, setListWidth] = usePersistentNumber("branchline.layout.fileListWidth", 380);
@@ -175,6 +178,17 @@ export function ChangesView({
             <span className="text-small text-secondary truncate">
               {summary.length ? summary.join(" · ") : "Nothing to commit"}
             </span>
+            {repo.totalChanges > 0 && (
+              <IconButton
+                label="Stash changes…"
+                icon={<Archive size={16} aria-hidden />}
+                size="sm"
+                className="bl-changes__stash"
+                disabled={busy || groups.conflicted.length > 0}
+                onClick={stash.save}
+                data-tooltip-align="end"
+              />
+            )}
           </div>
           {repo.totalChanges > 0 && (
             <label className="bl-search">
@@ -211,6 +225,8 @@ export function ChangesView({
               {groups.conflicted.length > 0
                 ? `Resolve ${plural(groups.conflicted.length, "conflicted file")} to continue.`
                 : "Finish or abort it from the command line for now."}
+              {repo.heldChanges &&
+                " Your uncommitted changes are put aside by Git and come back when it is committed or aborted."}
             </span>
           </div>
         )}

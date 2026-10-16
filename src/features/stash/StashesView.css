@@ -1,0 +1,115 @@
+.bl-stashes {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+.bl-stashes__list {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+.bl-stashes__list[style*="width"] {
+  flex: none;
+}
+.bl-stashes__header {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+}
+.bl-stashes__header .bl-icon-button {
+  align-self: center;
+}
+.bl-stashes__spacer {
+  flex: 1;
+}
+.bl-stashes__detail {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  background: var(--color-surface-subtle);
+}
+
+.bl-stash-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  margin: 0;
+  padding: var(--space-2);
+  list-style: none;
+}
+.bl-stash {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: 48px;
+  padding: var(--space-1) var(--space-3);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.bl-stash:hover {
+  background: var(--color-hover);
+}
+.bl-stash[aria-current] {
+  background: var(--color-selected);
+  box-shadow: inset 2px 0 0 var(--color-accent);
+}
+.bl-stash__icon {
+  flex: none;
+  color: var(--color-text-muted);
+}
+.bl-stash[aria-current] .bl-stash__icon {
+  color: var(--color-accent);
+}
+.bl-stash__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.bl-stash__message {
+  font-weight: var(--weight-medium);
+}
+
+.bl-stash-details {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: var(--space-4);
+}
+.bl-stash-details__head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+}
+.bl-stash-details__meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+.bl-stash-details__actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+.bl-stash-details__files {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-4);
+}

@@ -86,6 +86,9 @@ pub struct RemoteOutcome {
     pub up_to_date: bool,
     /// `remote/branch` that was pushed to or pulled from.
     pub target: Option<String>,
+    /// Pull with autostash: the stashed changes could not be reapplied cleanly
+    /// and are kept in the stash list, so nothing is lost.
+    pub stash_kept: bool,
 }
 
 // ---------------------------------------------------------------- redaction
@@ -554,6 +557,7 @@ fn current_branch(repo: &str) -> Result<String, GitError> {
 pub fn pull(
     repo: &str,
     mode: PullMode,
+    autostash: bool,
     op_id: &str,
     on_progress: &mut dyn FnMut(Progress),
 ) -> Result<RemoteOutcome, GitError> {
@@ -568,6 +572,15 @@ pub fn pull(
         // The tracking ref is missing (deleted on the remote and pruned); pulling would fail.
         return Err(GitError::NoUpstream { branch });
     }
+    if autostash {
+        let v = super::runner::git_version()?;
+        if (v.major, v.minor) < (2, 27) {
+            return Err(GitError::Unsupported(format!(
+                "Stashing changes during a pull needs Git 2.27 or newer (found {}).",
+                v.version
+            )));
+        }
+    }
     let before = run_git(&root, &["rev-parse", "HEAD"], DEFAULT_TIMEOUT)?.stdout_string();
 
     let mode_args: &[&str] = match mode {
@@ -577,6 +590,11 @@ pub fn pull(
     };
     let mut args = vec!["pull", "--progress", "--no-edit"];
     args.extend_from_slice(mode_args);
+    if autostash {
+        // Stash uncommitted changes (also untracked files that would be in the way),
+        // pull, then reapply them.
+        args.push("--autostash");
+    }
     // Explicit remote and branch, so the result never depends on push/merge defaults.
     args.push("--");
     args.push(&upstream.remote);
@@ -584,24 +602,32 @@ pub fn pull(
     let out = run_network(&root, &args, op_id, on_progress)?;
 
     let target = Some(upstream.short.clone());
+    let all_output = format!("{}\n{}", out.stdout_string(), out.stderr);
+    // With --autostash, Git reports a reapply that did not go cleanly but keeps the stash.
+    let stash_kept = autostash && all_output.contains("Applying autostash resulted in conflicts");
+    let updated_refs = count_ref_updates(&out.stderr);
     if out.code != 0 {
         // A merge or rebase that stopped with conflicts is a result, not a failure.
         if inspect(repo)?.operation.is_some() {
             return Ok(RemoteOutcome {
                 conflicts: true,
                 target,
-                updated_refs: count_ref_updates(&out.stderr),
+                updated_refs,
                 up_to_date: false,
+                stash_kept,
             });
         }
-        return Err(classify_pull_failure(out.code, &out.stderr));
+        if !stash_kept {
+            return Err(classify_pull_failure(out.code, &out.stderr));
+        }
     }
     let after = run_git(&root, &["rev-parse", "HEAD"], DEFAULT_TIMEOUT)?.stdout_string();
     Ok(RemoteOutcome {
-        updated_refs: count_ref_updates(&out.stderr),
+        updated_refs,
         up_to_date: before == after,
         target,
-        conflicts: false,
+        conflicts: stash_kept,
+        stash_kept,
     })
 }
 

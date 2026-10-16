@@ -16,6 +16,8 @@ import type {
   RemoteInfo,
   RemoteProgress,
   RemoteResult,
+  StashInfo,
+  StashResult,
   RepositoryInfo,
   StartPoint,
 } from "../types/git";
@@ -128,9 +130,11 @@ export const gitService = {
       onProgress: progressChannel(onProgress),
     });
   },
+  /** `autostash` stashes local changes first and reapplies them after the pull. */
   pullBranch: (
     repo: string,
     mode: PullMode,
+    autostash: boolean,
     opId: string,
     onProgress: (p: RemoteProgress) => void,
   ) => {
@@ -138,6 +142,7 @@ export const gitService = {
     return call<RemoteResult>("pull_branch", {
       repo,
       mode,
+      autostash,
       opId,
       onProgress: progressChannel(onProgress),
     });
@@ -156,6 +161,14 @@ export const gitService = {
       onProgress: progressChannel(onProgress),
     });
   },
+  listStashes: (repo: string) => call<StashInfo[]>("list_stashes", { repo }),
+  saveStash: (repo: string, message: string, includeUntracked: boolean) =>
+    call<RepositoryInfo>("save_stash", { repo, message, includeUntracked }),
+  /** `oid` must still be at `index`, otherwise the call fails with `stale`. */
+  applyStash: (repo: string, stash: { index: number; oid: string }, pop: boolean) =>
+    call<StashResult>("apply_stash", { repo, index: stash.index, oid: stash.oid, pop }),
+  dropStash: (repo: string, stash: { index: number; oid: string }) =>
+    call<RepositoryInfo>("drop_stash", { repo, index: stash.index, oid: stash.oid }),
   cancelRemote: (opId: string) => call<void>("cancel_remote_operation", { opId }),
   watchRepository: (repo: string) => call<void>("watch_repository", { repo }),
   unwatchRepository: () => call<void>("unwatch_repository"),

@@ -6,7 +6,7 @@ import type { RepositoryInfo } from "../../types/git";
 import { useRemoteActions, type NetworkActivity } from "./RemoteActions";
 import "./RemoteToolbar.css";
 
-function ToolButton({
+export function ToolButton({
   icon,
   label,
   count,

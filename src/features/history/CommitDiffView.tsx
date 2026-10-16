@@ -16,11 +16,14 @@ export function CommitDiffView({
   oid,
   file,
   onBack,
+  backLabel = "History",
 }: {
   repoPath: string;
   oid: string;
   file: CommitFile;
   onBack: () => void;
+  /** Text of the back button (where it returns to). */
+  backLabel?: string;
 }) {
   const [diff, setDiff] = useState<FileDiff | null>(null);
   const [error, setError] = useState<GitError | null>(null);
@@ -62,7 +65,7 @@ export function CommitDiffView({
             onClick={onBack}
             autoFocus
           >
-            History
+            {backLabel}
           </Button>
           <StatusLetter status={fileStatus(file)} />
           <div className="bl-diff__name">

@@ -69,6 +69,10 @@ are in the way (`checkoutConflict`); nothing is changed.
 | `pull_branch(repo, mode, opId, onProgress)` | `RemoteResult` | `fastForward` (default), `merge` or `rebase` |
 | `push_branch(repo, request, opId, onProgress)` | `RemoteResult` | Upstream push, publish (`setUpstream`) or force with lease |
 | `cancel_remote_operation(opId)` | nothing | Stops a running fetch, pull or push |
+| `list_stashes(repo)` | `StashInfo[]` | Newest first, with branch and untracked-files commit |
+| `save_stash(repo, message, includeUntracked)` | `RepositoryInfo` | |
+| `apply_stash(repo, index, oid, pop)` | `StashResult` | Fails with `stale` if `stash@{index}` is no longer `oid` |
+| `drop_stash(repo, index, oid)` | `RepositoryInfo` | Same check |
 
 Commit ids from the UI are accepted only as hexadecimal strings, so they can never be read as
 options or revision expressions.
@@ -104,6 +108,25 @@ commands at the same time.
   URL in them is redacted (`https://user:token@host` becomes `https://***@host`).
 - A pull that stops with merge or rebase conflicts is reported as a result
   (`conflicts: true`), not as a failure; the conflicts show up in the Changes view.
+
+Pull can stash local changes first (`autostash`, Git 2.27 or newer) and reapply them afterwards.
+If the pull stops with merge conflicts, Git holds those changes until the merge is committed or
+aborted; `RepositoryInfo.heldChanges` reports that, so the UI can say where they are. If
+reapplying conflicts, Git keeps a copy in the stash list (`stashKept`).
+
+## Stashes
+
+`git/stash.rs` addresses a stash by index and commit id together. Indexes shift whenever a stash
+is added or removed, also from a terminal, so every apply, pop and drop first checks that
+`stash@{index}` still is the commit the user selected and fails with `stale` otherwise. A
+stale view can never drop the wrong stash.
+
+Apply and pop restore staged and unstaged changes separately (`--index`) and fall back to a
+plain apply when Git cannot. A pop that produces conflicts keeps the stash. Stash commands run
+without `GIT_LITERAL_PATHSPECS`, because `git stash --include-untracked` relies on pathspec
+magic internally (with the variable set, untracked files are stashed but not removed); they never
+receive paths from the UI. `RepositoryInfo.stashCount` and `stashFingerprint` come from one
+`git stash list` call per inspection, so the list reloads only when it changes.
 
 One network operation runs per repository at a time; pull also takes the write lock because it
 changes the working tree.
