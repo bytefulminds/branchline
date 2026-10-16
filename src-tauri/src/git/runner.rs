@@ -130,22 +130,14 @@ pub fn run_git(cwd: &Path, args: &[&str], timeout: Duration) -> Result<GitOutput
     )
 }
 
-/// Run Git with explicit options. See [`RunOptions`].
-pub fn run_git_with(
-    cwd: &Path,
-    args: &[&str],
-    opts: &RunOptions<'_>,
-) -> Result<GitOutput, GitError> {
+/// Build the hardened `git` command: global options, environment and pipes.
+fn git_command(cwd: &Path, args: &[&str]) -> Result<Command, GitError> {
     let git = git_binary()?;
     let mut cmd = Command::new(git);
     cmd.args(GLOBAL_ARGS)
         .args(args)
         .current_dir(cwd)
-        .stdin(if opts.stdin.is_some() {
-            Stdio::piped()
-        } else {
-            Stdio::null()
-        })
+        .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .env("GIT_TERMINAL_PROMPT", "0")
@@ -165,11 +157,30 @@ pub fn run_git_with(
         const CREATE_NO_WINDOW: u32 = 0x0800_0000;
         cmd.creation_flags(CREATE_NO_WINDOW);
     }
+    Ok(cmd)
+}
 
-    let mut child = cmd.spawn().map_err(|e| match e.kind() {
+fn spawn(cmd: &mut Command) -> Result<std::process::Child, GitError> {
+    cmd.spawn().map_err(|e| match e.kind() {
         std::io::ErrorKind::NotFound => GitError::GitNotFound,
         _ => GitError::Internal(format!("failed to start git: {e}")),
-    })?;
+    })
+}
+
+/// Run Git with explicit options. See [`RunOptions`].
+pub fn run_git_with(
+    cwd: &Path,
+    args: &[&str],
+    opts: &RunOptions<'_>,
+) -> Result<GitOutput, GitError> {
+    let mut cmd = git_command(cwd, args)?;
+    cmd.stdin(if opts.stdin.is_some() {
+        Stdio::piped()
+    } else {
+        Stdio::null()
+    });
+
+    let mut child = spawn(&mut cmd)?;
 
     // Feed stdin from its own thread so a child that writes before reading cannot deadlock.
     let stdin_thread = match (opts.stdin, child.stdin.take()) {
@@ -258,6 +269,189 @@ pub fn run_git_with(
     } else {
         Err(classify_failure(code, stderr))
     }
+}
+
+/// Cancels a running [`run_git_streaming`] call from another thread.
+#[derive(Debug, Clone, Default)]
+pub struct CancelToken(Arc<AtomicBool>);
+
+impl CancelToken {
+    pub fn cancel(&self) {
+        self.0.store(true, Ordering::SeqCst);
+    }
+    pub fn is_cancelled(&self) -> bool {
+        self.0.load(Ordering::SeqCst)
+    }
+}
+
+/// Options for [`run_git_streaming`].
+#[derive(Debug, Clone, Default)]
+pub struct StreamOptions {
+    pub timeout: Duration,
+    /// Extra environment variables (for example `GIT_SSH_COMMAND`).
+    pub env: Vec<(String, String)>,
+    pub cancel: CancelToken,
+}
+
+/// Most stderr kept for error reporting; progress output can be long.
+const MAX_STREAM_STDERR: usize = 256 * 1024;
+/// After Git exits, wait this long for helper processes to release the pipes.
+const PIPE_GRACE: Duration = Duration::from_millis(500);
+
+/// Run a long Git command (fetch, pull, push), reporting stderr line by line.
+///
+/// Git separates progress updates with `\r`; both `\r` and `\n` end a line here.
+/// Unlike [`run_git_with`], any exit code is returned as `Ok`: the caller
+/// classifies failures, because network commands need their own error kinds.
+/// Cancellation and the timeout kill the process and return
+/// [`GitError::Cancelled`] or [`GitError::Timeout`].
+///
+/// Helper processes (`ssh`, `git-remote-https`) may keep the pipes open briefly
+/// after Git itself exits; reading stops after a short grace period so a
+/// cancelled command always returns promptly.
+pub fn run_git_streaming(
+    cwd: &Path,
+    args: &[&str],
+    opts: &StreamOptions,
+    on_line: &mut dyn FnMut(&str),
+) -> Result<GitOutput, GitError> {
+    use std::sync::mpsc;
+
+    let mut cmd = git_command(cwd, args)?;
+    for (key, value) in &opts.env {
+        cmd.env(key, value);
+    }
+    // Own process group, so cancelling also stops helpers such as `ssh`.
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        cmd.process_group(0);
+    }
+    let mut child = spawn(&mut cmd)?;
+
+    enum Event {
+        Line(String),
+        StderrDone,
+        Stdout(Vec<u8>),
+    }
+    let (tx, rx) = mpsc::channel::<Event>();
+    let mut stderr_pipe = child.stderr.take().expect("stderr is piped");
+    let mut stdout_pipe = child.stdout.take().expect("stdout is piped");
+    let tx_err = tx.clone();
+    thread::spawn(move || {
+        let mut pending = Vec::new();
+        let mut chunk = [0u8; 8192];
+        loop {
+            match stderr_pipe.read(&mut chunk) {
+                Ok(0) | Err(_) => break,
+                Ok(n) => {
+                    for &b in &chunk[..n] {
+                        if b == b'\r' || b == b'\n' {
+                            if !pending.is_empty() {
+                                let line = String::from_utf8_lossy(&pending).into_owned();
+                                pending.clear();
+                                if tx_err.send(Event::Line(line)).is_err() {
+                                    return;
+                                }
+                            }
+                        } else {
+                            pending.push(b);
+                        }
+                    }
+                }
+            }
+        }
+        if !pending.is_empty() {
+            let _ = tx_err.send(Event::Line(String::from_utf8_lossy(&pending).into_owned()));
+        }
+        let _ = tx_err.send(Event::StderrDone);
+    });
+    thread::spawn(move || {
+        let mut buf = Vec::new();
+        let _ = stdout_pipe.read_to_end(&mut buf);
+        let _ = tx.send(Event::Stdout(buf));
+    });
+
+    let deadline = Instant::now() + opts.timeout;
+    let mut stderr = String::new();
+    let mut stdout = Vec::new();
+    let (mut stderr_done, mut stdout_done) = (false, false);
+    let mut exited: Option<(std::process::ExitStatus, Instant)> = None;
+    let mut killed_for: Option<GitError> = None;
+
+    loop {
+        match rx.recv_timeout(Duration::from_millis(50)) {
+            Ok(Event::Line(line)) => {
+                if stderr.len() < MAX_STREAM_STDERR {
+                    stderr.push_str(&line);
+                    stderr.push('\n');
+                }
+                on_line(&line);
+            }
+            Ok(Event::StderrDone) => stderr_done = true,
+            Ok(Event::Stdout(buf)) => {
+                stdout = buf;
+                stdout_done = true;
+            }
+            Err(mpsc::RecvTimeoutError::Timeout) => {}
+            Err(mpsc::RecvTimeoutError::Disconnected) => break,
+        }
+        if stderr_done && stdout_done && exited.is_some() {
+            break;
+        }
+        if exited.is_none() {
+            if killed_for.is_none() {
+                if opts.cancel.is_cancelled() {
+                    kill_tree(&mut child);
+                    killed_for = Some(GitError::Cancelled);
+                } else if Instant::now() >= deadline {
+                    kill_tree(&mut child);
+                    killed_for = Some(GitError::Timeout {
+                        seconds: opts.timeout.as_secs(),
+                    });
+                }
+            }
+            match child.try_wait() {
+                Ok(Some(status)) => exited = Some((status, Instant::now())),
+                Ok(None) => {}
+                Err(e) => return Err(GitError::Internal(format!("failed to wait for git: {e}"))),
+            }
+        } else if let Some((_, at)) = exited {
+            if at.elapsed() >= PIPE_GRACE {
+                break;
+            }
+        }
+    }
+    let status = match exited {
+        Some((status, _)) => status,
+        None => child
+            .wait()
+            .map_err(|e| GitError::Internal(format!("failed to wait for git: {e}")))?,
+    };
+    if let Some(err) = killed_for {
+        return Err(err);
+    }
+    Ok(GitOutput {
+        stdout,
+        stderr: stderr.trim_end().to_string(),
+        code: status.code().unwrap_or(-1),
+    })
+}
+
+/// Kill Git and, on Unix, every process it started (its process group).
+/// On Windows only Git itself is killed; its helpers exit once their pipes close.
+fn kill_tree(child: &mut std::process::Child) {
+    #[cfg(unix)]
+    {
+        if let Ok(pid) = i32::try_from(child.id()) {
+            // SAFETY: plain syscall; a negative pid addresses the process group
+            // created for this child with `process_group(0)`.
+            unsafe {
+                libc::kill(-pid, libc::SIGKILL);
+            }
+        }
+    }
+    let _ = child.kill();
 }
 
 /// Map a failed Git invocation to a specific error using its (C locale) stderr.

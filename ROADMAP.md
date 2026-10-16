@@ -50,7 +50,7 @@ Milestones are only marked complete when the behavior works against real Git and
 - [x] Create, switch, rename, delete branches with safety checks
 - [x] Check out remote branches as tracking branches; detached checkout of a commit
 - [x] Branch switcher in the title bar; commit context menu in History
-- [ ] Remotes, fetch, pull, push with progress and cancellation
+- [x] Remotes, fetch, pull, push with progress and cancellation
 
 ## Milestone 5: Advanced workflows
 

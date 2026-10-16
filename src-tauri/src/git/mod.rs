@@ -8,6 +8,7 @@ pub mod log;
 pub mod ops;
 pub mod patch;
 pub mod paths;
+pub mod remote;
 pub mod repository;
 pub mod runner;
 pub mod status;

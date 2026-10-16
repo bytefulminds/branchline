@@ -38,6 +38,11 @@ pub fn run() {
             commands::checkout_detached,
             commands::rename_branch,
             commands::delete_branch,
+            commands::list_remotes,
+            commands::fetch_remote,
+            commands::pull_branch,
+            commands::push_branch,
+            commands::cancel_remote_operation,
             commands::watch_repository,
             commands::unwatch_repository,
         ])

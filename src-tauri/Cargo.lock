@@ -153,6 +153,7 @@ name = "branchline"
 version = "0.1.0"
 dependencies = [
  "ignore",
+ "libc",
  "notify",
  "serde",
  "serde_json",

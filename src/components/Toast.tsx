@@ -12,10 +12,17 @@ import "./Toast.css";
 
 export type ToastTone = "info" | "success" | "error";
 
+export interface ToastAction {
+  label: string;
+  onClick: () => void;
+}
+
 export interface ToastInput {
   tone?: ToastTone;
   title: string;
   description?: string;
+  /** Buttons under the description; choosing one also dismisses the toast. */
+  actions?: ToastAction[];
   /** Auto-dismiss after this many ms; errors stay until dismissed by default. */
   durationMs?: number | null;
 }
@@ -46,8 +53,13 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       const id = nextId.current++;
       const tone = input.tone ?? "info";
       setItems((list) => [...list.slice(-3), { ...input, id, tone }]);
+      // Toasts with actions stay until used or dismissed, so the choice is not lost.
       const duration =
-        input.durationMs === undefined ? (tone === "error" ? null : 4000) : input.durationMs;
+        input.durationMs === undefined
+          ? tone === "error" || input.actions?.length
+            ? null
+            : 4000
+          : input.durationMs;
       if (duration) window.setTimeout(() => dismiss(id), duration);
     },
     [dismiss],
@@ -71,6 +83,23 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               <div className="bl-toast__body">
                 <div className="bl-toast__title">{t.title}</div>
                 {t.description && <div className="bl-toast__description">{t.description}</div>}
+                {t.actions && t.actions.length > 0 && (
+                  <div className="bl-toast__actions">
+                    {t.actions.map((a) => (
+                      <button
+                        key={a.label}
+                        type="button"
+                        className="bl-toast__action"
+                        onClick={() => {
+                          dismiss(t.id);
+                          a.onClick();
+                        }}
+                      >
+                        {a.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
               <button
                 type="button"

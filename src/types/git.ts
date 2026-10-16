@@ -94,6 +94,16 @@ export type GitErrorKind =
   | "invalidBranchName"
   | "checkoutConflict"
   | "notMerged"
+  | "cancelled"
+  | "authFailed"
+  | "hostKeyUnverified"
+  | "networkFailed"
+  | "remoteNotFound"
+  | "pushRejected"
+  | "staleLease"
+  | "remoteRejected"
+  | "noUpstream"
+  | "diverged"
   | "parse"
   | "internal"
   /** Frontend-only: the app is not running inside the Tauri shell. */
@@ -239,3 +249,44 @@ export interface BranchList {
 
 export type StartPoint =
   { kind: "head" } | { kind: "commit"; oid: string } | { kind: "branch"; name: string };
+
+/** A configured remote. URLs never contain credentials. */
+export interface RemoteInfo {
+  name: string;
+  url: string;
+  /** Push URL when it differs from `url`. */
+  pushUrl: string | null;
+}
+
+/** One progress update of a fetch, pull or push. */
+export interface RemoteProgress {
+  /** For example "Receiving objects". */
+  phase: string;
+  percent: number | null;
+  /** For example "450/1000, 1.20 MiB | 2.00 MiB/s". */
+  detail: string | null;
+}
+
+export type PullMode = "fastForward" | "merge" | "rebase";
+
+export interface PushRequest {
+  branch: string;
+  /** Null pushes to the branch's upstream. */
+  remote: string | null;
+  setUpstream: boolean;
+  /** Force with lease. */
+  force: boolean;
+}
+
+export interface RemoteOutcome {
+  updatedRefs: number;
+  conflicts: boolean;
+  upToDate: boolean;
+  /** "origin" for a fetch, "origin/main" for a pull or push. */
+  target: string | null;
+}
+
+export interface RemoteResult {
+  outcome: RemoteOutcome;
+  repo: RepositoryInfo;
+}

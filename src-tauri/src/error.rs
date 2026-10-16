@@ -78,6 +78,38 @@ pub enum GitError {
     #[error("The branch {branch} has commits that are not merged anywhere else.")]
     NotMerged { branch: String },
 
+    #[error("The operation was cancelled.")]
+    Cancelled,
+
+    #[error("Git could not sign in to the remote. Check your credentials, token or SSH key.")]
+    AuthFailed { detail: String },
+
+    #[error("The remote's SSH host key is not trusted yet. Connect to it once from a terminal (for example with `ssh -T git@host`) to verify and save the key.")]
+    HostKeyUnverified { detail: String },
+
+    #[error("Could not reach the remote. Check your network connection and the remote URL.")]
+    NetworkFailed { detail: String },
+
+    #[error("The remote repository was not found, or you do not have access to it.")]
+    RemoteNotFound { detail: String },
+
+    #[error("The remote has commits that you do not have. Pull first, then push again.")]
+    PushRejected { detail: String },
+
+    #[error("The remote branch changed since you last fetched. Fetch, review the new commits and try again.")]
+    StaleLease { detail: String },
+
+    #[error(
+        "The remote refused the push, for example because of branch protection or a server hook."
+    )]
+    RemoteRejected { detail: String },
+
+    #[error("{branch} has no upstream branch to pull from or push to.")]
+    NoUpstream { branch: String },
+
+    #[error("Your branch and its upstream have diverged, so a fast-forward is not possible. Pull with merge or rebase instead.")]
+    Diverged { detail: String },
+
     #[error("Unexpected Git output: {0}")]
     Parse(String),
 
@@ -111,6 +143,16 @@ impl GitError {
             GitError::InvalidBranchName(_) => "invalidBranchName",
             GitError::CheckoutConflict { .. } => "checkoutConflict",
             GitError::NotMerged { .. } => "notMerged",
+            GitError::Cancelled => "cancelled",
+            GitError::AuthFailed { .. } => "authFailed",
+            GitError::HostKeyUnverified { .. } => "hostKeyUnverified",
+            GitError::NetworkFailed { .. } => "networkFailed",
+            GitError::RemoteNotFound { .. } => "remoteNotFound",
+            GitError::PushRejected { .. } => "pushRejected",
+            GitError::StaleLease { .. } => "staleLease",
+            GitError::RemoteRejected { .. } => "remoteRejected",
+            GitError::NoUpstream { .. } => "noUpstream",
+            GitError::Diverged { .. } => "diverged",
             GitError::Parse(_) => "parse",
             GitError::Internal(_) => "internal",
         }
@@ -125,7 +167,15 @@ impl GitError {
             | GitError::ApplyFailed { detail }
             | GitError::IdentityMissing { detail }
             | GitError::CommitFailed { detail }
-            | GitError::CheckoutConflict { detail, .. } => Some(detail.as_str()),
+            | GitError::CheckoutConflict { detail, .. }
+            | GitError::AuthFailed { detail }
+            | GitError::HostKeyUnverified { detail }
+            | GitError::NetworkFailed { detail }
+            | GitError::RemoteNotFound { detail }
+            | GitError::PushRejected { detail }
+            | GitError::StaleLease { detail }
+            | GitError::RemoteRejected { detail }
+            | GitError::Diverged { detail } => Some(detail.as_str()),
             GitError::GitFailed { stderr, .. } => Some(stderr.as_str()),
             _ => None,
         }

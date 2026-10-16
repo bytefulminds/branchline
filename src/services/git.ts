@@ -1,4 +1,4 @@
-import { invoke, isTauri } from "@tauri-apps/api/core";
+import { Channel, invoke, isTauri } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
   BranchList,
@@ -10,7 +10,12 @@ import type {
   GitVersion,
   LineRequest,
   LogPage,
+  PullMode,
+  PushRequest,
   RefInfo,
+  RemoteInfo,
+  RemoteProgress,
+  RemoteResult,
   RepositoryInfo,
   StartPoint,
 } from "../types/git";
@@ -50,6 +55,12 @@ async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> 
   } catch (err) {
     throw toGitError(err);
   }
+}
+
+function progressChannel(onProgress: (p: RemoteProgress) => void): Channel<RemoteProgress> {
+  const channel = new Channel<RemoteProgress>();
+  channel.onmessage = onProgress;
+  return channel;
 }
 
 export const gitService = {
@@ -101,6 +112,51 @@ export const gitService = {
     call<RepositoryInfo>("rename_branch", { repo, old, new: newName }),
   deleteBranch: (repo: string, name: string, force: boolean) =>
     call<RepositoryInfo>("delete_branch", { repo, name, force }),
+  listRemotes: (repo: string) => call<RemoteInfo[]>("list_remotes", { repo }),
+  /** Fetch `remote`, or every remote when null. `opId` identifies it for `cancelRemote`. */
+  fetchRemote: (
+    repo: string,
+    remote: string | null,
+    opId: string,
+    onProgress: (p: RemoteProgress) => void,
+  ) => {
+    ensureDesktop();
+    return call<RemoteResult>("fetch_remote", {
+      repo,
+      remote,
+      opId,
+      onProgress: progressChannel(onProgress),
+    });
+  },
+  pullBranch: (
+    repo: string,
+    mode: PullMode,
+    opId: string,
+    onProgress: (p: RemoteProgress) => void,
+  ) => {
+    ensureDesktop();
+    return call<RemoteResult>("pull_branch", {
+      repo,
+      mode,
+      opId,
+      onProgress: progressChannel(onProgress),
+    });
+  },
+  pushBranch: (
+    repo: string,
+    request: PushRequest,
+    opId: string,
+    onProgress: (p: RemoteProgress) => void,
+  ) => {
+    ensureDesktop();
+    return call<RemoteResult>("push_branch", {
+      repo,
+      request,
+      opId,
+      onProgress: progressChannel(onProgress),
+    });
+  },
+  cancelRemote: (opId: string) => call<void>("cancel_remote_operation", { opId }),
   watchRepository: (repo: string) => call<void>("watch_repository", { repo }),
   unwatchRepository: () => call<void>("unwatch_repository"),
   /** Subscribe to file-system changes of the watched repository. */

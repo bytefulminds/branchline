@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Splitter } from "../components/Splitter";
+import { useRemoteActions } from "../features/remote/RemoteActions";
 import type { RepositoryController } from "../features/repository/useRepository";
 import { usePersistentNumber } from "../lib/usePersistentNumber";
 import type { GitError, GitVersion } from "../types/git";
@@ -24,6 +25,7 @@ export function AppShell({
   onView: (view: WorkspaceView) => void;
   children: ReactNode;
 }) {
+  const remote = useRemoteActions();
   const [sidebarWidth, setSidebarWidth] = usePersistentNumber(
     "branchline.layout.sidebarWidth",
     240,
@@ -52,6 +54,8 @@ export function AppShell({
       <StatusBar
         state={controller.state}
         operation={controller.operation}
+        network={remote.activity}
+        onCancelNetwork={remote.cancel}
         gitVersion={gitVersion}
       />
     </div>

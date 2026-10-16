@@ -9,9 +9,9 @@ Branchline is a fast, local-first, open-source Git desktop client for Windows, m
 It is built with Tauri 2, React, TypeScript and Rust, and drives the native Git CLI instead of
 reimplementing Git.
 
-> **Status:** early development. Milestones 0 to 3 are complete: Branchline opens a local
-> repository, stages files, hunks and lines, creates and amends commits, and shows the full
-> history with a commit graph. See [ROADMAP.md](ROADMAP.md).
+> **Status:** early development. Milestones 0 to 4 are complete: Branchline opens a local
+> repository, stages files, hunks and lines, creates and amends commits, shows the full history
+> with a commit graph, manages branches, and fetches, pulls and pushes. See [ROADMAP.md](ROADMAP.md).
 
 ## What works today
 
@@ -46,9 +46,16 @@ reimplementing Git.
   second confirmation before deletion; switching never overwrites uncommitted work.
 - Quick branch switcher in the title bar, and right-click (or `Shift+F10`) on a commit to create
   a branch there or check it out.
+- Fetch, Pull and Push in the title bar, with ahead/behind counts. Pull fast-forwards by default,
+  or merges or rebases on request; a branch without upstream is published to the remote you
+  choose. Force push is only possible with lease, after a confirmation.
+- Live progress (phase and percentage) in the status bar, and Cancel for every fetch, pull and
+  push.
+- Clear messages for failed sign-in, unknown SSH hosts, unreachable or missing remotes, rejected
+  pushes and diverged branches, with the next step offered where there is one.
 - `Ctrl+1` / `⌘1` Changes, `Ctrl+2` / `⌘2` History, `Ctrl+3` / `⌘3` Branches.
 
-Fetch, pull and push, and the advanced workflows, follow next.
+Advanced workflows (stash, tags, merge and rebase tools) follow next.
 
 ## Prerequisites
 
@@ -100,7 +107,10 @@ public/                  Static assets (logo mark)
 src/                     React + TypeScript frontend
   components/            Shared UI components (Button, Menu, Badge, Toast, Splitter, ...)
   features/repository/   Repository state, welcome, loading and error views
-  features/changes/      Changed-file model, list and details panel
+  features/changes/      Changed-file model, list, diff and commit box
+  features/history/      Commit list, graph and commit details
+  features/branches/     Branch list, switcher and branch dialogs
+  features/remote/       Fetch, pull and push toolbar and actions
   layouts/               Window shell: title bar, sidebar, status bar, window controls
   services/              IPC wrappers, dialog, platform, local preferences
   styles/                Design tokens and base styles
@@ -109,6 +119,7 @@ src-tauri/               Rust backend
   src/git/runner.rs      Safe Git process execution (timeouts, no shell, hardened config)
   src/git/status.rs      `git status --porcelain=v2 -z` parser
   src/git/repository.rs  Repository inspection and models
+  src/git/remote.rs      Remotes, fetch, pull and push
   src/commands.rs        Tauri IPC commands (async, off the UI thread)
   src/error.rs           Error model shared with the frontend
   tests/                 Integration tests against real temporary repositories
@@ -131,6 +142,11 @@ See [docs/architecture.md](docs/architecture.md) for how the layers fit together
 - Partial staging never trusts line content sent by the UI: the backend recomputes the diff,
   checks a fingerprint of the version the user saw, and rebuilds the patch itself.
 - Discard re-reads the repository state first and only touches unstaged changes.
+- Network commands never prompt: SSH runs in batch mode unless you configured your own SSH
+  command, and HTTPS uses your credential helper. Credentials in remote URLs are removed before
+  anything reaches the UI, including error messages.
+- Force push always uses `--force-with-lease`, so it cannot overwrite commits you have not
+  fetched.
 - The webview has a strict CSP and only the Tauri permissions it needs (window controls and the
   folder picker).
 
@@ -166,8 +182,13 @@ is still to do.
 
 ## Known limitations
 
-- Tags, remotes, stashes and worktrees are not implemented yet; their navigation entries are
-  visible but disabled. Fetch, pull and push are not available yet.
+- Tags, stashes and worktrees are not implemented yet, and remotes cannot be added or edited
+  in Branchline yet; their navigation entries are visible but disabled.
+- Branchline does not ask for passwords. HTTPS remotes need a credential helper (macOS Keychain
+  and Git Credential Manager work), SSH keys need an agent or no passphrase, and a new SSH host
+  has to be verified once from a terminal.
+- One Git operation runs at a time: during a fetch, pull or push, staging waits. On Windows,
+  cancelling stops Git itself; its SSH or HTTPS helper exits shortly after.
 - The graph shows up to 12 lanes; further lanes are clipped. Merge commits list the files changed
   relative to their first parent.
 - History cannot be searched or filtered yet.

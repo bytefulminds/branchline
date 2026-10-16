@@ -1,4 +1,5 @@
 import {
+  ArrowUpFromLine,
   ArrowDown,
   ArrowUp,
   Check,
@@ -20,6 +21,7 @@ import type { MenuEntry } from "../../components/Menu";
 import { Spinner } from "../../components/Spinner";
 import { relativeTime } from "../../lib/format";
 import type { BranchInfo, RepositoryInfo } from "../../types/git";
+import { useRemoteActions } from "../remote/RemoteActions";
 import { useBranchActions } from "./BranchActions";
 import "./BranchesView.css";
 
@@ -55,6 +57,7 @@ function Tracking({ branch }: { branch: BranchInfo }) {
 
 export function BranchesView({ repo }: { repo: RepositoryInfo }) {
   const actions = useBranchActions();
+  const remote = useRemoteActions();
   const showMenu = useContextMenu();
   const [query, setQuery] = useState("");
   const { branches } = actions;
@@ -87,6 +90,13 @@ export function BranchesView({ repo }: { repo: RepositoryInfo }) {
       label: "Create branch from here…",
       icon: <GitBranchPlus size={16} />,
       onSelect: () => actions.create({ kind: "branch", name: b.name }, b.name),
+    },
+    {
+      id: "push",
+      label: b.upstream ? `Push to ${b.upstream}` : "Publish branch…",
+      icon: <ArrowUpFromLine size={16} />,
+      disabled: remote.activity !== null || (!b.upstream && remote.remotes.length === 0),
+      onSelect: () => remote.pushBranch(b.name, b.upstream),
     },
     {
       id: "rename",

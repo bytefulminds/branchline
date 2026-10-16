@@ -39,3 +39,46 @@
 .bl-statusbar__item--error {
   color: var(--color-error-text);
 }
+
+.bl-statusbar__network {
+  gap: var(--space-2);
+  color: var(--color-text-primary);
+}
+.bl-statusbar__network-label {
+  flex: none;
+}
+.bl-statusbar__progress {
+  flex: none;
+  position: relative;
+  width: 72px;
+  height: 4px;
+  border-radius: var(--radius-full);
+  background: var(--color-border-strong);
+  overflow: hidden;
+}
+.bl-statusbar__progress > span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background: var(--color-accent);
+  transition: width var(--duration-normal) var(--ease-standard);
+}
+.bl-statusbar__cancel {
+  flex: none;
+  height: 18px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+}
+.bl-statusbar__cancel:hover:not(:disabled) {
+  border-color: rgb(239 68 68 / 40%);
+  color: var(--color-error-text);
+}
+.bl-statusbar__cancel:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

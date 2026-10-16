@@ -45,7 +45,30 @@
   font-size: var(--text-small-size);
   line-height: var(--text-small-line);
   overflow-wrap: anywhere;
+  white-space: pre-line;
   user-select: text;
+}
+.bl-toast__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+.bl-toast__action {
+  height: var(--control-height-sm);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  font-size: var(--text-small-size);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+}
+.bl-toast__action:hover {
+  border-color: rgb(0 209 160 / 40%);
+  background: var(--color-accent-subtle);
+  color: var(--color-accent);
 }
 .bl-toast__close {
   display: grid;

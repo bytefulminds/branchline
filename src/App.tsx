@@ -11,6 +11,7 @@ import { WelcomeView } from "./features/repository/WelcomeView";
 import { BranchActionsProvider } from "./features/branches/BranchActions";
 import { BranchesView } from "./features/branches/BranchesView";
 import { HistoryView } from "./features/history/HistoryView";
+import { RemoteActionsProvider } from "./features/remote/RemoteActions";
 import { ContextMenuProvider } from "./components/ContextMenu";
 import { AppShell } from "./layouts/AppShell";
 import type { WorkspaceView } from "./layouts/Sidebar";
@@ -125,15 +126,21 @@ function Workspace() {
       repo={state.status === "ready" ? state.repo : null}
       controller={controller}
     >
-      <AppShell
+      <RemoteActionsProvider
+        repo={state.status === "ready" ? state.repo : null}
         controller={controller}
-        gitVersion={gitVersion}
-        onOpen={openPicker}
-        view={view}
-        onView={setView}
+        onShowChanges={() => setView("changes")}
       >
-        {content}
-      </AppShell>
+        <AppShell
+          controller={controller}
+          gitVersion={gitVersion}
+          onOpen={openPicker}
+          view={view}
+          onView={setView}
+        >
+          {content}
+        </AppShell>
+      </RemoteActionsProvider>
     </BranchActionsProvider>
   );
 }

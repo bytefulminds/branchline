@@ -1,12 +1,15 @@
 //! Tauri IPC commands. Each command moves blocking Git work off the async
 //! runtime with `spawn_blocking`, so the webview and event loop stay responsive.
 
+use tauri::ipc::Channel;
+
 use crate::error::GitError;
 use crate::git::branches::{self, BranchList, StartPoint};
 use crate::git::commit::{self, CommitDraft, CommitRequest};
 use crate::git::diff::{self, DiffArea, FileDiff};
 use crate::git::log::{self, CommitDetails, LogPage, RefInfo};
 use crate::git::ops::{self, LineRequest};
+use crate::git::remote::{self, Progress, PullMode, PushRequest, RemoteInfo, RemoteOutcome};
 use crate::git::repository::{self, RepositoryInfo};
 use crate::git::runner::{self, GitVersion};
 
@@ -211,6 +214,84 @@ pub async fn delete_branch(
 
 /// Watch `repo` for changes; emits `repository-changed` events.
 /// Setting up a recursive watch can take a moment on large trees, so it runs off the main thread.
+/// Result of a fetch, pull or push: what changed, plus the refreshed repository.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoteResult {
+    pub outcome: RemoteOutcome,
+    pub repo: RepositoryInfo,
+}
+
+#[tauri::command]
+pub async fn list_remotes(repo: String) -> Result<Vec<RemoteInfo>, GitError> {
+    blocking(move || remote::list_remotes(&repo)).await
+}
+
+/// Fetch one remote, or all remotes when `remote` is null. Progress is streamed on `on_progress`.
+#[tauri::command]
+pub async fn fetch_remote(
+    repo: String,
+    remote: Option<String>,
+    op_id: String,
+    on_progress: Channel<Progress>,
+) -> Result<RemoteResult, GitError> {
+    blocking(move || {
+        let outcome = remote::fetch(&repo, remote.as_deref(), &op_id, &mut |p| {
+            let _ = on_progress.send(p);
+        })?;
+        Ok(RemoteResult {
+            outcome,
+            repo: repository::inspect(&repo)?,
+        })
+    })
+    .await
+}
+
+/// Pull the current branch from its upstream.
+#[tauri::command]
+pub async fn pull_branch(
+    repo: String,
+    mode: PullMode,
+    op_id: String,
+    on_progress: Channel<Progress>,
+) -> Result<RemoteResult, GitError> {
+    blocking(move || {
+        let outcome = remote::pull(&repo, mode, &op_id, &mut |p| {
+            let _ = on_progress.send(p);
+        })?;
+        Ok(RemoteResult {
+            outcome,
+            repo: repository::inspect(&repo)?,
+        })
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn push_branch(
+    repo: String,
+    request: PushRequest,
+    op_id: String,
+    on_progress: Channel<Progress>,
+) -> Result<RemoteResult, GitError> {
+    blocking(move || {
+        let outcome = remote::push(&repo, &request, &op_id, &mut |p| {
+            let _ = on_progress.send(p);
+        })?;
+        Ok(RemoteResult {
+            outcome,
+            repo: repository::inspect(&repo)?,
+        })
+    })
+    .await
+}
+
+/// Cancel a running fetch, pull or push. Unknown ids are ignored.
+#[tauri::command]
+pub fn cancel_remote_operation(op_id: String) {
+    remote::cancel(&op_id);
+}
+
 #[tauri::command]
 pub async fn watch_repository(app: tauri::AppHandle, repo: String) -> Result<(), GitError> {
     blocking(move || {

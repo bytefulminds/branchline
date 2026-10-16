@@ -64,12 +64,49 @@ dash, not `HEAD`), and always passed after `--` or as full ref names. Switching 
 When a switch would overwrite uncommitted changes, Git refuses and Branchline reports which files
 are in the way (`checkoutConflict`); nothing is changed.
 
+| `list_remotes(repo)` | `RemoteInfo[]` | Names and URLs, credentials removed |
+| `fetch_remote(repo, remote, opId, onProgress)` | `RemoteResult` | `remote: null` fetches all remotes; always prunes |
+| `pull_branch(repo, mode, opId, onProgress)` | `RemoteResult` | `fastForward` (default), `merge` or `rebase` |
+| `push_branch(repo, request, opId, onProgress)` | `RemoteResult` | Upstream push, publish (`setUpstream`) or force with lease |
+| `cancel_remote_operation(opId)` | nothing | Stops a running fetch, pull or push |
+
 Commit ids from the UI are accepted only as hexadecimal strings, so they can never be read as
 options or revision expressions.
 
 Write commands return the refreshed repository so the UI updates in one round trip. All write
 operations go through one process-wide lock, so Branchline never runs two index-changing Git
 commands at the same time.
+
+## Fetch, pull and push
+
+`git/remote.rs` runs network commands through `runner::run_git_streaming`:
+
+- **Progress.** Git writes progress to stderr and repaints lines with `\r`. The runner splits on
+  `\r` and `\n`; `parse_progress` turns lines such as `Receiving objects:  45% (450/1000)` into
+  `{ phase, percent, detail }`, and only changes are forwarded to the UI over a Tauri channel
+  (about 7 updates per second on a 410,000 object fetch).
+- **Cancellation and timeout.** Each operation has an id. `cancel_remote_operation` sets a flag;
+  the runner kills Git and, on macOS and Linux, its whole process group, so helpers such as
+  `ssh` stop too. The hard limit is 30 minutes. A test checks that a hanging SSH helper does not
+  survive a cancel.
+- **No prompts.** `GIT_TERMINAL_PROMPT=0` for HTTPS and `ssh -o BatchMode=yes` for SSH, unless
+  the user configured `GIT_SSH_COMMAND`, `GIT_SSH` or `core.sshCommand`. Credential helpers
+  (macOS Keychain, Git Credential Manager) and SSH agents keep working.
+- **Arguments.** Remote names must match a configured remote; branches are validated and pushed
+  as full refspecs (`refs/heads/x:refs/heads/y`). Pull passes the upstream remote and branch
+  explicitly, so the result never depends on `push.default` or similar settings.
+- **Force push** is only offered with `--force-with-lease`, expecting the remote branch to be
+  where the remote-tracking branch says. If someone pushed since the last fetch, Git refuses
+  (`staleLease`).
+- **Errors** are classified from Git's output: `authFailed`, `hostKeyUnverified`,
+  `networkFailed`, `remoteNotFound`, `pushRejected`, `staleLease`, `remoteRejected`,
+  `noUpstream`, `diverged` and `cancelled`. Details drop progress and `hint:` lines, and every
+  URL in them is redacted (`https://user:token@host` becomes `https://***@host`).
+- A pull that stops with merge or rebase conflicts is reported as a result
+  (`conflicts: true`), not as a failure; the conflicts show up in the Changes view.
+
+One network operation runs per repository at a time; pull also takes the write lock because it
+changes the working tree.
 
 ## Partial staging
 

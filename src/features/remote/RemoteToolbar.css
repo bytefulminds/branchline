@@ -1,0 +1,83 @@
+.bl-remote-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex: none;
+}
+.bl-tool-split {
+  display: inline-flex;
+  align-items: center;
+}
+.bl-tool {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--text-small-size);
+  font-weight: var(--weight-medium);
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
+}
+.bl-tool svg {
+  flex: none;
+}
+.bl-tool:hover:not(:disabled),
+.bl-tool[aria-expanded="true"] {
+  background: var(--color-hover);
+  color: var(--color-text-primary);
+}
+.bl-tool:active:not(:disabled) {
+  background: var(--color-pressed);
+}
+.bl-tool:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.bl-tool[aria-busy="true"] {
+  opacity: 1;
+  color: var(--color-accent);
+}
+.bl-tool--split {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  padding-right: 6px;
+}
+.bl-tool--more {
+  width: 18px;
+  padding: 0;
+  justify-content: center;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  color: var(--color-text-muted);
+}
+.bl-tool-split:hover .bl-tool:not(:disabled) {
+  background: var(--color-hover);
+}
+.bl-tool__count {
+  min-width: 18px;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: var(--radius-full);
+  background: var(--color-accent-subtle-strong);
+  color: var(--color-accent);
+  font-size: 11px;
+  line-height: 16px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Narrow windows: icons and counts only; the name stays available as tooltip and label. */
+@media (max-width: 1080px) {
+  .bl-tool__label {
+    display: none;
+  }
+}

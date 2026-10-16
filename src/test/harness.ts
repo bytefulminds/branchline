@@ -152,6 +152,7 @@ export function setup(handler: Handler) {
       if (cmd === "launch_repository_path") return null;
       if (cmd === "file_diff") return diffFor(a as { path: string; area: DiffArea });
       if (cmd === "commit_draft") return DRAFT;
+      if (cmd === "list_remotes") return [];
       return undefined;
     },
     { shouldMockEvents: true },
