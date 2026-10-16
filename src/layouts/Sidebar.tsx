@@ -19,7 +19,7 @@ import { displayPath } from "../lib/format";
 import { modKeyLabel } from "../services/platform";
 import "./Sidebar.css";
 
-export type WorkspaceView = "changes" | "history";
+export type WorkspaceView = "changes" | "history" | "branches";
 
 const MAX_SIDEBAR_RECENT = 6;
 
@@ -62,7 +62,6 @@ function NavItem({
 
 /** Repository areas planned for later milestones. Shown disabled, never with fake data. */
 const UPCOMING: { label: string; icon: ReactNode }[] = [
-  { label: "Branches", icon: <GitBranch size={16} /> },
   { label: "Tags", icon: <Tag size={16} /> },
   { label: "Remotes", icon: <Cloud size={16} /> },
   { label: "Stashes", icon: <Archive size={16} /> },
@@ -134,6 +133,13 @@ export function Sidebar({
               title={`History (${modKeyLabel}2)`}
               active={view === "history"}
               onClick={() => onView("history")}
+            />
+            <NavItem
+              icon={<GitBranch size={16} />}
+              label="Branches"
+              title={`Branches (${modKeyLabel}3)`}
+              active={view === "branches"}
+              onClick={() => onView("branches")}
             />
             {UPCOMING.map((item) => (
               <NavItem

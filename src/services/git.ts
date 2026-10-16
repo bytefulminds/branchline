@@ -1,6 +1,7 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
+  BranchList,
   CommitDetails,
   CommitDraft,
   DiffArea,
@@ -11,6 +12,7 @@ import type {
   LogPage,
   RefInfo,
   RepositoryInfo,
+  StartPoint,
 } from "../types/git";
 
 /** Normalize anything thrown by `invoke` into the backend's error shape. */
@@ -83,6 +85,22 @@ export const gitService = {
   commitDraft: (repo: string) => call<CommitDraft>("commit_draft", { repo }),
   createCommit: (repo: string, message: string, amend: boolean) =>
     call<RepositoryInfo>("create_commit", { repo, request: { message, amend } }),
+  listBranches: (repo: string) => call<BranchList>("list_branches", { repo }),
+  /** Resolves to a reason the name is invalid, or null when it is fine. */
+  checkBranchName: (repo: string, name: string) =>
+    call<string | null>("check_branch_name", { repo, name }),
+  createBranch: (repo: string, name: string, start: StartPoint, checkout: boolean) =>
+    call<RepositoryInfo>("create_branch", { repo, name, start, checkout }),
+  switchBranch: (repo: string, name: string) =>
+    call<RepositoryInfo>("switch_branch", { repo, name }),
+  checkoutRemoteBranch: (repo: string, remoteBranch: string) =>
+    call<RepositoryInfo>("checkout_remote_branch", { repo, remoteBranch }),
+  checkoutDetached: (repo: string, oid: string) =>
+    call<RepositoryInfo>("checkout_detached", { repo, oid }),
+  renameBranch: (repo: string, old: string, newName: string) =>
+    call<RepositoryInfo>("rename_branch", { repo, old, new: newName }),
+  deleteBranch: (repo: string, name: string, force: boolean) =>
+    call<RepositoryInfo>("delete_branch", { repo, name, force }),
   watchRepository: (repo: string) => call<void>("watch_repository", { repo }),
   unwatchRepository: () => call<void>("unwatch_repository"),
   /** Subscribe to file-system changes of the watched repository. */

@@ -69,6 +69,15 @@ pub enum GitError {
     #[error("The commit was not created.")]
     CommitFailed { detail: String },
 
+    #[error("{0}")]
+    InvalidBranchName(String),
+
+    #[error("Your local changes would be overwritten. Commit or stash them first.")]
+    CheckoutConflict { files: Vec<String>, detail: String },
+
+    #[error("The branch {branch} has commits that are not merged anywhere else.")]
+    NotMerged { branch: String },
+
     #[error("Unexpected Git output: {0}")]
     Parse(String),
 
@@ -99,6 +108,9 @@ impl GitError {
             GitError::ApplyFailed { .. } => "applyFailed",
             GitError::IdentityMissing { .. } => "identityMissing",
             GitError::CommitFailed { .. } => "commitFailed",
+            GitError::InvalidBranchName(_) => "invalidBranchName",
+            GitError::CheckoutConflict { .. } => "checkoutConflict",
+            GitError::NotMerged { .. } => "notMerged",
             GitError::Parse(_) => "parse",
             GitError::Internal(_) => "internal",
         }
@@ -112,7 +124,8 @@ impl GitError {
             | GitError::Locked { detail }
             | GitError::ApplyFailed { detail }
             | GitError::IdentityMissing { detail }
-            | GitError::CommitFailed { detail } => Some(detail.as_str()),
+            | GitError::CommitFailed { detail }
+            | GitError::CheckoutConflict { detail, .. } => Some(detail.as_str()),
             GitError::GitFailed { stderr, .. } => Some(stderr.as_str()),
             _ => None,
         }

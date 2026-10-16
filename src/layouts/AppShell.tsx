@@ -30,7 +30,7 @@ export function AppShell({
   );
   return (
     <div className="bl-app">
-      <TitleBar controller={controller} onOpen={onOpen} />
+      <TitleBar controller={controller} onOpen={onOpen} onShowBranches={() => onView("branches")} />
       <div className="bl-app__body">
         <Sidebar
           controller={controller}

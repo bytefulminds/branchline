@@ -41,9 +41,14 @@ reimplementing Git.
   dates. Fast on large repositories: the list is virtualized and loads page by page.
 - Commit details: full message, author and committer, parents, changed files with line counts,
   and a read-only diff per file.
-- `Ctrl+1` / `⌘1` for Changes and `Ctrl+2` / `⌘2` for History.
+- Branches: list local and remote branches with upstream and ahead/behind, then create, switch,
+  rename and delete them. Remote branches check out as tracking branches; unmerged branches need a
+  second confirmation before deletion; switching never overwrites uncommitted work.
+- Quick branch switcher in the title bar, and right-click (or `Shift+F10`) on a commit to create
+  a branch there or check it out.
+- `Ctrl+1` / `⌘1` Changes, `Ctrl+2` / `⌘2` History, `Ctrl+3` / `⌘3` Branches.
 
-Branches, remotes (fetch, pull, push) and advanced workflows follow in the next milestones.
+Fetch, pull and push, and the advanced workflows, follow next.
 
 ## Prerequisites
 
@@ -161,8 +166,8 @@ is still to do.
 
 ## Known limitations
 
-- Branches, tags, remotes, stashes and worktrees are not implemented yet; their navigation entries
-  are visible but disabled.
+- Tags, remotes, stashes and worktrees are not implemented yet; their navigation entries are
+  visible but disabled. Fetch, pull and push are not available yet.
 - The graph shows up to 12 lanes; further lanes are clipped. Merge commits list the files changed
   relative to their first parent.
 - History cannot be searched or filtered yet.

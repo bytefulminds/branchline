@@ -2,6 +2,7 @@
 //! runtime with `spawn_blocking`, so the webview and event loop stay responsive.
 
 use crate::error::GitError;
+use crate::git::branches::{self, BranchList, StartPoint};
 use crate::git::commit::{self, CommitDraft, CommitRequest};
 use crate::git::diff::{self, DiffArea, FileDiff};
 use crate::git::log::{self, CommitDetails, LogPage, RefInfo};
@@ -135,6 +136,77 @@ pub async fn create_commit(
     request: CommitRequest,
 ) -> Result<RepositoryInfo, GitError> {
     write_then_inspect(repo, move |r| commit::commit(r, &request).map(|_| ())).await
+}
+
+#[tauri::command]
+pub async fn list_branches(repo: String) -> Result<BranchList, GitError> {
+    blocking(move || branches::list_branches(&repository::resolve_root(&repo)?)).await
+}
+
+/// Live validation for branch name inputs; resolves to an error message or null.
+#[tauri::command]
+pub async fn check_branch_name(repo: String, name: String) -> Result<Option<String>, GitError> {
+    blocking(move || {
+        let root = repository::resolve_root(&repo)?;
+        match branches::validate_branch_name(&root, &name) {
+            Ok(()) => Ok(None),
+            Err(GitError::InvalidBranchName(why)) => Ok(Some(why)),
+            Err(e) => Err(e),
+        }
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn create_branch(
+    repo: String,
+    name: String,
+    start: StartPoint,
+    checkout: bool,
+) -> Result<RepositoryInfo, GitError> {
+    write_then_inspect(repo, move |r| {
+        branches::create_branch(r, &name, &start, checkout)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn switch_branch(repo: String, name: String) -> Result<RepositoryInfo, GitError> {
+    write_then_inspect(repo, move |r| branches::switch_branch(r, &name)).await
+}
+
+#[tauri::command]
+pub async fn checkout_remote_branch(
+    repo: String,
+    remote_branch: String,
+) -> Result<RepositoryInfo, GitError> {
+    write_then_inspect(repo, move |r| {
+        branches::checkout_remote_branch(r, &remote_branch).map(|_| ())
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn checkout_detached(repo: String, oid: String) -> Result<RepositoryInfo, GitError> {
+    write_then_inspect(repo, move |r| branches::checkout_detached(r, &oid)).await
+}
+
+#[tauri::command]
+pub async fn rename_branch(
+    repo: String,
+    old: String,
+    new: String,
+) -> Result<RepositoryInfo, GitError> {
+    write_then_inspect(repo, move |r| branches::rename_branch(r, &old, &new)).await
+}
+
+#[tauri::command]
+pub async fn delete_branch(
+    repo: String,
+    name: String,
+    force: bool,
+) -> Result<RepositoryInfo, GitError> {
+    write_then_inspect(repo, move |r| branches::delete_branch(r, &name, force)).await
 }
 
 /// Watch `repo` for changes; emits `repository-changed` events.

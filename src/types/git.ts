@@ -91,6 +91,9 @@ export type GitErrorKind =
   | "applyFailed"
   | "identityMissing"
   | "commitFailed"
+  | "invalidBranchName"
+  | "checkoutConflict"
+  | "notMerged"
   | "parse"
   | "internal"
   /** Frontend-only: the app is not running inside the Tauri shell. */
@@ -214,3 +217,25 @@ export interface CommitDraft {
   preparedMessage: string | null;
   canAmend: boolean;
 }
+
+export interface BranchInfo {
+  /** `main`, or `origin/main` for remote branches. */
+  name: string;
+  remote: string | null;
+  oid: string;
+  isCurrent: boolean;
+  upstream: string | null;
+  ahead: number;
+  behind: number;
+  upstreamGone: boolean;
+  tipTime: number;
+  tipSummary: string;
+}
+
+export interface BranchList {
+  local: BranchInfo[];
+  remote: BranchInfo[];
+}
+
+export type StartPoint =
+  { kind: "head" } | { kind: "commit"; oid: string } | { kind: "branch"; name: string };

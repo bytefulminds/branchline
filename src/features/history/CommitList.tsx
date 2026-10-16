@@ -34,6 +34,7 @@ export function CommitList({
   onSelect,
   onNearEnd,
   loadingMore,
+  onContextMenu,
 }: {
   data: HistoryData;
   head: HeadState;
@@ -41,6 +42,8 @@ export function CommitList({
   onSelect: (oid: string) => void;
   onNearEnd: () => void;
   loadingMore: boolean;
+  /** Open the commit's context menu at a screen position. */
+  onContextMenu?: (oid: string, at: { x: number; y: number }) => void;
 }) {
   const baseId = useId();
   const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
@@ -62,6 +65,15 @@ export function CommitList({
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (count === 0) return;
+    if ((e.key === "F10" && e.shiftKey) || e.key === "ContextMenu") {
+      e.preventDefault();
+      const el = document.getElementById(`${baseId}-${activeIndex}`);
+      if (el && activeIndex >= 0) {
+        const r = el.getBoundingClientRect();
+        onContextMenu?.(data.commits[activeIndex]!.oid, { x: r.left + 120, y: r.bottom });
+      }
+      return;
+    }
     let next: number;
     if (e.key === "ArrowDown") next = Math.min(count - 1, activeIndex + 1);
     else if (e.key === "ArrowUp") next = Math.max(0, activeIndex - 1);
@@ -104,6 +116,11 @@ export function CommitList({
               className={`bl-commit-row${isHead ? " bl-commit-row--head" : ""}`}
               style={{ transform: `translateY(${index * HISTORY_ROW_HEIGHT}px)` }}
               onClick={() => onSelect(commit.oid)}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                onSelect(commit.oid);
+                onContextMenu?.(commit.oid, { x: e.clientX, y: e.clientY });
+              }}
             >
               <span className="bl-commit-row__graph">
                 <GraphCell row={row} height={HISTORY_ROW_HEIGHT} lanes={lanes} isHead={isHead} />

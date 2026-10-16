@@ -8,7 +8,10 @@ import {
 } from "./features/repository/RepositoryStatusViews";
 import { useRepository } from "./features/repository/useRepository";
 import { WelcomeView } from "./features/repository/WelcomeView";
+import { BranchActionsProvider } from "./features/branches/BranchActions";
+import { BranchesView } from "./features/branches/BranchesView";
 import { HistoryView } from "./features/history/HistoryView";
+import { ContextMenuProvider } from "./components/ContextMenu";
 import { AppShell } from "./layouts/AppShell";
 import type { WorkspaceView } from "./layouts/Sidebar";
 import { pickRepositoryFolder } from "./services/dialog";
@@ -60,9 +63,14 @@ function Workspace() {
       if (isPrimaryModifier(e) && !e.shiftKey && !e.altKey && key === "o") {
         e.preventDefault();
         void openPicker();
-      } else if (isPrimaryModifier(e) && !e.shiftKey && !e.altKey && (key === "1" || key === "2")) {
+      } else if (
+        isPrimaryModifier(e) &&
+        !e.shiftKey &&
+        !e.altKey &&
+        (key === "1" || key === "2" || key === "3")
+      ) {
         e.preventDefault();
-        setView(key === "1" ? "changes" : "history");
+        setView(key === "1" ? "changes" : key === "2" ? "history" : "branches");
       } else if ((isPrimaryModifier(e) && key === "r") || e.key === "F5") {
         // Also suppresses the webview's own page reload.
         e.preventDefault();
@@ -104,6 +112,8 @@ function Workspace() {
             repo={state.repo}
             onShowChanges={() => setView("changes")}
           />
+        ) : view === "branches" ? (
+          <BranchesView key={state.repo.path} repo={state.repo} />
         ) : (
           <ChangesView key={state.repo.path} repo={state.repo} controller={controller} />
         );
@@ -111,15 +121,20 @@ function Workspace() {
   }
 
   return (
-    <AppShell
+    <BranchActionsProvider
+      repo={state.status === "ready" ? state.repo : null}
       controller={controller}
-      gitVersion={gitVersion}
-      onOpen={openPicker}
-      view={view}
-      onView={setView}
     >
-      {content}
-    </AppShell>
+      <AppShell
+        controller={controller}
+        gitVersion={gitVersion}
+        onOpen={openPicker}
+        view={view}
+        onView={setView}
+      >
+        {content}
+      </AppShell>
+    </BranchActionsProvider>
   );
 }
 
@@ -127,7 +142,9 @@ export default function App() {
   return (
     <ToastProvider>
       <ConfirmProvider>
-        <Workspace />
+        <ContextMenuProvider>
+          <Workspace />
+        </ContextMenuProvider>
       </ConfirmProvider>
     </ToastProvider>
   );

@@ -6,6 +6,7 @@ import "@fontsource/jetbrains-mono/500.css";
 import "./styles/tokens.css";
 import "./styles/base.css";
 import "./components/Tooltip.css";
+import "./components/Form.css";
 import App from "./App";
 import { platform } from "./services/platform";
 

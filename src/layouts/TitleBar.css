@@ -74,6 +74,9 @@
 }
 
 .bl-branch-pill {
+  border: 0;
+  cursor: pointer;
+  font: inherit;
   display: flex;
   align-items: center;
   gap: var(--space-1);
@@ -94,4 +97,11 @@
   color: var(--color-text-secondary);
   font-size: var(--text-small-size);
   font-weight: var(--weight-regular);
+}
+.bl-branch-pill:hover,
+.bl-branch-pill[aria-expanded="true"] {
+  background: var(--color-accent-subtle-strong);
+}
+.bl-branch-pill__chevron {
+  opacity: 0.7;
 }

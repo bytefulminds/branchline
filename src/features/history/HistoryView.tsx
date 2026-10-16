@@ -1,4 +1,7 @@
-import { CircleAlert, GitCommitHorizontal } from "lucide-react";
+import { Check, CircleAlert, Copy, GitBranchPlus, GitCommitHorizontal, LogIn } from "lucide-react";
+import { useContextMenu } from "../../components/ContextMenu";
+import type { MenuEntry } from "../../components/Menu";
+import { useBranchActions } from "../branches/BranchActions";
 import { useCallback, useState } from "react";
 import { EmptyState } from "../../components/EmptyState";
 import { Spinner } from "../../components/Spinner";
@@ -19,6 +22,8 @@ export function HistoryView({
   onShowChanges: () => void;
 }) {
   const history = useHistory(repo);
+  const branchActions = useBranchActions();
+  const showMenu = useContextMenu();
   const [selectedOid, setSelectedOid] = useState<string | null>(null);
   const [openFile, setOpenFile] = useState<{ oid: string; file: CommitFile } | null>(null);
   const [detailsWidth, setDetailsWidth] = usePersistentNumber(
@@ -33,6 +38,41 @@ export function HistoryView({
   }, []);
 
   const selected = selectedOid ?? data?.commits[0]?.oid ?? null;
+
+  const commitMenu = (oid: string): MenuEntry[] => {
+    const short = oid.slice(0, 7);
+    const localBranches = (data?.refsByOid.get(oid) ?? []).filter((r) => r.kind === "branch");
+    const headOid = repo.head.kind === "unborn" ? null : repo.head.oid;
+    return [
+      ...localBranches.map<MenuEntry>((r) => ({
+        id: `switch:${r.name}`,
+        label: `Switch to ${r.name}`,
+        icon: <Check size={16} />,
+        disabled: repo.head.kind === "branch" && repo.head.name === r.name,
+        onSelect: () => branchActions.switchTo(r.name),
+      })),
+      {
+        id: "create",
+        label: "Create branch here…",
+        icon: <GitBranchPlus size={16} />,
+        onSelect: () => branchActions.create({ kind: "commit", oid }, `commit ${short}`),
+      },
+      {
+        id: "detach",
+        label: "Check out this commit…",
+        icon: <LogIn size={16} />,
+        disabled: oid === headOid,
+        onSelect: () => branchActions.checkoutCommit(oid),
+      },
+      { type: "separator", id: "sep" },
+      {
+        id: "copy",
+        label: "Copy commit id",
+        icon: <Copy size={16} />,
+        onSelect: () => void navigator.clipboard?.writeText(oid).catch(() => {}),
+      },
+    ];
+  };
 
   let list;
   if (history.error && !data) {
@@ -68,6 +108,9 @@ export function HistoryView({
         onSelect={select}
         onNearEnd={loadMore}
         loadingMore={history.loadingMore}
+        onContextMenu={(oid, at) =>
+          showMenu(at, commitMenu(oid), `Actions for commit ${oid.slice(0, 7)}`)
+        }
       />
     );
   }

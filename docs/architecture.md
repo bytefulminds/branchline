@@ -52,6 +52,18 @@ Native Git CLI
 | `commit_draft(repo)` | `CommitDraft` | Author identity, HEAD message (for amend), prepared merge message |
 | `create_commit(repo, request)` | `RepositoryInfo` | `git commit --file=- --cleanup=whitespace [--amend]` |
 
+| `list_branches(repo)` | `BranchList` | Local and remote branches, upstream, ahead/behind, tip |
+| `check_branch_name(repo, name)` | `string \| null` | Live validation message for name inputs |
+| `create_branch` / `switch_branch` / `rename_branch` / `delete_branch` | `RepositoryInfo` | Delete without `force` reports `notMerged` |
+| `checkout_remote_branch(repo, remoteBranch)` | `RepositoryInfo` | Creates a tracking branch, or switches to it |
+| `checkout_detached(repo, oid)` | `RepositoryInfo` | Detached HEAD at a commit |
+
+Branch names are checked with `git check-ref-format` plus Branchline's own rules (no leading
+dash, not `HEAD`), and always passed after `--` or as full ref names. Switching uses
+`git checkout <name> --`, so a file with the same name as a branch cannot be mistaken for it.
+When a switch would overwrite uncommitted changes, Git refuses and Branchline reports which files
+are in the way (`checkoutConflict`); nothing is changed.
+
 Commit ids from the UI are accepted only as hexadecimal strings, so they can never be read as
 options or revision expressions.
 

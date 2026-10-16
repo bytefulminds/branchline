@@ -3,10 +3,13 @@ import {
   FolderGit2,
   FolderOpen,
   GitBranch,
+  GitBranchPlus,
   History,
+  ListTree,
   RefreshCw,
   X,
 } from "lucide-react";
+import { useBranchActions } from "../features/branches/BranchActions";
 import { IconButton } from "../components/Button";
 import { LogoMark } from "../components/Logo";
 import { Menu, type MenuEntry } from "../components/Menu";
@@ -21,13 +24,19 @@ import { modKeyLabel, platform } from "../services/platform";
 import { WindowControls } from "./WindowControls";
 import "./TitleBar.css";
 
+/** Most recently active local branches shown in the quick switcher. */
+const QUICK_SWITCH_LIMIT = 12;
+
 export function TitleBar({
   controller,
   onOpen,
+  onShowBranches,
 }: {
   controller: RepositoryController;
   onOpen: () => void;
+  onShowBranches: () => void;
 }) {
+  const branchActions = useBranchActions();
   const { state, recent } = controller;
   const repo = state.status === "ready" ? state.repo : null;
   const busy = state.status === "loading" || (state.status === "ready" && state.refreshing);
@@ -66,6 +75,39 @@ export function TitleBar({
       : []),
   ];
 
+  const local = [...(branchActions.branches?.local ?? [])]
+    .sort((a, b) => Number(b.isCurrent) - Number(a.isCurrent) || b.tipTime - a.tipTime)
+    .slice(0, QUICK_SWITCH_LIMIT);
+  const branchEntries: MenuEntry[] = [
+    { type: "header", id: "branches-header", label: "Switch branch" },
+    ...local.map<MenuEntry>((b) => ({
+      id: `branch:${b.name}`,
+      label: b.name,
+      description: b.tipSummary,
+      icon: <GitBranch size={16} aria-hidden />,
+      checked: b.isCurrent,
+      onSelect: () => !b.isCurrent && branchActions.switchTo(b.name),
+    })),
+    ...(local.length === 0
+      ? ([{ type: "header", id: "no-branches", label: "No branches yet" }] as MenuEntry[])
+      : []),
+    { type: "separator", id: "branches-sep" },
+    {
+      id: "new-branch",
+      label: "New branch…",
+      icon: <GitBranchPlus size={16} aria-hidden />,
+      disabled: repo?.head.kind === "unborn",
+      onSelect: () => repo && branchActions.create({ kind: "head" }, head?.text ?? "HEAD"),
+    },
+    {
+      id: "all-branches",
+      label: "All branches",
+      icon: <ListTree size={16} aria-hidden />,
+      shortcut: `${modKeyLabel}3`,
+      onSelect: onShowBranches,
+    },
+  ];
+
   const selectorLabel =
     repo?.name ??
     (state.status === "loading"
@@ -101,12 +143,27 @@ export function TitleBar({
         )}
       />
 
-      {head && (
-        <div className="bl-branch-pill" title={head.title}>
-          <GitBranch size={14} aria-hidden />
-          <span className={`truncate${head.mono ? " mono" : ""}`}>{head.text}</span>
-          {head.qualifier && <span className="bl-branch-pill__qualifier">{head.qualifier}</span>}
-        </div>
+      {head && repo && (
+        <Menu
+          entries={branchEntries}
+          minWidth={280}
+          trigger={(props) => (
+            <button
+              type="button"
+              className="bl-branch-pill"
+              title={head.title}
+              aria-label={`Branch: ${head.text}${head.qualifier ? ` (${head.qualifier})` : ""}. Switch branch`}
+              {...props}
+            >
+              <GitBranch size={14} aria-hidden />
+              <span className={`truncate${head.mono ? " mono" : ""}`}>{head.text}</span>
+              {head.qualifier && (
+                <span className="bl-branch-pill__qualifier">{head.qualifier}</span>
+              )}
+              <ChevronDown size={12} aria-hidden className="bl-branch-pill__chevron" />
+            </button>
+          )}
+        />
       )}
 
       <div className="bl-titlebar__spacer" data-tauri-drag-region />
