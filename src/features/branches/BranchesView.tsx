@@ -1,11 +1,13 @@
 import {
-  ArrowUpFromLine,
   ArrowDown,
   ArrowUp,
+  ArrowUpFromLine,
   Check,
   Cloud,
   GitBranch,
   GitBranchPlus,
+  GitMerge,
+  GitPullRequestArrow,
   MoreHorizontal,
   Pencil,
   Search,
@@ -21,6 +23,7 @@ import type { MenuEntry } from "../../components/Menu";
 import { Spinner } from "../../components/Spinner";
 import { relativeTime } from "../../lib/format";
 import type { BranchInfo, RepositoryInfo } from "../../types/git";
+import { useIntegrateActions } from "../integrate/IntegrateActions";
 import { useRemoteActions } from "../remote/RemoteActions";
 import { useBranchActions } from "./BranchActions";
 import "./BranchesView.css";
@@ -58,6 +61,7 @@ function Tracking({ branch }: { branch: BranchInfo }) {
 export function BranchesView({ repo }: { repo: RepositoryInfo }) {
   const actions = useBranchActions();
   const remote = useRemoteActions();
+  const integrate = useIntegrateActions();
   const showMenu = useContextMenu();
   const [query, setQuery] = useState("");
   const { branches } = actions;
@@ -77,6 +81,23 @@ export function BranchesView({ repo }: { repo: RepositoryInfo }) {
     return [...groups.entries()];
   }, [branches, q]);
 
+  const current = repo.head.kind === "branch" ? repo.head.name : null;
+  const integrateEntries = (b: BranchInfo): MenuEntry[] => [
+    {
+      id: "merge",
+      label: current ? `Merge into ${current}…` : "Merge into current…",
+      icon: <GitMerge size={16} />,
+      disabled: b.isCurrent || repo.head.kind === "unborn" || repo.operation !== null,
+      onSelect: () => integrate.merge({ kind: "branch", name: b.name }, b.name),
+    },
+    {
+      id: "rebase",
+      label: current ? `Rebase ${current} onto this…` : "Rebase onto this…",
+      icon: <GitPullRequestArrow size={16} />,
+      disabled: b.isCurrent || !current || repo.operation !== null,
+      onSelect: () => integrate.rebase({ kind: "branch", name: b.name }, b.name),
+    },
+  ];
   const localMenu = (b: BranchInfo): MenuEntry[] => [
     {
       id: "switch",
@@ -91,6 +112,8 @@ export function BranchesView({ repo }: { repo: RepositoryInfo }) {
       icon: <GitBranchPlus size={16} />,
       onSelect: () => actions.create({ kind: "branch", name: b.name }, b.name),
     },
+    ...integrateEntries(b),
+    { type: "separator", id: "sep-integrate" },
     {
       id: "push",
       label: b.upstream ? `Push to ${b.upstream}` : "Publish branch…",
@@ -127,6 +150,8 @@ export function BranchesView({ repo }: { repo: RepositoryInfo }) {
       icon: <GitBranchPlus size={16} />,
       onSelect: () => actions.create({ kind: "branch", name: b.name }, b.name),
     },
+    { type: "separator", id: "sep" },
+    ...integrateEntries(b),
   ];
 
   const row = (b: BranchInfo, entries: MenuEntry[], primary: () => void, remote: boolean) => (

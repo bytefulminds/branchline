@@ -17,7 +17,8 @@ interface Message {
 }
 
 /** Unsent messages per repository survive switching views. */
-const drafts = new Map<string, Message & { amend: boolean }>();
+/** Unsent messages per repository; `prefilled` is the prepared message Branchline filled in. */
+const drafts = new Map<string, Message & { amend: boolean; prefilled: string | null }>();
 
 /** Test helper: forget unsent messages. */
 export function resetCommitDrafts() {
@@ -44,6 +45,8 @@ export function commitBlocker(
   const staged = repo.changes.filter((c) => c.indexStatus).length;
   if (conflicts > 0)
     return `Resolve ${conflicts === 1 ? "the conflict" : `${conflicts} conflicts`} first.`;
+  // A plain commit in the middle of a rebase would add an unrelated commit.
+  if (repo.operation === "rebase") return "Use Continue above to finish this rebase step.";
   if (!amend && staged === 0 && repo.operation !== "merge") return "Stage changes to commit.";
   if (!message.summary.trim()) return "Enter a summary.";
   return null;
@@ -62,12 +65,14 @@ export function CommitBox({
   const [message, setMessage] = useState<Message>(saved ?? { summary: "", description: "" });
   const [amend, setAmend] = useState(saved?.amend ?? false);
   const [draft, setDraft] = useState<CommitDraft | null>(null);
+  // The prepared (merge, cherry-pick, ...) message Branchline filled in, if still there.
+  const prefilled = useRef<string | null>(saved?.prefilled ?? null);
   const [error, setError] = useState<GitError | null>(null);
   const summaryRef = useRef<HTMLInputElement>(null);
   const headOid = repo.head.kind === "unborn" ? null : repo.head.oid;
 
   useEffect(() => {
-    drafts.set(repo.path, { ...message, amend });
+    drafts.set(repo.path, { ...message, amend, prefilled: prefilled.current });
   }, [repo.path, message, amend]);
 
   // Author, HEAD message and prepared merge message change with HEAD and operations.
@@ -78,10 +83,23 @@ export function CommitBox({
       .then((d) => {
         if (cancelled) return;
         setDraft(d);
-        // Prefill a prepared merge/cherry-pick message once, if the box is empty.
-        if (d.preparedMessage) {
-          setMessage((m) => (m.summary || m.description ? m : splitMessage(d.preparedMessage!)));
-        }
+        // Prefill a prepared merge/cherry-pick message if the box is empty. A prefill the
+        // user did not touch follows the operation: replaced by the next prepared message,
+        // or cleared when the operation ends (for example after Abort).
+        setMessage((m) => {
+          const untouched = prefilled.current !== null && joinMessage(m) === prefilled.current;
+          const empty = !m.summary && !m.description;
+          if (d.preparedMessage && (empty || untouched)) {
+            const next = splitMessage(d.preparedMessage);
+            prefilled.current = joinMessage(next);
+            return next;
+          }
+          if (!d.preparedMessage && untouched) {
+            prefilled.current = null;
+            return { summary: "", description: "" };
+          }
+          return m;
+        });
       })
       .catch(() => {});
     return () => {
@@ -114,6 +132,7 @@ export function CommitBox({
     }
     setMessage({ summary: "", description: "" });
     setAmend(false);
+    prefilled.current = null;
     drafts.delete(repo.path);
     toast({
       tone: "success",

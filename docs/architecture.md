@@ -78,6 +78,10 @@ are in the way (`checkoutConflict`); nothing is changed.
 | `create_tag(repo, name, target, message)` | `RepositoryInfo` | A non-empty message makes an annotated tag |
 | `delete_tag(repo, name)` | `RepositoryInfo` | Local only |
 | `push_tag(repo, name, remote, delete, opId, onProgress)` | `RemoteResult` | Push or delete on the remote; never forced |
+| `merge_into_current(repo, request)` | `IntegrateResult` | Source is a branch or commit; `noFf`, `autostash` |
+| `rebase_current(repo, onto, autostash)` | `IntegrateResult` | Current branch only (not a detached HEAD) |
+| `cherry_pick(repo, oid)` / `revert_commit(repo, oid)` | `IntegrateResult` | Merge commits use their first parent (`-m 1`) |
+| `operation_step(repo, step)` | `IntegrateResult` | `continue`, `skip` or `abort` the operation in progress |
 
 Commit ids from the UI are accepted only as hexadecimal strings, so they can never be read as
 options or revision expressions.
@@ -118,6 +122,28 @@ Pull can stash local changes first (`autostash`, Git 2.27 or newer) and reapply 
 If the pull stops with merge conflicts, Git holds those changes until the merge is committed or
 aborted; `RepositoryInfo.heldChanges` reports that, so the UI can say where they are. If
 reapplying conflicts, Git keeps a copy in the stash list (`stashKept`).
+
+## Merge, rebase, cherry-pick and revert
+
+`git/integrate.rs` starts these only when no other operation is in progress. Stopping with
+conflicts is a result (`conflicts: true`), not an error; the Changes view then shows a banner
+with Continue, Skip commit and Abort, and `RepositoryInfo.operationProgress` gives rebase
+progress (read from `rebase-merge/msgnum` and `end`).
+
+- Git never opens an editor: merges and reverts use `--no-edit`, and `GIT_EDITOR` and
+  `GIT_SEQUENCE_EDITOR` are a no-op (`:`), so prepared messages are used as they are. Continuing
+  a merge commits with `--cleanup=strip`, because without an editor Git would otherwise keep its
+  `# Conflicts:` comment lines in the message.
+- A branch is merged by its short name when that name resolves to exactly that branch (so Git
+  writes its usual "Merge branch 'x'" message), and by its full ref otherwise, for example when
+  a tag has the same name.
+- Local changes in the way are reported as `checkoutConflict` (`git merge` signals this with exit
+  status 2 when changes are staged, and 1 otherwise); the UI offers to retry with `--autostash`.
+- A cherry-pick or revert whose changes are already on the branch is skipped and reported as up
+  to date, so no empty operation is left behind. Merge commits are picked and reverted relative
+  to their first parent.
+- During a rebase the commit box is disabled: a plain commit in the middle of a rebase would add
+  an unrelated commit. Continue finishes the step instead.
 
 ## Tags
 

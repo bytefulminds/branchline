@@ -88,6 +88,8 @@ pub struct RepositoryInfo {
     pub stash_fingerprint: String,
     /// Uncommitted changes are held by Git until the operation in progress ends.
     pub held_changes: bool,
+    /// Rebase progress, when a rebase is in progress.
+    pub operation_progress: Option<OperationProgress>,
 }
 
 /// Validate a user-supplied path before handing it to Git.
@@ -222,6 +224,41 @@ pub fn detect_operation(git_dir: &Path) -> Option<RepoOperation> {
     }
 }
 
+/// Where a rebase is: step `step` of `total`, rebasing `branch`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OperationProgress {
+    pub step: u32,
+    pub total: u32,
+    /// Branch being rebased (HEAD is detached while a rebase runs).
+    pub branch: Option<String>,
+}
+
+/// Read rebase progress from `rebase-merge/` (or the older `rebase-apply/`).
+pub fn detect_progress(git_dir: &Path) -> Option<OperationProgress> {
+    let read = |dir: &str, file: &str| {
+        std::fs::read_to_string(git_dir.join(dir).join(file))
+            .ok()
+            .map(|s| s.trim().to_string())
+    };
+    let (dir, step_file, total_file) = if git_dir.join("rebase-merge").is_dir() {
+        ("rebase-merge", "msgnum", "end")
+    } else if git_dir.join("rebase-apply").is_dir() {
+        ("rebase-apply", "next", "last")
+    } else {
+        return None;
+    };
+    let step = read(dir, step_file)?.parse().ok()?;
+    let total = read(dir, total_file)?.parse().ok()?;
+    let branch =
+        read(dir, "head-name").and_then(|h| h.strip_prefix("refs/heads/").map(str::to_string));
+    Some(OperationProgress {
+        step,
+        total,
+        branch,
+    })
+}
+
 /// Uncommitted changes that Git put aside for an operation with `--autostash`
 /// (pull, merge or rebase). Git restores them when the operation is committed,
 /// continued to the end, or aborted.
@@ -311,6 +348,7 @@ pub fn inspect(raw_path: &str) -> Result<RepositoryInfo, GitError> {
         git_dir: git_dir.display().to_string(),
         operation: detect_operation(&git_dir),
         held_changes: detect_held_changes(&git_dir),
+        operation_progress: detect_progress(&git_dir),
         head,
         upstream,
         head_commit,

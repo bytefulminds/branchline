@@ -422,6 +422,7 @@ pub fn file_diff(
             max_output: Some(limit),
             stdin: None,
             pathspec_magic: false,
+            env: &[],
         },
     ) {
         Ok(out) => out,

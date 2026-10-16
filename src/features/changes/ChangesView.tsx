@@ -1,4 +1,4 @@
-import { Archive, CircleCheck, GitMerge, Search, TriangleAlert, X } from "lucide-react";
+import { Archive, CircleCheck, Search, TriangleAlert, X } from "lucide-react";
 import { IconButton } from "../../components/Button";
 import { useStashActions } from "../stash/StashActions";
 import { useCallback, useMemo, useState } from "react";
@@ -16,7 +16,7 @@ import type {
   LineAction,
   RepositoryInfo,
 } from "../../types/git";
-import { OPERATION_LABEL } from "../repository/headLabel";
+import { OperationBanner } from "../integrate/OperationBanner";
 import { RepositoryOverview } from "../repository/RepositoryOverview";
 import type { RepositoryController } from "../repository/useRepository";
 import { filterGroups, groupChanges, type ChangeEntry } from "./changeModel";
@@ -217,19 +217,7 @@ export function ChangesView({
           )}
         </div>
 
-        {repo.operation && (
-          <div className="bl-banner bl-banner--warning" role="status">
-            <GitMerge size={16} aria-hidden />
-            <span>
-              <strong>{OPERATION_LABEL[repo.operation]}.</strong>{" "}
-              {groups.conflicted.length > 0
-                ? `Resolve ${plural(groups.conflicted.length, "conflicted file")} to continue.`
-                : "Finish or abort it from the command line for now."}
-              {repo.heldChanges &&
-                " Your uncommitted changes are put aside by Git and come back when it is committed or aborted."}
-            </span>
-          </div>
-        )}
+        <OperationBanner repo={repo} conflicts={groups.conflicted.length} busy={busy} />
         {repo.truncated && (
           <div className="bl-banner bl-banner--warning" role="status">
             <TriangleAlert size={16} aria-hidden />

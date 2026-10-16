@@ -64,6 +64,8 @@ pub struct RunOptions<'a> {
     /// Let Git interpret pathspec magic. Only for commands that receive no paths
     /// from the UI: `git stash --include-untracked` relies on it internally.
     pub pathspec_magic: bool,
+    /// Extra environment variables, for example to suppress the editor.
+    pub env: &'a [(&'a str, &'a str)],
 }
 
 impl Default for RunOptions<'_> {
@@ -74,6 +76,7 @@ impl Default for RunOptions<'_> {
             ok_codes: &[0],
             max_output: None,
             pathspec_magic: false,
+            env: &[],
         }
     }
 }
@@ -180,6 +183,9 @@ pub fn run_git_with(
     let mut cmd = git_command(cwd, args)?;
     if opts.pathspec_magic {
         cmd.env_remove("GIT_LITERAL_PATHSPECS");
+    }
+    for (key, value) in opts.env {
+        cmd.env(key, value);
     }
     cmd.stdin(if opts.stdin.is_some() {
         Stdio::piped()

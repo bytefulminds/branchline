@@ -186,7 +186,7 @@ pub enum StartPoint {
     Branch { name: String },
 }
 
-fn start_ref(root: &Path, start: &StartPoint) -> Result<String, GitError> {
+pub(crate) fn start_ref(root: &Path, start: &StartPoint) -> Result<String, GitError> {
     Ok(match start {
         StartPoint::Head => "HEAD".to_string(),
         StartPoint::Commit { oid } => validate_oid(oid)?.to_string(),

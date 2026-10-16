@@ -64,6 +64,8 @@ export interface RepositoryInfo {
   stashCount: number;
   /** Git holds uncommitted changes (autostash) until the operation in progress ends. */
   heldChanges: boolean;
+  /** Rebase progress while a rebase is in progress. */
+  operationProgress: OperationProgress | null;
   /** Changes whenever a stash is added or removed. */
   stashFingerprint: string;
 }
@@ -339,3 +341,24 @@ export interface TagInfo {
   /** Seconds since the Unix epoch. */
   time: number;
 }
+
+export interface OperationProgress {
+  step: number;
+  total: number;
+  /** Branch being rebased. */
+  branch: string | null;
+}
+
+export interface IntegrateOutcome {
+  /** Stopped with conflicts; continue or abort from the banner. */
+  conflicts: boolean;
+  upToDate: boolean;
+  fastForward: boolean;
+}
+
+export interface IntegrateResult {
+  outcome: IntegrateOutcome;
+  repo: RepositoryInfo;
+}
+
+export type OperationStep = "continue" | "skip" | "abort";

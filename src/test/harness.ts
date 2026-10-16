@@ -50,6 +50,7 @@ export const REPO: RepositoryInfo = {
   refsFingerprint: "refs-1",
   stashCount: 0,
   heldChanges: false,
+  operationProgress: null,
   stashFingerprint: "stash-0",
   durationMs: 12,
 };

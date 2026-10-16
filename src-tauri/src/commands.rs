@@ -7,6 +7,7 @@ use crate::error::GitError;
 use crate::git::branches::{self, BranchList, StartPoint};
 use crate::git::commit::{self, CommitDraft, CommitRequest};
 use crate::git::diff::{self, DiffArea, FileDiff};
+use crate::git::integrate::{self, IntegrateOutcome, MergeRequest, Step};
 use crate::git::log::{self, CommitDetails, LogPage, RefInfo};
 use crate::git::ops::{self, LineRequest};
 use crate::git::remote::{self, Progress, PullMode, PushRequest, RemoteInfo, RemoteOutcome};
@@ -381,6 +382,61 @@ pub async fn push_tag(
         })
     })
     .await
+}
+
+/// Result of a merge, rebase, cherry-pick, revert or continue/skip/abort, plus the refreshed repository.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IntegrateResult {
+    pub outcome: IntegrateOutcome,
+    pub repo: RepositoryInfo,
+}
+
+async fn integrate_then_inspect<F>(repo: String, op: F) -> Result<IntegrateResult, GitError>
+where
+    F: FnOnce(&str) -> Result<IntegrateOutcome, GitError> + Send + 'static,
+{
+    blocking(move || {
+        let outcome = op(&repo)?;
+        Ok(IntegrateResult {
+            outcome,
+            repo: repository::inspect(&repo)?,
+        })
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn merge_into_current(
+    repo: String,
+    request: MergeRequest,
+) -> Result<IntegrateResult, GitError> {
+    integrate_then_inspect(repo, move |r| integrate::merge(r, &request)).await
+}
+
+#[tauri::command]
+pub async fn rebase_current(
+    repo: String,
+    onto: StartPoint,
+    autostash: bool,
+) -> Result<IntegrateResult, GitError> {
+    integrate_then_inspect(repo, move |r| integrate::rebase(r, &onto, autostash)).await
+}
+
+#[tauri::command]
+pub async fn cherry_pick(repo: String, oid: String) -> Result<IntegrateResult, GitError> {
+    integrate_then_inspect(repo, move |r| integrate::cherry_pick(r, &oid)).await
+}
+
+#[tauri::command]
+pub async fn revert_commit(repo: String, oid: String) -> Result<IntegrateResult, GitError> {
+    integrate_then_inspect(repo, move |r| integrate::revert(r, &oid)).await
+}
+
+/// Continue, skip or abort the merge, rebase, cherry-pick or revert in progress.
+#[tauri::command]
+pub async fn operation_step(repo: String, step: Step) -> Result<IntegrateResult, GitError> {
+    integrate_then_inspect(repo, move |r| integrate::step(r, step)).await
 }
 
 /// Cancel a running fetch, pull or push. Unknown ids are ignored.

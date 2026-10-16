@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 import App from "../../App";
@@ -139,5 +139,42 @@ describe("commit box", () => {
       expect(within(form).getByLabelText("Commit summary")).toHaveValue("Merge branch 'feature'"),
     );
     expect(within(form).getByRole("button", { name: "Commit merge" })).toBeEnabled();
+  });
+
+  it("clears an untouched merge message when the merge is aborted, but keeps edits", async () => {
+    const merging: RepositoryInfo = { ...CLEAN, operation: "merge" };
+    let state: RepositoryInfo = merging;
+    for (const edit of [false, true]) {
+      resetCommitDrafts();
+      state = merging;
+      const { user, form } = await openRepo(merging, (cmd) => {
+        if (cmd === "inspect_repository") return state;
+        if (cmd === "commit_draft")
+          return {
+            ...DRAFT,
+            preparedMessage: state.operation ? "Merge branch 'feature'" : null,
+          };
+        if (cmd === "operation_step") {
+          state = CLEAN;
+          return {
+            outcome: { conflicts: false, upToDate: false, fastForward: false },
+            repo: CLEAN,
+          };
+        }
+      });
+      const summary = within(form).getByLabelText("Commit summary");
+      await waitFor(() => expect(summary).toHaveValue("Merge branch 'feature'"));
+      if (edit) {
+        await user.clear(summary);
+        await user.type(summary, "My own words");
+      }
+      await user.click(screen.getByRole("button", { name: "Abort" }));
+      await user.click(
+        within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Abort merge" }),
+      );
+      await waitFor(() => expect(screen.queryByText("Merge in progress.")).not.toBeInTheDocument());
+      await waitFor(() => expect(summary).toHaveValue(edit ? "My own words" : ""));
+      cleanup();
+    }
   });
 });

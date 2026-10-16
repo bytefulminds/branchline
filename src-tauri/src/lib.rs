@@ -52,6 +52,11 @@ pub fn run() {
             commands::create_tag,
             commands::delete_tag,
             commands::push_tag,
+            commands::merge_into_current,
+            commands::rebase_current,
+            commands::cherry_pick,
+            commands::revert_commit,
+            commands::operation_step,
             commands::watch_repository,
             commands::unwatch_repository,
         ])

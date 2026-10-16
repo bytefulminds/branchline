@@ -6,6 +6,8 @@ import type {
   CommitDraft,
   DiffArea,
   FileDiff,
+  IntegrateResult,
+  OperationStep,
   GitError,
   GitVersion,
   LineRequest,
@@ -197,6 +199,20 @@ export const gitService = {
       onProgress: progressChannel(onProgress),
     });
   },
+  /** Merge a branch or commit into the current branch. */
+  mergeIntoCurrent: (
+    repo: string,
+    source: StartPoint,
+    options: { noFf: boolean; autostash: boolean },
+  ) => call<IntegrateResult>("merge_into_current", { repo, request: { source, ...options } }),
+  rebaseCurrent: (repo: string, onto: StartPoint, autostash: boolean) =>
+    call<IntegrateResult>("rebase_current", { repo, onto, autostash }),
+  cherryPick: (repo: string, oid: string) => call<IntegrateResult>("cherry_pick", { repo, oid }),
+  revertCommit: (repo: string, oid: string) =>
+    call<IntegrateResult>("revert_commit", { repo, oid }),
+  /** Continue, skip or abort the merge, rebase, cherry-pick or revert in progress. */
+  operationStep: (repo: string, step: OperationStep) =>
+    call<IntegrateResult>("operation_step", { repo, step }),
   cancelRemote: (opId: string) => call<void>("cancel_remote_operation", { opId }),
   watchRepository: (repo: string) => call<void>("watch_repository", { repo }),
   unwatchRepository: () => call<void>("unwatch_repository"),

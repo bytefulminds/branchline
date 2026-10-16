@@ -1,11 +1,15 @@
 import {
   Check,
+  Cherry,
   CircleAlert,
   Copy,
   GitBranchPlus,
   GitCommitHorizontal,
+  GitMerge,
+  GitPullRequestArrow,
   LogIn,
   Tag,
+  Undo2,
 } from "lucide-react";
 import { useContextMenu } from "../../components/ContextMenu";
 import type { MenuEntry } from "../../components/Menu";
@@ -19,6 +23,7 @@ import type { CommitFile, RepositoryInfo } from "../../types/git";
 import { CommitDetailsPanel } from "./CommitDetailsPanel";
 import { CommitDiffView } from "./CommitDiffView";
 import { useTagActions } from "../tags/TagActions";
+import { useIntegrateActions } from "../integrate/IntegrateActions";
 import { CommitList, graphColumnWidth, WorkInProgressRow } from "./CommitList";
 import { useHistory } from "./useHistory";
 import "./HistoryView.css";
@@ -49,6 +54,9 @@ export function HistoryView({
   const selected = selectedOid ?? data?.commits[0]?.oid ?? null;
 
   const tagActions = useTagActions();
+  const integrate = useIntegrateActions();
+  const current = repo.head.kind === "branch" ? repo.head.name : null;
+  const busyOp = repo.operation !== null;
   const commitMenu = (oid: string): MenuEntry[] => {
     const short = oid.slice(0, 7);
     const localBranches = (data?.refsByOid.get(oid) ?? []).filter((r) => r.kind === "branch");
@@ -74,6 +82,36 @@ export function HistoryView({
         disabled: oid === headOid,
         onSelect: () => branchActions.checkoutCommit(oid),
       },
+      { type: "separator", id: "sep-integrate" },
+      {
+        id: "merge",
+        label: current ? `Merge into ${current}…` : "Merge into current…",
+        icon: <GitMerge size={16} />,
+        disabled: oid === headOid || busyOp,
+        onSelect: () => integrate.merge({ kind: "commit", oid }, `commit ${short}`),
+      },
+      {
+        id: "rebase",
+        label: current ? `Rebase ${current} onto this commit…` : "Rebase onto this commit…",
+        icon: <GitPullRequestArrow size={16} />,
+        disabled: !current || oid === headOid || busyOp,
+        onSelect: () => integrate.rebase({ kind: "commit", oid }, `commit ${short}`),
+      },
+      {
+        id: "cherry-pick",
+        label: "Cherry-pick commit",
+        icon: <Cherry size={16} />,
+        disabled: oid === headOid || busyOp || repo.head.kind === "unborn",
+        onSelect: () => integrate.cherryPick(oid),
+      },
+      {
+        id: "revert",
+        label: "Revert commit",
+        icon: <Undo2 size={16} />,
+        disabled: busyOp || repo.head.kind === "unborn",
+        onSelect: () => integrate.revert(oid),
+      },
+      { type: "separator", id: "sep-tag" },
       {
         id: "tag",
         label: "Create tag here…",

@@ -119,3 +119,21 @@
   align-self: center;
   flex: none;
 }
+
+.bl-operation {
+  align-items: flex-start;
+}
+.bl-operation > svg {
+  margin-top: 2px;
+}
+.bl-operation__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.bl-operation__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}

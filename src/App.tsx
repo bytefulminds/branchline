@@ -11,6 +11,7 @@ import { WelcomeView } from "./features/repository/WelcomeView";
 import { BranchActionsProvider } from "./features/branches/BranchActions";
 import { BranchesView } from "./features/branches/BranchesView";
 import { HistoryView } from "./features/history/HistoryView";
+import { IntegrateActionsProvider } from "./features/integrate/IntegrateActions";
 import { RemoteActionsProvider } from "./features/remote/RemoteActions";
 import { StashActionsProvider } from "./features/stash/StashActions";
 import { StashesView } from "./features/stash/StashesView";
@@ -156,20 +157,26 @@ function Workspace() {
           controller={controller}
           onShowChanges={() => setView("changes")}
         >
-          <TagActionsProvider
+          <IntegrateActionsProvider
             repo={state.status === "ready" ? state.repo : null}
             controller={controller}
+            onShowChanges={() => setView("changes")}
           >
-            <AppShell
+            <TagActionsProvider
+              repo={state.status === "ready" ? state.repo : null}
               controller={controller}
-              gitVersion={gitVersion}
-              onOpen={openPicker}
-              view={view}
-              onView={setView}
             >
-              {content}
-            </AppShell>
-          </TagActionsProvider>
+              <AppShell
+                controller={controller}
+                gitVersion={gitVersion}
+                onOpen={openPicker}
+                view={view}
+                onView={setView}
+              >
+                {content}
+              </AppShell>
+            </TagActionsProvider>
+          </IntegrateActionsProvider>
         </StashActionsProvider>
       </RemoteActionsProvider>
     </BranchActionsProvider>
