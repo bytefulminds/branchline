@@ -65,6 +65,11 @@ reimplementing Git.
 - Merge a branch or commit into the current branch (optionally always with a merge commit),
   rebase onto a branch or commit, cherry-pick and revert commits, from the Branches view and the
   History context menu. Rebasing a published branch warns that a force push will follow.
+- Interactive rebase ("Rebase interactively from here…" on a commit in History): drag commits
+  into a new order (or use `Alt+↑` / `Alt+↓`), and pick, reword, squash, fix up or drop each one.
+  Branchline checks the plan before Git runs it.
+- Drag a branch (in Branches, or its label in History) onto another branch or a commit to merge
+  or rebase; a menu offers what is possible from there.
 - When an operation stops with conflicts, a banner shows what is left (with rebase progress, for
   example "commit 2 of 5") and offers Continue, Skip commit and Abort. Local changes in the way
   can be stashed and reapplied automatically.
@@ -142,6 +147,7 @@ src-tauri/               Rust backend
   src/git/stash.rs       Stash save, apply, pop and drop
   src/git/tags.rs        Tag list, create and delete
   src/git/integrate.rs   Merge, rebase, cherry-pick, revert; continue, skip, abort
+  src/git/rebase_plan.rs Interactive rebase plans
   src/commands.rs        Tauri IPC commands (async, off the UI thread)
   src/error.rs           Error model shared with the frontend
   tests/                 Integration tests against real temporary repositories
@@ -208,8 +214,10 @@ is still to do.
   their navigation entries are visible but disabled.
 - The Tags view shows local tags; it does not show which of them already exist on a remote.
 - Conflicts are resolved in your editor for now (then mark them as resolved in Branchline);
-  there is no built-in conflict editor yet. Interactive rebase is not supported, and a bisect can
-  only be stopped from Branchline.
+  there is no built-in conflict editor yet. A bisect can only be stopped from Branchline.
+- Interactive rebase cannot include merge commits, and cannot stop to edit a commit's content
+  (`edit`); it covers reorder, reword, squash, fixup and drop. Reworded commits skip the
+  `pre-commit` and `commit-msg` hooks, like Git's own reword skips `pre-commit`.
 - Applying a stash restores staged and unstaged changes separately when Git can; when it
   cannot, everything comes back unstaged. A staged rename that Git puts aside during a pull
   returns as a deleted and an added file.

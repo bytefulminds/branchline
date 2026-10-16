@@ -1,0 +1,19 @@
+/* Drag image for branches and rebase rows (see setDragGhost). */
+.bl-drag-ghost {
+  position: fixed;
+  top: -1000px;
+  left: -1000px;
+  max-width: 320px;
+  padding: 3px 10px;
+  /* Small radius: some webviews draw the image's transparent corners opaque. */
+  border-radius: var(--radius-sm);
+  background: var(--color-accent);
+  color: var(--color-text-on-accent);
+  font-family: var(--font-ui);
+  font-size: var(--text-small-size);
+  font-weight: var(--weight-semibold);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}

@@ -35,6 +35,7 @@ export function CommitList({
   onNearEnd,
   loadingMore,
   onContextMenu,
+  rowProps,
 }: {
   data: HistoryData;
   head: HeadState;
@@ -44,6 +45,8 @@ export function CommitList({
   loadingMore: boolean;
   /** Open the commit's context menu at a screen position. */
   onContextMenu?: (oid: string, at: { x: number; y: number }) => void;
+  /** Extra props per row, for example to accept dropped branches. */
+  rowProps?: (oid: string) => Record<string, unknown>;
 }) {
   const baseId = useId();
   const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
@@ -115,6 +118,7 @@ export function CommitList({
               aria-posinset={index + 1}
               className={`bl-commit-row${isHead ? " bl-commit-row--head" : ""}`}
               style={{ transform: `translateY(${index * HISTORY_ROW_HEIGHT}px)` }}
+              {...rowProps?.(commit.oid)}
               onClick={() => onSelect(commit.oid)}
               onContextMenu={(e) => {
                 e.preventDefault();

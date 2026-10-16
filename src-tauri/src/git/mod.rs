@@ -9,6 +9,7 @@ pub mod log;
 pub mod ops;
 pub mod patch;
 pub mod paths;
+pub mod rebase_plan;
 pub mod remote;
 pub mod repository;
 pub mod runner;

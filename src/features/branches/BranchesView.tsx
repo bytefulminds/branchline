@@ -24,6 +24,7 @@ import { Spinner } from "../../components/Spinner";
 import { relativeTime } from "../../lib/format";
 import type { BranchInfo, RepositoryInfo } from "../../types/git";
 import { useIntegrateActions } from "../integrate/IntegrateActions";
+import { refDragProps, useRefDrop } from "../integrate/refDrag";
 import { useRemoteActions } from "../remote/RemoteActions";
 import { useBranchActions } from "./BranchActions";
 import "./BranchesView.css";
@@ -62,6 +63,7 @@ export function BranchesView({ repo }: { repo: RepositoryInfo }) {
   const actions = useBranchActions();
   const remote = useRemoteActions();
   const integrate = useIntegrateActions();
+  const drop = useRefDrop(repo);
   const showMenu = useContextMenu();
   const [query, setQuery] = useState("");
   const { branches } = actions;
@@ -158,6 +160,8 @@ export function BranchesView({ repo }: { repo: RepositoryInfo }) {
     <li
       key={b.name}
       className={`bl-branch${b.isCurrent ? " bl-branch--current" : ""}`}
+      {...refDragProps({ name: b.name, remote })}
+      {...(remote ? {} : drop(`branch:${b.name}`, { kind: "branch", name: b.name }))}
       onDoubleClick={primary}
       onContextMenu={(e) => {
         e.preventDefault();

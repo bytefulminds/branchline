@@ -362,3 +362,22 @@ export interface IntegrateResult {
 }
 
 export type OperationStep = "continue" | "skip" | "abort";
+
+/** A commit in an interactive rebase plan. */
+export interface PlanCommit {
+  oid: string;
+  summary: string;
+  message: string;
+  authorName: string;
+  /** Seconds since the Unix epoch. */
+  authorTime: number;
+}
+
+export type PlanAction = "pick" | "reword" | "squash" | "fixup" | "drop";
+
+export interface PlanStep {
+  oid: string;
+  action: PlanAction;
+  /** New message for `reword`. */
+  message?: string | null;
+}

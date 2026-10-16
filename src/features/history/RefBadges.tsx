@@ -1,5 +1,6 @@
 import { Cloud, GitBranch, Tag } from "lucide-react";
 import type { HeadState, RefInfo } from "../../types/git";
+import { refDragProps } from "../integrate/refDrag";
 
 const ICON = { branch: GitBranch, remote: Cloud, tag: Tag } as const;
 const ORDER = { branch: 0, remote: 1, tag: 2 } as const;
@@ -37,6 +38,9 @@ export function RefBadges({
             key={`${r.kind}:${r.name}`}
             className={`bl-ref bl-ref--${r.kind}${isCurrent ? " bl-ref--current" : ""}`}
             title={`${r.kind === "remote" ? "Remote branch" : r.kind === "tag" ? "Tag" : isCurrent ? "Current branch" : "Branch"} ${r.name}`}
+            {...(r.kind === "tag"
+              ? {}
+              : refDragProps({ name: r.name, remote: r.kind === "remote" }))}
           >
             <Icon size={11} aria-hidden />
             <span className="truncate">{r.name}</span>

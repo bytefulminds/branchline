@@ -82,6 +82,8 @@ are in the way (`checkoutConflict`); nothing is changed.
 | `rebase_current(repo, onto, autostash)` | `IntegrateResult` | Current branch only (not a detached HEAD) |
 | `cherry_pick(repo, oid)` / `revert_commit(repo, oid)` | `IntegrateResult` | Merge commits use their first parent (`-m 1`) |
 | `operation_step(repo, step)` | `IntegrateResult` | `continue`, `skip` or `abort` the operation in progress |
+| `rebase_plan_commits(repo, base)` | `PlanCommit[]` | Commits after `base` on the current branch, oldest first |
+| `interactive_rebase(repo, base, plan, autostash)` | `IntegrateResult` | Plan: every commit once, oldest first |
 
 Commit ids from the UI are accepted only as hexadecimal strings, so they can never be read as
 options or revision expressions.
@@ -144,6 +146,25 @@ progress (read from `rebase-merge/msgnum` and `end`).
   to their first parent.
 - During a rebase the commit box is disabled: a plain commit in the middle of a rebase would add
   an unrelated commit. Continue finishes the step instead.
+
+## Interactive rebase
+
+`git/rebase_plan.rs` builds the rebase plan itself and runs `git rebase --interactive` with
+`GIT_SEQUENCE_EDITOR='cat "$BRANCHLINE_REBASE_PLAN" >'`: Git's "editor" only copies the prepared
+plan over its todo file. The plan's path is in an environment variable, so it is never parsed by
+the shell. Before anything runs, the plan is checked against the current commits: each commit
+after the base exactly once (a plan made before a new commit appeared is refused), at least one
+commit kept, and no squash or fixup without an earlier kept commit. Ranges with merge commits are
+refused.
+
+Rewording is a `pick` followed by `exec git commit --amend --no-verify --cleanup=strip
+--file=<path>`; the message is written to a file in the Git directory and the path is quoted for
+the shell (a test uses a repository folder named `it's a $HOME repo`). These files and the plan are
+removed when the rebase finishes or is aborted, also when it finishes later through Continue.
+
+Drag and drop uses HTML5 drag events with a private data type, so only branches dragged inside
+Branchline are accepted. The window sets `dragDropEnabled: false`: Branchline accepts no file
+drops, and Tauri's file-drop handling would otherwise intercept in-page drags on Windows.
 
 ## Tags
 

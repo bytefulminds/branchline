@@ -57,6 +57,8 @@ pub fn run() {
             commands::cherry_pick,
             commands::revert_commit,
             commands::operation_step,
+            commands::rebase_plan_commits,
+            commands::interactive_rebase,
             commands::watch_repository,
             commands::unwatch_repository,
         ])

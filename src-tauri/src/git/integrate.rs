@@ -56,7 +56,7 @@ pub enum Step {
     Abort,
 }
 
-fn git(root: &Path, args: &[&str]) -> Result<GitOutput, GitError> {
+pub(crate) fn git(root: &Path, args: &[&str]) -> Result<GitOutput, GitError> {
     run_git_with(
         root,
         args,
@@ -75,7 +75,7 @@ fn text(out: &GitOutput) -> String {
 }
 
 /// The repository must be on a commit and not in the middle of another operation.
-fn ready(repo: &str) -> Result<RepositoryInfo, GitError> {
+pub(crate) fn ready(repo: &str) -> Result<RepositoryInfo, GitError> {
     let info = inspect(repo)?;
     if let Some(op) = info.operation {
         return Err(GitError::Unsupported(format!(
@@ -109,7 +109,7 @@ fn files_in(text: &str) -> Vec<String> {
 }
 
 /// Turn a failed command into an outcome (stopped with conflicts) or a specific error.
-fn conclude(repo: &str, out: &GitOutput) -> Result<IntegrateOutcome, GitError> {
+pub(crate) fn conclude(repo: &str, out: &GitOutput) -> Result<IntegrateOutcome, GitError> {
     let all = text(out);
     if out.code == 0 {
         return Ok(IntegrateOutcome {
@@ -331,6 +331,9 @@ pub fn step(repo: &str, step: Step) -> Result<IntegrateOutcome, GitError> {
         }
     };
     let out = git(&root, args)?;
+    if inspect(repo)?.operation.is_none() {
+        super::rebase_plan::remove_message_files(&root);
+    }
     if out.code == 0 {
         return Ok(IntegrateOutcome::default());
     }

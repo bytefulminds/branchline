@@ -10,6 +10,7 @@ use crate::git::diff::{self, DiffArea, FileDiff};
 use crate::git::integrate::{self, IntegrateOutcome, MergeRequest, Step};
 use crate::git::log::{self, CommitDetails, LogPage, RefInfo};
 use crate::git::ops::{self, LineRequest};
+use crate::git::rebase_plan::{self, PlanCommit, PlanStep};
 use crate::git::remote::{self, Progress, PullMode, PushRequest, RemoteInfo, RemoteOutcome};
 use crate::git::repository::{self, RepositoryInfo};
 use crate::git::runner::{self, GitVersion};
@@ -431,6 +432,26 @@ pub async fn cherry_pick(repo: String, oid: String) -> Result<IntegrateResult, G
 #[tauri::command]
 pub async fn revert_commit(repo: String, oid: String) -> Result<IntegrateResult, GitError> {
     integrate_then_inspect(repo, move |r| integrate::revert(r, &oid)).await
+}
+
+/// Commits after `base` on the current branch, oldest first, for an interactive rebase.
+#[tauri::command]
+pub async fn rebase_plan_commits(repo: String, base: String) -> Result<Vec<PlanCommit>, GitError> {
+    blocking(move || rebase_plan::plan_commits(&repo, &base)).await
+}
+
+/// Rewrite the commits after `base` according to `plan` (reorder, reword, squash, fixup, drop).
+#[tauri::command]
+pub async fn interactive_rebase(
+    repo: String,
+    base: String,
+    plan: Vec<PlanStep>,
+    autostash: bool,
+) -> Result<IntegrateResult, GitError> {
+    integrate_then_inspect(repo, move |r| {
+        rebase_plan::interactive_rebase(r, &base, &plan, autostash)
+    })
+    .await
 }
 
 /// Continue, skip or abort the merge, rebase, cherry-pick or revert in progress.

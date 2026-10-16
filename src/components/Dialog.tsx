@@ -13,6 +13,7 @@ export function Dialog({
   onCancel,
   onSubmit,
   role = "dialog",
+  size = "default",
 }: {
   title: string;
   description?: ReactNode;
@@ -21,6 +22,8 @@ export function Dialog({
   onCancel: () => void;
   onSubmit?: () => void;
   role?: "dialog" | "alertdialog";
+  /** `wide` for dialogs with lists, such as the interactive rebase plan. */
+  size?: "default" | "wide";
 }) {
   const titleId = useId();
   const descId = useId();
@@ -41,7 +44,7 @@ export function Dialog({
     } else if (e.key === "Tab") {
       const focusables = Array.from(
         ref.current?.querySelectorAll<HTMLElement>(
-          "input:not(:disabled), textarea, button:not(:disabled)",
+          "input:not(:disabled), select:not(:disabled), textarea, button:not(:disabled)",
         ) ?? [],
       );
       if (focusables.length === 0) return;
@@ -64,7 +67,7 @@ export function Dialog({
     >
       <form
         ref={ref}
-        className="bl-dialog"
+        className={`bl-dialog${size === "wide" ? " bl-dialog--wide" : ""}`}
         role={role}
         aria-modal="true"
         aria-labelledby={titleId}

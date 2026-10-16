@@ -8,6 +8,8 @@ import type {
   FileDiff,
   IntegrateResult,
   OperationStep,
+  PlanCommit,
+  PlanStep,
   GitError,
   GitVersion,
   LineRequest,
@@ -210,6 +212,12 @@ export const gitService = {
   cherryPick: (repo: string, oid: string) => call<IntegrateResult>("cherry_pick", { repo, oid }),
   revertCommit: (repo: string, oid: string) =>
     call<IntegrateResult>("revert_commit", { repo, oid }),
+  /** Commits after `base` on the current branch, oldest first. */
+  rebasePlanCommits: (repo: string, base: string) =>
+    call<PlanCommit[]>("rebase_plan_commits", { repo, base }),
+  /** Rewrite the commits after `base`; `plan` is oldest first and names every commit once. */
+  interactiveRebase: (repo: string, base: string, plan: PlanStep[], autostash: boolean) =>
+    call<IntegrateResult>("interactive_rebase", { repo, base, plan, autostash }),
   /** Continue, skip or abort the merge, rebase, cherry-pick or revert in progress. */
   operationStep: (repo: string, step: OperationStep) =>
     call<IntegrateResult>("operation_step", { repo, step }),

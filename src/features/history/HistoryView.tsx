@@ -7,6 +7,7 @@ import {
   GitCommitHorizontal,
   GitMerge,
   GitPullRequestArrow,
+  ListOrdered,
   LogIn,
   Tag,
   Undo2,
@@ -24,6 +25,7 @@ import { CommitDetailsPanel } from "./CommitDetailsPanel";
 import { CommitDiffView } from "./CommitDiffView";
 import { useTagActions } from "../tags/TagActions";
 import { useIntegrateActions } from "../integrate/IntegrateActions";
+import { useRefDrop } from "../integrate/refDrag";
 import { CommitList, graphColumnWidth, WorkInProgressRow } from "./CommitList";
 import { useHistory } from "./useHistory";
 import "./HistoryView.css";
@@ -55,6 +57,7 @@ export function HistoryView({
 
   const tagActions = useTagActions();
   const integrate = useIntegrateActions();
+  const drop = useRefDrop(repo);
   const current = repo.head.kind === "branch" ? repo.head.name : null;
   const busyOp = repo.operation !== null;
   const commitMenu = (oid: string): MenuEntry[] => {
@@ -96,6 +99,14 @@ export function HistoryView({
         icon: <GitPullRequestArrow size={16} />,
         disabled: !current || oid === headOid || busyOp,
         onSelect: () => integrate.rebase({ kind: "commit", oid }, `commit ${short}`),
+      },
+      {
+        id: "interactive",
+        label: "Rebase interactively from here…",
+        description: "Reorder, reword, squash or drop the commits after this one",
+        icon: <ListOrdered size={16} />,
+        disabled: !current || oid === headOid || busyOp,
+        onSelect: () => integrate.interactive(oid, `commit ${short}`),
       },
       {
         id: "cherry-pick",
@@ -162,6 +173,15 @@ export function HistoryView({
         onSelect={select}
         onNearEnd={loadMore}
         loadingMore={history.loadingMore}
+        rowProps={(oid) =>
+          drop(oid, {
+            kind: "commit",
+            oid,
+            branches: (data?.refsByOid.get(oid) ?? [])
+              .filter((r) => r.kind === "branch")
+              .map((r) => r.name),
+          })
+        }
         onContextMenu={(oid, at) =>
           showMenu(at, commitMenu(oid), `Actions for commit ${oid.slice(0, 7)}`)
         }

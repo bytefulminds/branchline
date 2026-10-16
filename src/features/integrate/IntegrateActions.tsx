@@ -17,11 +17,13 @@ import type {
   GitError,
   IntegrateResult,
   OperationStep,
+  PlanStep,
   RepoOperation,
   RepositoryInfo,
   StartPoint,
 } from "../../types/git";
 import type { RepositoryController } from "../repository/useRepository";
+import { InteractiveRebaseDialog } from "./InteractiveRebaseDialog";
 
 export interface IntegrateActions {
   /** Ask, then merge `source` into the current branch. `label` names it ("feature", "commit a1b2c3d"). */
@@ -32,6 +34,8 @@ export interface IntegrateActions {
   revert: (oid: string) => void;
   /** Continue, skip or abort the operation in progress (abort asks first). */
   step: (step: OperationStep) => void;
+  /** Open the interactive rebase plan for the commits after `base`. */
+  interactive: (base: string, label: string) => void;
 }
 
 const noop = () => {};
@@ -41,6 +45,7 @@ const IntegrateContext = createContext<IntegrateActions>({
   cherryPick: noop,
   revert: noop,
   step: noop,
+  interactive: noop,
 });
 
 export function useIntegrateActions(): IntegrateActions {
@@ -78,11 +83,13 @@ export function IntegrateActionsProvider({
     null,
   );
   const [noFf, setNoFf] = useState(false);
+  const [irebase, setIrebase] = useState<{ base: string; label: string } | null>(null);
   // Retries offered in toasts call the latest merge/rebase without a dependency cycle.
   const retry = useRef<{
     merge: (source: StartPoint, label: string, o: { noFf: boolean; autostash: boolean }) => void;
     rebase: (onto: StartPoint, label: string, autostash: boolean) => void;
-  }>({ merge: () => {}, rebase: () => {} });
+    interactive: (base: string, label: string, plan: PlanStep[]) => void;
+  }>({ merge: () => {}, rebase: () => {}, interactive: () => {} });
 
   const report = useCallback(
     (title: string, error: GitError, retry?: { label: string; run: () => void }) => {
@@ -123,16 +130,22 @@ export function IntegrateActionsProvider({
         failed: string;
         /** Retry with autostash, offered when local changes are in the way. */
         retryWithStash?: { label: string; run: () => void };
+        /** Errors of these kinds are returned to the caller instead of shown. */
+        returnErrors?: GitError["kind"][];
       },
-    ) => {
+    ): Promise<GitError | null> => {
       let result: IntegrateResult | null = null;
       const error = await run(label, async (path) => {
         result = await op(path);
         return result.repo;
       });
-      if (error) return report(messages.failed, error, messages.retryWithStash);
+      if (error) {
+        if (messages.returnErrors?.includes(error.kind)) return error;
+        report(messages.failed, error, messages.retryWithStash);
+        return null;
+      }
       const r = result as IntegrateResult | null;
-      if (!r) return;
+      if (!r) return null;
       if (r.outcome.conflicts) {
         const op = r.repo.operation;
         toast({
@@ -151,6 +164,7 @@ export function IntegrateActionsProvider({
             r.outcome.fastForward && messages.fastForward ? messages.fastForward : messages.done,
         });
       }
+      return null;
     },
     [run, toast, onShowChanges, report],
   );
@@ -189,9 +203,36 @@ export function IntegrateActionsProvider({
     [perform, repo],
   );
 
+  /** Run an interactive rebase plan; plan problems are returned so the dialog can show them. */
+  const doInteractive = useCallback(
+    (base: string, label: string, plan: PlanStep[], autostash: boolean) => {
+      const branch = currentName(repo);
+      return perform(
+        "Rebasing",
+        (path) => gitService.interactiveRebase(path, base, plan, autostash),
+        {
+          done: `Rewrote ${branch}`,
+          failed: `Could not rebase ${branch}`,
+          returnErrors: ["unsupported"],
+          retryWithStash: autostash
+            ? undefined
+            : {
+                label: "Stash and rebase",
+                run: () => retry.current.interactive(base, label, plan),
+              },
+        },
+      );
+    },
+    [perform, repo],
+  );
+
   useEffect(() => {
-    retry.current = { merge: doMerge, rebase: doRebase };
-  }, [doMerge, doRebase]);
+    retry.current = {
+      merge: doMerge,
+      rebase: doRebase,
+      interactive: (base, label, plan) => void doInteractive(base, label, plan, true),
+    };
+  }, [doMerge, doRebase, doInteractive]);
 
   const rebase = useCallback(
     async (onto: StartPoint, label: string) => {
@@ -280,6 +321,7 @@ export function IntegrateActionsProvider({
       cherryPick,
       revert,
       step: (s) => void step(s),
+      interactive: (base, label) => setIrebase({ base, label }),
     }),
     [rebase, cherryPick, revert, step],
   );
@@ -287,6 +329,21 @@ export function IntegrateActionsProvider({
   return (
     <IntegrateContext.Provider value={value}>
       {children}
+      {irebase && repo && (
+        <InteractiveRebaseDialog
+          repoPath={repo.path}
+          base={irebase.base}
+          baseLabel={irebase.label}
+          branch={currentName(repo)}
+          onCancel={() => setIrebase(null)}
+          onSubmit={async (plan) => {
+            const error = await doInteractive(irebase.base, irebase.label, plan, false);
+            if (error) return error.message;
+            setIrebase(null);
+            return null;
+          }}
+        />
+      )}
       {mergeDialog && (
         <Dialog
           title={`Merge ${mergeDialog.label} into ${currentName(repo)}?`}

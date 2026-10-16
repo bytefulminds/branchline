@@ -1,0 +1,103 @@
+.bl-irebase {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+.bl-irebase__loading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-4) 0;
+  color: var(--color-text-secondary);
+}
+.bl-irebase__row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+.bl-irebase__row--dragging {
+  opacity: 0.45;
+}
+.bl-irebase__row--drop-before {
+  box-shadow: 0 -2px 0 var(--color-accent);
+}
+.bl-irebase__row--drop-after {
+  box-shadow: 0 2px 0 var(--color-accent);
+}
+.bl-irebase__row--drop .bl-irebase__summary-text {
+  color: var(--color-text-muted);
+  text-decoration: line-through;
+}
+.bl-irebase__row--squash,
+.bl-irebase__row--fixup {
+  margin-left: var(--space-6);
+  border-left: 2px solid var(--color-accent);
+}
+.bl-irebase__row--reword {
+  border-color: rgb(0 209 160 / 40%);
+}
+.bl-irebase__handle {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 24px;
+  height: 28px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: grab;
+}
+.bl-irebase__handle:hover {
+  background: var(--color-hover);
+  color: var(--color-text-primary);
+}
+.bl-irebase__action {
+  flex: none;
+  width: 92px;
+  height: 28px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-elevated);
+  color: var(--color-text-primary);
+  font: inherit;
+  font-size: var(--text-small-size);
+}
+.bl-irebase__main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+  padding-top: 4px;
+}
+.bl-irebase__row--reword .bl-irebase__main {
+  padding-top: 0;
+}
+.bl-irebase__message {
+  min-height: 0;
+  resize: vertical;
+  font-size: var(--text-small-size);
+  line-height: var(--text-small-line);
+}
+.bl-irebase__base {
+  margin: var(--space-2) 0 0 var(--space-2);
+}
+.bl-irebase__problem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+}
+.bl-irebase__summary {
+  margin-right: auto;
+  align-self: center;
+}
