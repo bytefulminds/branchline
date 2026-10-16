@@ -157,6 +157,7 @@ export function setup(handler: Handler) {
       if (cmd === "commit_draft") return DRAFT;
       if (cmd === "list_remotes") return [];
       if (cmd === "list_stashes") return [];
+      if (cmd === "list_tags") return [];
       return undefined;
     },
     { shouldMockEvents: true },

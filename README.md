@@ -12,7 +12,7 @@ reimplementing Git.
 > **Status:** early development. Milestones 0 to 4 are complete and Milestone 5 is in progress:
 > Branchline opens a local repository, stages files, hunks and lines, creates and amends commits,
 > shows the full history with a commit graph, manages branches, fetches, pulls and pushes, and
-> manages stashes. See [ROADMAP.md](ROADMAP.md).
+> manages stashes and tags. See [ROADMAP.md](ROADMAP.md).
 
 ## What works today
 
@@ -59,10 +59,13 @@ reimplementing Git.
   also in the title bar.
 - When local changes block a pull or a branch switch, Branchline offers "Stash, pull and
   reapply" or "Stash and switch" instead of leaving you stuck.
+- Tags: create lightweight or annotated tags (from the Tags view or on any commit in History),
+  push them, delete them locally or on a remote, check them out or start a branch from them.
+  Pushing never overwrites a different tag with the same name on the remote.
 - `Ctrl+1` / `⌘1` Changes, `Ctrl+2` / `⌘2` History, `Ctrl+3` / `⌘3` Branches, `Ctrl+4` / `⌘4`
-  Stashes.
+  Stashes, `Ctrl+5` / `⌘5` Tags.
 
-Tags, merge and rebase tools, and conflict resolution follow next.
+Merge and rebase tools and conflict resolution follow next.
 
 ## Prerequisites
 
@@ -119,6 +122,7 @@ src/                     React + TypeScript frontend
   features/branches/     Branch list, switcher and branch dialogs
   features/remote/       Fetch, pull and push toolbar and actions
   features/stash/        Stashes view, stash dialog and actions
+  features/tags/         Tags view, tag dialog and actions
   layouts/               Window shell: title bar, sidebar, status bar, window controls
   services/              IPC wrappers, dialog, platform, local preferences
   styles/                Design tokens and base styles
@@ -129,6 +133,7 @@ src-tauri/               Rust backend
   src/git/repository.rs  Repository inspection and models
   src/git/remote.rs      Remotes, fetch, pull and push
   src/git/stash.rs       Stash save, apply, pop and drop
+  src/git/tags.rs        Tag list, create and delete
   src/commands.rs        Tauri IPC commands (async, off the UI thread)
   src/error.rs           Error model shared with the frontend
   tests/                 Integration tests against real temporary repositories
@@ -191,8 +196,9 @@ is still to do.
 
 ## Known limitations
 
-- Tags and worktrees are not implemented yet, and remotes cannot be added or edited in
-  Branchline yet; their navigation entries are visible but disabled.
+- Worktrees are not implemented yet, and remotes cannot be added or edited in Branchline yet;
+  their navigation entries are visible but disabled.
+- The Tags view shows local tags; it does not show which of them already exist on a remote.
 - A merge or rebase in progress can be committed in Branchline but not aborted or continued yet.
 - Applying a stash restores staged and unstaged changes separately when Git can; when it
   cannot, everything comes back unstaged. A staged rename that Git puts aside during a pull

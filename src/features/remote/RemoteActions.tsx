@@ -44,6 +44,10 @@ export interface RemoteActions {
   forcePush: () => void;
   /** Push any local branch (publishing it when it has no upstream). */
   pushBranch: (name: string, upstream: string | null) => void;
+  /** Push a tag; asks which remote when there are several. */
+  pushTag: (name: string) => void;
+  /** Delete a tag on a remote, after confirmation. */
+  deleteRemoteTag: (name: string) => void;
   cancel: () => void;
 }
 
@@ -56,6 +60,8 @@ const RemoteActionsContext = createContext<RemoteActions>({
   push: noop,
   forcePush: noop,
   pushBranch: noop,
+  pushTag: noop,
+  deleteRemoteTag: noop,
   cancel: noop,
 });
 
@@ -96,6 +102,7 @@ const ERROR_TITLE: Partial<Record<GitError["kind"], string>> = {
   pushRejected: "Push rejected",
   staleLease: "Force push refused",
   remoteRejected: "Push refused by the remote",
+  tagConflict: "Tag exists on the remote",
   noUpstream: "No upstream branch",
   diverged: "Cannot fast-forward",
   checkoutConflict: "Pull blocked by local changes",
@@ -122,7 +129,13 @@ export function RemoteActionsProvider({
   const confirm = useConfirm();
   const { run } = controller;
   const [activity, setActivity] = useState<(NetworkActivity & { opId: string }) | null>(null);
-  const [publishing, setPublishing] = useState<string | null>(null);
+  /** Open remote chooser: what to do with the remote the user picks. */
+  const [picker, setPicker] = useState<{
+    title: string;
+    description: string;
+    submitLabel: string;
+    onPick: (remote: string) => void;
+  } | null>(null);
   // Actions referenced from toasts; kept fresh without re-creating every callback.
   const actionsRef = useRef<RemoteActions | null>(null);
 
@@ -297,7 +310,17 @@ export function RemoteActionsProvider({
           `Publishing ${name}`,
         );
       } else {
-        setPublishing(name);
+        setPicker({
+          title: `Publish ${name}`,
+          description:
+            "The branch is pushed and the remote branch becomes its upstream, so later pulls and pushes go there.",
+          submitLabel: "Publish",
+          onPick: (remote) =>
+            void doPush(
+              { branch: name, remote, setUpstream: true, force: false },
+              `Publishing ${name}`,
+            ),
+        });
       }
     },
     [remotes, doPush, toast],
@@ -334,6 +357,79 @@ export function RemoteActionsProvider({
     );
   }, [branch, upstream, confirm, doPush]);
 
+  const runTag = useCallback(
+    async (name: string, remote: string, remove: boolean) => {
+      const { result, error } = await runRemote(
+        "push",
+        remove ? `Deleting ${name} from ${remote}` : `Pushing ${name}`,
+        (path, opId, onProgress) =>
+          gitService.pushTag(path, name, remote, remove, opId, onProgress),
+      );
+      if (error) return report(remove ? "Could not delete the remote tag" : "Push failed", error);
+      const upToDate = result?.outcome.upToDate ?? false;
+      toast({
+        tone: upToDate ? "info" : "success",
+        title: remove
+          ? upToDate
+            ? `${name} was not on ${remote}`
+            : `Deleted ${name} from ${remote}`
+          : upToDate
+            ? `${name} is already on ${remote}`
+            : `Pushed ${name} to ${remote}`,
+      });
+    },
+    [runRemote, report, toast],
+  );
+
+  /** Run `action` with the only remote, or ask which one when there are several. */
+  const withRemote = useCallback(
+    (title: string, description: string, submitLabel: string, action: (remote: string) => void) => {
+      if (remotes.length === 0) {
+        toast({
+          tone: "error",
+          title: "No remote configured",
+          description: "Add a remote to this repository first (git remote add).",
+        });
+      } else if (remotes.length === 1) {
+        action(remotes[0]!.name);
+      } else {
+        setPicker({ title, description, submitLabel, onPick: action });
+      }
+    },
+    [remotes, toast],
+  );
+
+  const pushTag = useCallback(
+    (name: string) =>
+      withRemote(
+        `Push tag ${name}`,
+        "Choose the remote to push the tag to.",
+        "Push tag",
+        (remote) => void runTag(name, remote, false),
+      ),
+    [withRemote, runTag],
+  );
+
+  const deleteRemoteTag = useCallback(
+    (name: string) =>
+      withRemote(
+        `Delete tag ${name} from a remote`,
+        "Choose the remote to delete the tag from.",
+        "Continue",
+        async (remote) => {
+          const ok = await confirm({
+            title: `Delete tag ${name} from ${remote}?`,
+            description:
+              "The tag is removed from the remote. Copies that others already fetched stay on their machines, and your local tag is kept.",
+            confirmLabel: "Delete from remote",
+            destructive: true,
+          });
+          if (ok) void runTag(name, remote, true);
+        },
+      ),
+    [withRemote, confirm, runTag],
+  );
+
   const cancel = useCallback(() => {
     setActivity((a) => {
       if (!a || a.cancelling) return a;
@@ -358,9 +454,22 @@ export function RemoteActionsProvider({
       push,
       forcePush: () => void forcePush(),
       pushBranch,
+      pushTag,
+      deleteRemoteTag,
       cancel,
     }),
-    [remotes, activity, fetchAll, pull, push, forcePush, pushBranch, cancel],
+    [
+      remotes,
+      activity,
+      fetchAll,
+      pull,
+      push,
+      forcePush,
+      pushBranch,
+      pushTag,
+      deleteRemoteTag,
+      cancel,
+    ],
   );
 
   useEffect(() => {
@@ -370,18 +479,16 @@ export function RemoteActionsProvider({
   return (
     <RemoteActionsContext.Provider value={value}>
       {children}
-      {publishing && (
+      {picker && (
         <PublishDialog
-          branch={publishing}
+          title={picker.title}
+          description={picker.description}
+          submitLabel={picker.submitLabel}
           remotes={remotes}
-          onCancel={() => setPublishing(null)}
+          onCancel={() => setPicker(null)}
           onSubmit={(remote) => {
-            const name = publishing;
-            setPublishing(null);
-            void doPush(
-              { branch: name, remote, setUpstream: true, force: false },
-              `Publishing ${name}`,
-            );
+            setPicker(null);
+            picker.onPick(remote);
           }}
         />
       )}

@@ -4,14 +4,18 @@ import { Dialog } from "../../components/Dialog";
 import type { RemoteInfo } from "../../types/git";
 import "./PublishDialog.css";
 
-/** Choose the remote for a branch that has no upstream yet. */
+/** Choose a remote, for example to publish a branch that has no upstream yet. */
 export function PublishDialog({
-  branch,
+  title,
+  description,
+  submitLabel,
   remotes,
   onSubmit,
   onCancel,
 }: {
-  branch: string;
+  title: string;
+  description: string;
+  submitLabel: string;
   remotes: RemoteInfo[];
   onSubmit: (remote: string) => void;
   onCancel: () => void;
@@ -21,8 +25,8 @@ export function PublishDialog({
   );
   return (
     <Dialog
-      title={`Publish ${branch}`}
-      description="The branch is pushed and the remote branch becomes its upstream, so later pulls and pushes go there."
+      title={title}
+      description={description}
       onCancel={onCancel}
       onSubmit={() => remote && onSubmit(remote)}
       actions={
@@ -31,7 +35,7 @@ export function PublishDialog({
             Cancel
           </Button>
           <Button variant="primary" type="submit" disabled={!remote}>
-            Publish
+            {submitLabel}
           </Button>
         </>
       }

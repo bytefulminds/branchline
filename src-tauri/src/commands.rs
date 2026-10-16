@@ -13,6 +13,7 @@ use crate::git::remote::{self, Progress, PullMode, PushRequest, RemoteInfo, Remo
 use crate::git::repository::{self, RepositoryInfo};
 use crate::git::runner::{self, GitVersion};
 use crate::git::stash::{self, StashInfo, StashOutcome};
+use crate::git::tags::{self, TagInfo};
 
 async fn blocking<T, F>(f: F) -> Result<T, GitError>
 where
@@ -331,6 +332,55 @@ pub async fn apply_stash(
 #[tauri::command]
 pub async fn drop_stash(repo: String, index: u32, oid: String) -> Result<RepositoryInfo, GitError> {
     write_then_inspect(repo, move |r| stash::drop(r, index, &oid)).await
+}
+
+#[tauri::command]
+pub async fn list_tags(repo: String) -> Result<Vec<TagInfo>, GitError> {
+    blocking(move || tags::list_tags(&repo)).await
+}
+
+/// Why `name` cannot be used for a new tag, or null when it can.
+#[tauri::command]
+pub async fn check_tag_name(repo: String, name: String) -> Result<Option<String>, GitError> {
+    blocking(move || tags::check_tag_name(&repo, &name)).await
+}
+
+/// Create a tag at commit `target`; a non-empty `message` makes it annotated.
+#[tauri::command]
+pub async fn create_tag(
+    repo: String,
+    name: String,
+    target: String,
+    message: String,
+) -> Result<RepositoryInfo, GitError> {
+    write_then_inspect(repo, move |r| tags::create_tag(r, &name, &target, &message)).await
+}
+
+#[tauri::command]
+pub async fn delete_tag(repo: String, name: String) -> Result<RepositoryInfo, GitError> {
+    write_then_inspect(repo, move |r| tags::delete_tag(r, &name)).await
+}
+
+/// Push a tag to a remote, or delete it there (`delete`).
+#[tauri::command]
+pub async fn push_tag(
+    repo: String,
+    name: String,
+    remote: String,
+    delete: bool,
+    op_id: String,
+    on_progress: Channel<Progress>,
+) -> Result<RemoteResult, GitError> {
+    blocking(move || {
+        let outcome = remote::push_tag(&repo, &name, &remote, delete, &op_id, &mut |p| {
+            let _ = on_progress.send(p);
+        })?;
+        Ok(RemoteResult {
+            outcome,
+            repo: repository::inspect(&repo)?,
+        })
+    })
+    .await
 }
 
 /// Cancel a running fetch, pull or push. Unknown ids are ignored.

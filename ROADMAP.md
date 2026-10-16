@@ -56,7 +56,7 @@ Milestones are only marked complete when the behavior works against real Git and
 
 - [x] Stash: save (with or without untracked files), apply, pop, delete, browse files and diffs
 - [x] Stash, pull and reapply; stash and switch
-- [ ] Tags
+- [x] Tags: create (lightweight or annotated), delete, push, delete on a remote, check out
 - [ ] Merge, rebase, cherry-pick and revert, with continue and abort
 - [ ] Conflict resolution
 - [ ] Worktrees

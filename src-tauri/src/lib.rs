@@ -47,6 +47,11 @@ pub fn run() {
             commands::save_stash,
             commands::apply_stash,
             commands::drop_stash,
+            commands::list_tags,
+            commands::check_tag_name,
+            commands::create_tag,
+            commands::delete_tag,
+            commands::push_tag,
             commands::watch_repository,
             commands::unwatch_repository,
         ])

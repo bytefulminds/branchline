@@ -99,6 +99,8 @@ export type GitErrorKind =
   | "invalidBranchName"
   | "checkoutConflict"
   | "notMerged"
+  | "invalidTagName"
+  | "tagConflict"
   | "cancelled"
   | "authFailed"
   | "hostKeyUnverified"
@@ -322,4 +324,18 @@ export interface StashOutcome {
 export interface StashResult {
   outcome: StashOutcome;
   repo: RepositoryInfo;
+}
+
+export interface TagInfo {
+  name: string;
+  /** Commit the tag points at (annotated tags are peeled). */
+  target: string;
+  /** False for the rare tags that point at a tree or blob. */
+  isCommit: boolean;
+  annotated: boolean;
+  /** Annotated: first line of the tag message. Lightweight: subject of the commit. */
+  subject: string;
+  tagger: string | null;
+  /** Seconds since the Unix epoch. */
+  time: number;
 }

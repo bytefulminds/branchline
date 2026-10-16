@@ -15,11 +15,12 @@ import {
   currentRepositoryPath,
   type RepositoryController,
 } from "../features/repository/useRepository";
+import { useTagActions } from "../features/tags/TagActions";
 import { displayPath } from "../lib/format";
 import { modKeyLabel } from "../services/platform";
 import "./Sidebar.css";
 
-export type WorkspaceView = "changes" | "history" | "branches" | "stashes";
+export type WorkspaceView = "changes" | "history" | "branches" | "stashes" | "tags";
 
 const MAX_SIDEBAR_RECENT = 6;
 
@@ -62,7 +63,6 @@ function NavItem({
 
 /** Repository areas planned for later milestones. Shown disabled, never with fake data. */
 const UPCOMING: { label: string; icon: ReactNode }[] = [
-  { label: "Tags", icon: <Tag size={16} /> },
   { label: "Remotes", icon: <Cloud size={16} /> },
   { label: "Worktrees", icon: <FolderTree size={16} /> },
 ];
@@ -84,6 +84,7 @@ export function Sidebar({
   const repo = state.status === "ready" ? state.repo : null;
   const currentPath = currentRepositoryPath(state);
   const conflicts = repo?.changes.filter((c) => c.conflict).length ?? 0;
+  const { tags } = useTagActions();
 
   return (
     <nav className="bl-sidebar" style={{ width }} aria-label="Repository navigation">
@@ -147,6 +148,14 @@ export function Sidebar({
               active={view === "stashes"}
               onClick={() => onView("stashes")}
               count={repo.stashCount || undefined}
+            />
+            <NavItem
+              icon={<Tag size={16} />}
+              label="Tags"
+              title={`Tags (${modKeyLabel}5)`}
+              active={view === "tags"}
+              onClick={() => onView("tags")}
+              count={tags?.length || undefined}
             />
             {UPCOMING.map((item) => (
               <NavItem

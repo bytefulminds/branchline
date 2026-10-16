@@ -1,4 +1,12 @@
-import { Check, CircleAlert, Copy, GitBranchPlus, GitCommitHorizontal, LogIn } from "lucide-react";
+import {
+  Check,
+  CircleAlert,
+  Copy,
+  GitBranchPlus,
+  GitCommitHorizontal,
+  LogIn,
+  Tag,
+} from "lucide-react";
 import { useContextMenu } from "../../components/ContextMenu";
 import type { MenuEntry } from "../../components/Menu";
 import { useBranchActions } from "../branches/BranchActions";
@@ -10,6 +18,7 @@ import { usePersistentNumber } from "../../lib/usePersistentNumber";
 import type { CommitFile, RepositoryInfo } from "../../types/git";
 import { CommitDetailsPanel } from "./CommitDetailsPanel";
 import { CommitDiffView } from "./CommitDiffView";
+import { useTagActions } from "../tags/TagActions";
 import { CommitList, graphColumnWidth, WorkInProgressRow } from "./CommitList";
 import { useHistory } from "./useHistory";
 import "./HistoryView.css";
@@ -39,6 +48,7 @@ export function HistoryView({
 
   const selected = selectedOid ?? data?.commits[0]?.oid ?? null;
 
+  const tagActions = useTagActions();
   const commitMenu = (oid: string): MenuEntry[] => {
     const short = oid.slice(0, 7);
     const localBranches = (data?.refsByOid.get(oid) ?? []).filter((r) => r.kind === "branch");
@@ -63,6 +73,12 @@ export function HistoryView({
         icon: <LogIn size={16} />,
         disabled: oid === headOid,
         onSelect: () => branchActions.checkoutCommit(oid),
+      },
+      {
+        id: "tag",
+        label: "Create tag here…",
+        icon: <Tag size={16} />,
+        onSelect: () => tagActions.create(oid, `commit ${short}`),
       },
       { type: "separator", id: "sep" },
       {

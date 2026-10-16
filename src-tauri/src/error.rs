@@ -72,6 +72,12 @@ pub enum GitError {
     #[error("{0}")]
     InvalidBranchName(String),
 
+    #[error("{0}")]
+    InvalidTagName(String),
+
+    #[error("The remote already has a different tag with this name. Delete it on the remote first if you want to replace it.")]
+    TagConflict { detail: String },
+
     #[error("Your local changes would be overwritten. Commit or stash them first.")]
     CheckoutConflict { files: Vec<String>, detail: String },
 
@@ -141,6 +147,8 @@ impl GitError {
             GitError::IdentityMissing { .. } => "identityMissing",
             GitError::CommitFailed { .. } => "commitFailed",
             GitError::InvalidBranchName(_) => "invalidBranchName",
+            GitError::InvalidTagName(_) => "invalidTagName",
+            GitError::TagConflict { .. } => "tagConflict",
             GitError::CheckoutConflict { .. } => "checkoutConflict",
             GitError::NotMerged { .. } => "notMerged",
             GitError::Cancelled => "cancelled",
@@ -175,6 +183,7 @@ impl GitError {
             | GitError::PushRejected { detail }
             | GitError::StaleLease { detail }
             | GitError::RemoteRejected { detail }
+            | GitError::TagConflict { detail }
             | GitError::Diverged { detail } => Some(detail.as_str()),
             GitError::GitFailed { stderr, .. } => Some(stderr.as_str()),
             _ => None,

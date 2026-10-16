@@ -18,6 +18,7 @@ import type {
   RemoteResult,
   StashInfo,
   StashResult,
+  TagInfo,
   RepositoryInfo,
   StartPoint,
 } from "../types/git";
@@ -169,6 +170,33 @@ export const gitService = {
     call<StashResult>("apply_stash", { repo, index: stash.index, oid: stash.oid, pop }),
   dropStash: (repo: string, stash: { index: number; oid: string }) =>
     call<RepositoryInfo>("drop_stash", { repo, index: stash.index, oid: stash.oid }),
+  listTags: (repo: string) => call<TagInfo[]>("list_tags", { repo }),
+  /** Resolves to why the name cannot be used, or null. */
+  checkTagName: (repo: string, name: string) =>
+    call<string | null>("check_tag_name", { repo, name }),
+  /** A non-empty message creates an annotated tag. */
+  createTag: (repo: string, name: string, target: string, message: string) =>
+    call<RepositoryInfo>("create_tag", { repo, name, target, message }),
+  deleteTag: (repo: string, name: string) => call<RepositoryInfo>("delete_tag", { repo, name }),
+  /** Push `name` to `remote`, or delete it there. */
+  pushTag: (
+    repo: string,
+    name: string,
+    remote: string,
+    remove: boolean,
+    opId: string,
+    onProgress: (p: RemoteProgress) => void,
+  ) => {
+    ensureDesktop();
+    return call<RemoteResult>("push_tag", {
+      repo,
+      name,
+      remote,
+      delete: remove,
+      opId,
+      onProgress: progressChannel(onProgress),
+    });
+  },
   cancelRemote: (opId: string) => call<void>("cancel_remote_operation", { opId }),
   watchRepository: (repo: string) => call<void>("watch_repository", { repo }),
   unwatchRepository: () => call<void>("unwatch_repository"),

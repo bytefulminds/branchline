@@ -14,6 +14,8 @@ import { HistoryView } from "./features/history/HistoryView";
 import { RemoteActionsProvider } from "./features/remote/RemoteActions";
 import { StashActionsProvider } from "./features/stash/StashActions";
 import { StashesView } from "./features/stash/StashesView";
+import { TagActionsProvider } from "./features/tags/TagActions";
+import { TagsView } from "./features/tags/TagsView";
 import { ContextMenuProvider } from "./components/ContextMenu";
 import { AppShell } from "./layouts/AppShell";
 import type { WorkspaceView } from "./layouts/Sidebar";
@@ -21,6 +23,14 @@ import { pickRepositoryFolder } from "./services/dialog";
 import { gitService } from "./services/git";
 import { isPrimaryModifier } from "./services/platform";
 import type { GitError, GitVersion } from "./types/git";
+
+const VIEW_KEYS: Record<string, WorkspaceView> = {
+  "1": "changes",
+  "2": "history",
+  "3": "branches",
+  "4": "stashes",
+  "5": "tags",
+};
 
 function Workspace() {
   const toast = useToast();
@@ -70,12 +80,10 @@ function Workspace() {
         isPrimaryModifier(e) &&
         !e.shiftKey &&
         !e.altKey &&
-        (key === "1" || key === "2" || key === "3" || key === "4")
+        ["1", "2", "3", "4", "5"].includes(key)
       ) {
         e.preventDefault();
-        setView(
-          key === "1" ? "changes" : key === "2" ? "history" : key === "3" ? "branches" : "stashes",
-        );
+        setView(VIEW_KEYS[key]!);
       } else if ((isPrimaryModifier(e) && key === "r") || e.key === "F5") {
         // Also suppresses the webview's own page reload.
         e.preventDefault();
@@ -119,6 +127,8 @@ function Workspace() {
           />
         ) : view === "branches" ? (
           <BranchesView key={state.repo.path} repo={state.repo} />
+        ) : view === "tags" ? (
+          <TagsView key={state.repo.path} repo={state.repo} busy={controller.operation !== null} />
         ) : view === "stashes" ? (
           <StashesView
             key={state.repo.path}
@@ -146,15 +156,20 @@ function Workspace() {
           controller={controller}
           onShowChanges={() => setView("changes")}
         >
-          <AppShell
+          <TagActionsProvider
+            repo={state.status === "ready" ? state.repo : null}
             controller={controller}
-            gitVersion={gitVersion}
-            onOpen={openPicker}
-            view={view}
-            onView={setView}
           >
-            {content}
-          </AppShell>
+            <AppShell
+              controller={controller}
+              gitVersion={gitVersion}
+              onOpen={openPicker}
+              view={view}
+              onView={setView}
+            >
+              {content}
+            </AppShell>
+          </TagActionsProvider>
         </StashActionsProvider>
       </RemoteActionsProvider>
     </BranchActionsProvider>

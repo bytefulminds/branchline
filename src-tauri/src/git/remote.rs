@@ -673,7 +673,9 @@ pub fn push_rejection(stdout: &str, stderr: &str) -> Option<GitError> {
         } else {
             detail.clone()
         };
-        return Some(if summary.contains("stale info") {
+        return Some(if summary.contains("already exists") {
+            GitError::TagConflict { detail }
+        } else if summary.contains("stale info") {
             GitError::StaleLease { detail }
         } else if summary.contains("remote rejected") {
             GitError::RemoteRejected { detail }
@@ -684,6 +686,69 @@ pub fn push_rejection(stdout: &str, stderr: &str) -> Option<GitError> {
         });
     }
     None
+}
+
+/// Push a tag to `remote`, or with `delete`, remove the tag there.
+/// Never forces: a different tag with the same name on the remote is reported as
+/// [`GitError::TagConflict`], not overwritten.
+pub fn push_tag(
+    repo: &str,
+    name: &str,
+    remote: &str,
+    delete: bool,
+    op_id: &str,
+    on_progress: &mut dyn FnMut(Progress),
+) -> Result<RemoteOutcome, GitError> {
+    let root = resolve_root(repo)?;
+    super::tags::validate_tag_name(&root, name)?;
+    let _net = network_lock(&root)?;
+    require_remote(&root, remote)?;
+    let full = format!("refs/tags/{name}");
+    let refspec = if delete {
+        format!(":{full}")
+    } else {
+        let exists = run_git_with(
+            &root,
+            &["rev-parse", "--verify", "--quiet", &full],
+            &RunOptions {
+                ok_codes: &[0, 1],
+                ..RunOptions::default()
+            },
+        )?
+        .code
+            == 0;
+        if !exists {
+            return Err(GitError::Stale);
+        }
+        format!("{full}:{full}")
+    };
+    let args = ["push", "--progress", "--porcelain", "--", remote, &refspec];
+    let out = run_network(&root, &args, op_id, on_progress)?;
+    let stdout = out.stdout_string();
+    let target = Some(format!("{remote}/{name}"));
+    // Git reports a tag that is already gone either as an error ("remote ref does not
+    // exist") or, in newer versions, as a warning; either way the goal is reached.
+    if delete
+        && (out.stderr.contains("remote ref does not exist")
+            || out.stderr.contains("deleting a non-existent ref"))
+    {
+        return Ok(RemoteOutcome {
+            up_to_date: true,
+            target,
+            ..RemoteOutcome::default()
+        });
+    }
+    if let Some(rejection) = push_rejection(&stdout, &out.stderr) {
+        return Err(rejection);
+    }
+    if out.code != 0 {
+        return Err(classify_remote_failure(out.code, &out.stderr));
+    }
+    Ok(RemoteOutcome {
+        up_to_date: stdout.lines().any(|l| l.starts_with('=')),
+        target,
+        ..RemoteOutcome::default()
+    })
 }
 
 /// Push a local branch. Without `remote`, it goes to the branch's upstream.

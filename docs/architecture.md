@@ -73,6 +73,11 @@ are in the way (`checkoutConflict`); nothing is changed.
 | `save_stash(repo, message, includeUntracked)` | `RepositoryInfo` | |
 | `apply_stash(repo, index, oid, pop)` | `StashResult` | Fails with `stale` if `stash@{index}` is no longer `oid` |
 | `drop_stash(repo, index, oid)` | `RepositoryInfo` | Same check |
+| `list_tags(repo)` | `TagInfo[]` | Newest first; annotated tags peeled to their commit |
+| `check_tag_name(repo, name)` | `string \| null` | Validation and duplicate check for the tag dialog |
+| `create_tag(repo, name, target, message)` | `RepositoryInfo` | A non-empty message makes an annotated tag |
+| `delete_tag(repo, name)` | `RepositoryInfo` | Local only |
+| `push_tag(repo, name, remote, delete, opId, onProgress)` | `RemoteResult` | Push or delete on the remote; never forced |
 
 Commit ids from the UI are accepted only as hexadecimal strings, so they can never be read as
 options or revision expressions.
@@ -113,6 +118,16 @@ Pull can stash local changes first (`autostash`, Git 2.27 or newer) and reapply 
 If the pull stops with merge conflicts, Git holds those changes until the merge is committed or
 aborted; `RepositoryInfo.heldChanges` reports that, so the UI can say where they are. If
 reapplying conflicts, Git keeps a copy in the stash list (`stashKept`).
+
+## Tags
+
+Tag names get the same validation as branch names (`git check-ref-format` plus no leading dash),
+and are passed after `--`. Targets are commit ids, never revision expressions. Messages go in as
+`--message=<text>`, so a message can never be read as an option. `push_tag` pushes
+`refs/tags/<name>:refs/tags/<name>` without force: a different tag with the same name on the
+remote is reported as `tagConflict` instead of being replaced. Deleting a tag that is already gone
+on the remote counts as done (Git reports that as an error in some versions and as a warning in
+others).
 
 ## Stashes
 
