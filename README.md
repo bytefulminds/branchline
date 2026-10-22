@@ -9,7 +9,7 @@ Branchline is a fast, local-first, open-source Git desktop client for Windows, m
 It is built with Tauri 2, React, TypeScript and Rust, and drives the native Git CLI instead of
 reimplementing Git.
 
-> **Status:** early development. Milestones 0 to 4 are complete and Milestone 5 is in progress:
+> **Status:** early development. Milestones 0 to 5 are complete and Milestone 6 is in progress:
 > Branchline opens a local repository, stages files, hunks and lines, creates and amends commits,
 > shows the full history with a commit graph, manages branches, fetches, pulls and pushes, and
 > manages stashes and tags, and merges, rebases, cherry-picks and reverts. See [ROADMAP.md](ROADMAP.md).
