@@ -8,6 +8,9 @@ import {
 } from "./features/repository/RepositoryStatusViews";
 import { useRepository } from "./features/repository/useRepository";
 import { WelcomeView } from "./features/repository/WelcomeView";
+import { CloneDialog, parentOf } from "./features/repository/CloneDialog";
+import { InitDialog } from "./features/repository/InitDialog";
+import { separatorOf } from "./features/worktrees/WorktreeDialog";
 import { BranchActionsProvider } from "./features/branches/BranchActions";
 import { BranchesView } from "./features/branches/BranchesView";
 import { HistoryView } from "./features/history/HistoryView";
@@ -16,6 +19,7 @@ import { RemoteActionsProvider } from "./features/remote/RemoteActions";
 import { StashActionsProvider } from "./features/stash/StashActions";
 import { StashesView } from "./features/stash/StashesView";
 import { TagActionsProvider } from "./features/tags/TagActions";
+import { RemotesView } from "./features/remote/RemotesView";
 import { TagsView } from "./features/tags/TagsView";
 import { WorktreeActionsProvider } from "./features/worktrees/WorktreeActions";
 import { WorktreesView } from "./features/worktrees/WorktreesView";
@@ -34,6 +38,7 @@ const VIEW_KEYS: Record<string, WorkspaceView> = {
   "4": "stashes",
   "5": "tags",
   "6": "worktrees",
+  "7": "remotes",
 };
 
 function Workspace() {
@@ -46,6 +51,7 @@ function Workspace() {
   const controller = useRepository(onRefreshError);
   const [gitVersion, setGitVersion] = useState<GitVersion | GitError | null>(null);
   const [view, setView] = useState<WorkspaceView>("changes");
+  const [creating, setCreating] = useState<"clone" | "init" | null>(null);
   const { state, open, refresh } = controller;
 
   // `branchline <path>` opens that repository on startup.
@@ -93,10 +99,21 @@ function Workspace() {
     return () => window.removeEventListener("keydown", onKey);
   }, [openPicker, refresh]);
 
+  // New clones and repositories go next to the most recent one by default.
+  const defaultParent = controller.recent[0] ? parentOf(controller.recent[0].path) : "";
+
   let content;
   switch (state.status) {
     case "idle":
-      content = <WelcomeView controller={controller} onOpen={openPicker} gitVersion={gitVersion} />;
+      content = (
+        <WelcomeView
+          controller={controller}
+          onOpen={openPicker}
+          onClone={() => setCreating("clone")}
+          onCreate={() => setCreating("init")}
+          gitVersion={gitVersion}
+        />
+      );
       break;
     case "loading":
       content = <RepositoryLoading path={state.path} />;
@@ -126,6 +143,8 @@ function Workspace() {
           />
         ) : view === "branches" ? (
           <BranchesView key={state.repo.path} repo={state.repo} />
+        ) : view === "remotes" ? (
+          <RemotesView busy={controller.operation !== null} />
         ) : view === "worktrees" ? (
           <WorktreesView repo={state.repo} busy={controller.operation !== null} />
         ) : view === "tags" ? (
@@ -174,11 +193,37 @@ function Workspace() {
                   controller={controller}
                   gitVersion={gitVersion}
                   onOpen={openPicker}
+                  onClone={() => setCreating("clone")}
+                  onCreate={() => setCreating("init")}
                   view={view}
                   onView={setView}
                 >
                   {content}
                 </AppShell>
+                {creating === "clone" && (
+                  <CloneDialog
+                    defaultParent={defaultParent}
+                    onCancel={() => setCreating(null)}
+                    onDone={(path) => {
+                      setCreating(null);
+                      toast({ tone: "success", title: "Cloned", description: path });
+                      void open(path);
+                    }}
+                  />
+                )}
+                {creating === "init" && (
+                  <InitDialog
+                    defaultFolder={
+                      defaultParent ? `${defaultParent}${separatorOf(defaultParent)}` : ""
+                    }
+                    onCancel={() => setCreating(null)}
+                    onDone={(path) => {
+                      setCreating(null);
+                      toast({ tone: "success", title: "Created a repository", description: path });
+                      void open(path);
+                    }}
+                  />
+                )}
               </WorktreeActionsProvider>
             </TagActionsProvider>
           </IntegrateActionsProvider>

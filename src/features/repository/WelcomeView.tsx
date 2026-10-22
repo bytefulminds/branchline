@@ -1,4 +1,4 @@
-import { CircleAlert, FolderOpen, History, X } from "lucide-react";
+import { CircleAlert, CloudDownload, FolderOpen, FolderPlus, History, X } from "lucide-react";
 import { Button, IconButton } from "../../components/Button";
 import { LogoMark } from "../../components/Logo";
 import { displayPath, relativeTime } from "../../lib/format";
@@ -10,10 +10,14 @@ import "./WelcomeView.css";
 export function WelcomeView({
   controller,
   onOpen,
+  onClone,
+  onCreate,
   gitVersion,
 }: {
   controller: RepositoryController;
   onOpen: () => void;
+  onClone: () => void;
+  onCreate: () => void;
   gitVersion: GitVersion | GitError | null;
 }) {
   const gitProblem = gitVersion && "kind" in gitVersion ? gitVersion : null;
@@ -43,6 +47,12 @@ export function WelcomeView({
           onClick={onOpen}
         >
           Open repository
+        </Button>
+        <Button icon={<CloudDownload size={16} aria-hidden />} onClick={onClone}>
+          Clone…
+        </Button>
+        <Button icon={<FolderPlus size={16} aria-hidden />} onClick={onCreate}>
+          New repository…
         </Button>
       </div>
 

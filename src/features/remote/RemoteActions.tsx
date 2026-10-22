@@ -23,6 +23,7 @@ import type {
 } from "../../types/git";
 import type { RepositoryController } from "../repository/useRepository";
 import { PublishDialog } from "./PublishDialog";
+import { RemoteDialog } from "./RemoteDialog";
 
 /** A fetch, pull or push that is running. */
 export interface NetworkActivity {
@@ -37,6 +38,14 @@ export interface RemoteActions {
   remotes: RemoteInfo[];
   activity: NetworkActivity | null;
   fetchAll: () => void;
+  /** Fetch one remote. */
+  fetchRemote: (name: string) => void;
+  /** Ask for a name and address, then add a remote. */
+  addRemote: () => void;
+  /** Rename a remote or change its addresses. */
+  editRemote: (remote: RemoteInfo) => void;
+  /** Remove a remote after confirmation. */
+  removeRemote: (remote: RemoteInfo) => void;
   /** Pull the current branch; `autostash` puts local changes aside and reapplies them. */
   pull: (mode?: PullMode, autostash?: boolean) => void;
   /** Push the current branch to its upstream, or publish it when it has none. */
@@ -56,6 +65,10 @@ const RemoteActionsContext = createContext<RemoteActions>({
   remotes: [],
   activity: null,
   fetchAll: noop,
+  fetchRemote: noop,
+  addRemote: noop,
+  editRemote: noop,
+  removeRemote: noop,
   pull: noop,
   push: noop,
   forcePush: noop,
@@ -70,8 +83,9 @@ export function useRemoteActions(): RemoteActions {
 }
 
 /** Remotes of the open repository; reloaded when refs change (for example after `git remote add` and a fetch). */
-function useRemotes(repo: RepositoryInfo | null): RemoteInfo[] {
-  const key = repo ? `${repo.path}|${repo.refsFingerprint}` : null;
+function useRemotes(repo: RepositoryInfo | null) {
+  const [token, setToken] = useState(0);
+  const key = repo ? `${repo.path}|${repo.refsFingerprint}|${token}` : null;
   const [state, setState] = useState<{ path: string; remotes: RemoteInfo[] } | null>(null);
   const latest = useRef(key);
   useEffect(() => {
@@ -85,7 +99,8 @@ function useRemotes(repo: RepositoryInfo | null): RemoteInfo[] {
     // repo.path is part of the key.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
-  return repo && state?.path === repo.path ? state.remotes : [];
+  const reload = useCallback(() => setToken((t) => t + 1), []);
+  return { remotes: repo && state?.path === repo.path ? state.remotes : [], reload };
 }
 
 const MODE_LABEL: Record<PullMode, string> = {
@@ -124,7 +139,8 @@ export function RemoteActionsProvider({
   onShowChanges: () => void;
   children: ReactNode;
 }) {
-  const remotes = useRemotes(repo);
+  const { remotes, reload: reloadRemotes } = useRemotes(repo);
+  const [remoteDialog, setRemoteDialog] = useState<{ edit: RemoteInfo | null } | null>(null);
   const toast = useToast();
   const confirm = useConfirm();
   const { run } = controller;
@@ -206,6 +222,53 @@ export function RemoteActionsProvider({
         : `Nothing new on ${plural(remotes.length, "remote")}.`,
     });
   }, [runRemote, report, toast, remotes.length]);
+
+  const fetchRemote = useCallback(
+    async (name: string) => {
+      const { result, error } = await runRemote(
+        "fetch",
+        `Fetching ${name}`,
+        (path, opId, onProgress) => gitService.fetchRemote(path, name, opId, onProgress),
+      );
+      if (error) return report(`Could not fetch ${name}`, error);
+      const n = result?.outcome.updatedRefs ?? 0;
+      toast({
+        tone: n ? "success" : "info",
+        title: n ? `Fetched ${name}` : `${name} is up to date`,
+        description: n ? `${plural(n, "branch or tag", "branches or tags")} updated.` : undefined,
+      });
+    },
+    [runRemote, report, toast],
+  );
+
+  /** Change the remote configuration, then refresh the repository and the remote list. */
+  const configure = useCallback(
+    async (label: string, op: (path: string) => Promise<unknown>) => {
+      const error = await run(label, async (path) => {
+        await op(path);
+        return gitService.inspectRepository(path);
+      });
+      reloadRemotes();
+      return error;
+    },
+    [run, reloadRemotes],
+  );
+
+  const removeRemote = useCallback(
+    async (r: RemoteInfo) => {
+      const ok = await confirm({
+        title: `Remove remote ${r.name}?`,
+        description: `Branchline forgets ${r.url} and its remote branches (${r.name}/…). Nothing changes on the server, and your local branches stay; they no longer track ${r.name}.`,
+        confirmLabel: "Remove remote",
+        destructive: true,
+      });
+      if (!ok) return;
+      const error = await configure("Removing remote", (p) => gitService.removeRemote(p, r.name));
+      if (error) report(`Could not remove ${r.name}`, error);
+      else toast({ tone: "success", title: `Removed remote ${r.name}` });
+    },
+    [confirm, configure, report, toast],
+  );
 
   const pull = useCallback(
     async (mode: PullMode = "fastForward", autostash = false) => {
@@ -450,6 +513,10 @@ export function RemoteActionsProvider({
           }
         : null,
       fetchAll: () => void fetchAll(),
+      fetchRemote: (n) => void fetchRemote(n),
+      addRemote: () => setRemoteDialog({ edit: null }),
+      editRemote: (r) => setRemoteDialog({ edit: r }),
+      removeRemote: (r) => void removeRemote(r),
       pull: (mode, autostash) => void pull(mode, autostash),
       push,
       forcePush: () => void forcePush(),
@@ -462,6 +529,8 @@ export function RemoteActionsProvider({
       remotes,
       activity,
       fetchAll,
+      fetchRemote,
+      removeRemote,
       pull,
       push,
       forcePush,
@@ -479,6 +548,29 @@ export function RemoteActionsProvider({
   return (
     <RemoteActionsContext.Provider value={value}>
       {children}
+      {remoteDialog && repo && (
+        <RemoteDialog
+          remote={remoteDialog.edit}
+          existing={remotes.map((r) => r.name)}
+          onCancel={() => setRemoteDialog(null)}
+          onSubmit={async ({ name, url, pushUrl, fetch }) => {
+            const editing = remoteDialog.edit;
+            const error = editing
+              ? await configure("Saving remote", (p) =>
+                  gitService.editRemote(p, editing.name, name, url, pushUrl),
+                )
+              : await configure("Adding remote", (p) => gitService.addRemote(p, name, url));
+            if (error) return error.message;
+            setRemoteDialog(null);
+            toast({
+              tone: "success",
+              title: editing ? `Saved remote ${name}` : `Added remote ${name}`,
+            });
+            if (fetch) void fetchRemote(name);
+            return null;
+          }}
+        />
+      )}
       {picker && (
         <PublishDialog
           title={picker.title}

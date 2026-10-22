@@ -117,6 +117,8 @@ export type GitErrorKind =
   | "branchInWorktree"
   /** `detail` is the worktree folder. */
   | "worktreeDirty"
+  /** A remote name or address that cannot be used; `message` says why. */
+  | "invalidRemote"
   | "parse"
   | "internal"
   /** Frontend-only: the app is not running inside the Tauri shell. */

@@ -64,6 +64,10 @@ Milestones are only marked complete when the behavior works against real Git and
 - [x] Conflict resolution: three-pane merge editor (take ours or theirs per change, edit the
       result), whole-file choices
 - [x] Worktrees: create (new or existing branch, or a commit), open, lock, remove, clean up
+- [x] Remotes: list, add, rename, change addresses, remove, fetch one
+- [x] Clone a repository (with progress and Stop) and create a new one
+- [ ] Settings screen
+- [ ] Commit message suggestions from a local AI model (Ollama)
 
 ## Milestone 6: Quality and release readiness
 

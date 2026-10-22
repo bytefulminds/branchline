@@ -105,7 +105,7 @@ pub fn parse_worktrees(text: &str) -> Vec<RawWorktree> {
     list
 }
 
-fn canonical(path: &Path) -> PathBuf {
+pub(crate) fn canonical(path: &Path) -> PathBuf {
     let p = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
     strip_verbatim(p)
 }
@@ -199,43 +199,11 @@ pub fn list(repo: &str) -> Result<Vec<WorktreeInfo>, GitError> {
 
 /// Check the folder for a new worktree and return it as Git should receive it.
 fn check_new_path(root: &Path, raw: &str) -> Result<PathBuf, GitError> {
-    let invalid = |why: &str| Err(GitError::InvalidPath(why.to_string()));
-    let raw = raw.trim();
-    if raw.is_empty() {
-        return invalid("Choose a folder for the worktree.");
-    }
-    if raw.contains('\0') {
-        return invalid("The folder name contains an invalid character.");
-    }
-    let path = Path::new(raw);
-    if !path.is_absolute() {
-        return invalid("Use a full path, for example /Users/you/code/project-feature.");
-    }
-    let Some(leaf) = path.file_name().filter(|n| !n.is_empty()) else {
-        return invalid("Choose a folder name, not a drive or root folder.");
-    };
-    if path
-        .components()
-        .any(|c| matches!(c, std::path::Component::ParentDir))
-    {
-        return invalid("The path cannot contain `..`.");
-    }
-    let Some(parent) = path.parent().filter(|p| p.is_dir()) else {
-        return invalid("The folder it goes in does not exist.");
-    };
-    let target = canonical(parent).join(leaf);
-    if let Ok(meta) = std::fs::symlink_metadata(&target) {
-        let empty_dir = meta.is_dir()
-            && std::fs::read_dir(&target)
-                .map(|mut d| d.next().is_none())
-                .unwrap_or(false);
-        if !empty_dir {
-            return invalid("That folder already exists and is not empty.");
-        }
-    }
-    let root = canonical(root);
-    if target.starts_with(&root) {
-        return invalid("Choose a folder outside the repository.");
+    let target = super::paths::new_folder(raw)?;
+    if target.starts_with(canonical(root)) {
+        return Err(GitError::InvalidPath(
+            "Choose a folder outside the repository.".into(),
+        ));
     }
     Ok(target)
 }

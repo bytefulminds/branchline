@@ -122,6 +122,9 @@ pub enum GitError {
     #[error("This worktree has uncommitted or untracked files.")]
     WorktreeDirty { path: String },
 
+    #[error("{0}")]
+    InvalidRemote(String),
+
     #[error("Unexpected Git output: {0}")]
     Parse(String),
 
@@ -169,6 +172,7 @@ impl GitError {
             GitError::Diverged { .. } => "diverged",
             GitError::BranchInWorktree { .. } => "branchInWorktree",
             GitError::WorktreeDirty { .. } => "worktreeDirty",
+            GitError::InvalidRemote(_) => "invalidRemote",
             GitError::Parse(_) => "parse",
             GitError::Internal(_) => "internal",
         }

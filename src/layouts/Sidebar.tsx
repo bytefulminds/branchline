@@ -15,13 +15,15 @@ import {
   currentRepositoryPath,
   type RepositoryController,
 } from "../features/repository/useRepository";
+import { useRemoteActions } from "../features/remote/RemoteActions";
 import { useTagActions } from "../features/tags/TagActions";
 import { useWorktreeActions } from "../features/worktrees/WorktreeActions";
 import { displayPath } from "../lib/format";
 import { modKeyLabel } from "../services/platform";
 import "./Sidebar.css";
 
-export type WorkspaceView = "changes" | "history" | "branches" | "stashes" | "tags" | "worktrees";
+export type WorkspaceView =
+  "changes" | "history" | "branches" | "stashes" | "tags" | "worktrees" | "remotes";
 
 const MAX_SIDEBAR_RECENT = 6;
 
@@ -62,11 +64,6 @@ function NavItem({
   );
 }
 
-/** Repository areas planned for later milestones. Shown disabled, never with fake data. */
-const UPCOMING: { label: string; icon: ReactNode }[] = [
-  { label: "Remotes", icon: <Cloud size={16} /> },
-];
-
 export function Sidebar({
   controller,
   onOpen,
@@ -86,6 +83,7 @@ export function Sidebar({
   const conflicts = repo?.changes.filter((c) => c.conflict).length ?? 0;
   const { tags } = useTagActions();
   const { worktrees } = useWorktreeActions();
+  const { remotes } = useRemoteActions();
 
   return (
     <nav className="bl-sidebar" style={{ width }} aria-label="Repository navigation">
@@ -166,15 +164,14 @@ export function Sidebar({
               onClick={() => onView("worktrees")}
               count={worktrees && worktrees.length > 1 ? worktrees.length : undefined}
             />
-            {UPCOMING.map((item) => (
-              <NavItem
-                key={item.label}
-                icon={item.icon}
-                label={item.label}
-                disabled
-                title={`${item.label}: planned for a later milestone`}
-              />
-            ))}
+            <NavItem
+              icon={<Cloud size={16} />}
+              label="Remotes"
+              title={`Remotes (${modKeyLabel}7)`}
+              active={view === "remotes"}
+              onClick={() => onView("remotes")}
+              count={remotes.length || undefined}
+            />
           </ul>
         </section>
       )}

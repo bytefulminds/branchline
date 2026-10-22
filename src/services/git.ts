@@ -139,6 +139,30 @@ export const gitService = {
       onProgress: progressChannel(onProgress),
     });
   },
+  addRemote: (repo: string, name: string, url: string) =>
+    call<void>("add_remote", { repo, name, url }),
+  /** Rename and/or change addresses; unchanged (redacted) values are left alone. */
+  editRemote: (repo: string, name: string, newName: string, url: string, pushUrl: string) =>
+    call<void>("edit_remote", { repo, name, newName, url, pushUrl }),
+  removeRemote: (repo: string, name: string) => call<void>("remove_remote", { repo, name }),
+  /** Clone into a new or empty folder; resolves to the folder. Cancel with `cancelRemote(opId)`. */
+  cloneRepository: (
+    url: string,
+    dest: string,
+    opId: string,
+    onProgress: (p: RemoteProgress) => void,
+  ) => {
+    ensureDesktop();
+    return call<string>("clone_repository", {
+      url,
+      dest,
+      opId,
+      onProgress: progressChannel(onProgress),
+    });
+  },
+  /** Create a repository in a folder; resolves to the folder. */
+  initRepository: (path: string, branch: string) =>
+    call<string>("init_repository", { path, branch }),
   /** `autostash` stashes local changes first and reapplies them after the pull. */
   pullBranch: (
     repo: string,

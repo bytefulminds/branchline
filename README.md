@@ -19,6 +19,9 @@ reimplementing Git.
 - Open a repository with the native folder picker (`Ctrl+O` / `⌘O`), from the recent list, or
   from the command line (`branchline /path/to/repo`). Selecting a subfolder opens the repository
   root.
+- Clone a repository from an address (HTTPS, SSH or a local path) with progress and Stop, or
+  create a new one in a new or existing folder, from the welcome screen or the repository menu.
+  A failed or stopped clone leaves no files behind.
 - Current branch, detached HEAD and repositories without commits.
 - Upstream tracking with ahead/behind counts, including upstreams that no longer exist.
 - Changed files from `git status`: modified, added, deleted, renamed (with source path), copied,
@@ -87,6 +90,10 @@ reimplementing Git.
   writes the file and marks it as resolved; it refuses if the file changed since the editor
   opened it. Binary files, symbolic links and files deleted on one side get whole-file choices
   (keep one version or delete the file).
+- Remotes: list them with their addresses and branch counts, fetch one or all, add a remote
+  (optionally fetching it right away), rename it or change its fetch and push addresses, and
+  remove it. Addresses are shown without user names or tokens, and a hidden token is kept
+  when you save. Passwords in addresses are refused; use a credential helper instead.
 - Worktrees: extra working folders for the same repository, each with its own branch checked
   out. Create one with a new branch (from the current branch, any branch or a commit in
   History) or for an existing branch, open it in Branchline, lock or unlock it, and remove it
@@ -94,7 +101,7 @@ reimplementing Git.
   Worktrees whose folder was deleted can be cleaned up. Branches checked out in another
   worktree are marked in Branches and offer "Open worktree" instead of Switch.
 - `Ctrl+1` / `⌘1` Changes, `Ctrl+2` / `⌘2` History, `Ctrl+3` / `⌘3` Branches, `Ctrl+4` / `⌘4`
-  Stashes, `Ctrl+5` / `⌘5` Tags, `Ctrl+6` / `⌘6` Worktrees.
+  Stashes, `Ctrl+5` / `⌘5` Tags, `Ctrl+6` / `⌘6` Worktrees, `Ctrl+7` / `⌘7` Remotes.
 
 ## Prerequisites
 
@@ -149,7 +156,7 @@ src/                     React + TypeScript frontend
   features/changes/      Changed-file model, list, diff and commit box
   features/history/      Commit list, graph and commit details
   features/branches/     Branch list, switcher and branch dialogs
-  features/remote/       Fetch, pull and push toolbar and actions
+  features/remote/       Remotes view and dialog; fetch, pull and push toolbar and actions
   features/stash/        Stashes view, stash dialog and actions
   features/tags/         Tags view, tag dialog and actions
   features/integrate/    Merge, rebase, cherry-pick, revert and the operation banner
@@ -170,6 +177,7 @@ src-tauri/               Rust backend
   src/git/rebase_plan.rs Interactive rebase plans
   src/git/conflict.rs    Three-way view of a conflicted file; saving its resolution
   src/git/worktrees.rs   Worktree list, add, remove, lock and prune
+  src/git/create.rs      Clone and init
   src/commands.rs        Tauri IPC commands (async, off the UI thread)
   src/error.rs           Error model shared with the frontend
   tests/                 Integration tests against real temporary repositories
@@ -232,8 +240,6 @@ is still to do.
 
 ## Known limitations
 
-- Remotes cannot be added or edited in Branchline yet; their navigation entry is visible but
-  disabled.
 - New worktrees go in a folder outside the repository. Branchline shows one repository (or
   worktree) per window; opening a worktree switches the window to it.
 - The Tags view shows local tags; it does not show which of them already exist on a remote.

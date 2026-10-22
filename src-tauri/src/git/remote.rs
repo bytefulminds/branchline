@@ -198,6 +198,153 @@ fn require_remote(root: &Path, name: &str) -> Result<(), GitError> {
     }
 }
 
+// ---------------------------------------------------------------- managing remotes
+
+/// Validate a remote name: Git's own rules, plus no leading dash or dot and no spaces.
+pub fn validate_remote_name(root: &Path, name: &str) -> Result<(), GitError> {
+    let invalid = |why: &str| Err(GitError::InvalidRemote(why.to_string()));
+    if name.is_empty() {
+        return invalid("Enter a name, for example origin or upstream.");
+    }
+    if name.contains(char::is_whitespace) {
+        return invalid("Remote names cannot contain spaces.");
+    }
+    if name.starts_with('-') || name.starts_with('.') {
+        return invalid("Remote names cannot start with a dash or a dot.");
+    }
+    let probe = format!("refs/remotes/{name}/HEAD");
+    match run_git(root, &["check-ref-format", &probe], DEFAULT_TIMEOUT) {
+        Ok(_) => Ok(()),
+        Err(GitError::GitFailed { .. }) => {
+            invalid("Not a valid remote name. Avoid `..`, `~`, `^`, `:`, `?`, `*`, `[` and `\\`.")
+        }
+        Err(e) => Err(e),
+    }
+}
+
+/// Validate a remote URL or path before it is stored in the configuration.
+pub fn validate_remote_url(url: &str) -> Result<(), GitError> {
+    let invalid = |why: &str| Err(GitError::InvalidRemote(why.to_string()));
+    if url.trim().is_empty() {
+        return invalid("Enter the address of the repository.");
+    }
+    if url != url.trim() || url.chars().any(char::is_control) {
+        return invalid("The address cannot contain spaces at the ends or line breaks.");
+    }
+    if url.starts_with('-') {
+        return invalid("The address cannot start with a dash.");
+    }
+    if url.to_ascii_lowercase().starts_with("ext::") {
+        return invalid("Remote helpers that run commands (ext::) are not allowed.");
+    }
+    if let Some(i) = url.find("://") {
+        let authority = url[i + 3..].split('/').next().unwrap_or("");
+        if let Some((userinfo, _)) = authority.rsplit_once('@') {
+            if userinfo.contains(':') {
+                return invalid(
+                    "Leave the password or token out of the address; Git asks your credential helper for it.",
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Add a remote.
+pub fn add_remote(repo: &str, name: &str, url: &str) -> Result<(), GitError> {
+    let root = resolve_root(repo)?;
+    let _guard = write_lock();
+    validate_remote_name(&root, name)?;
+    validate_remote_url(url)?;
+    if remotes_at(&root)?.iter().any(|r| r.name == name) {
+        return Err(GitError::InvalidRemote(format!(
+            "A remote named {name} already exists."
+        )));
+    }
+    run_git(&root, &["remote", "add", "--", name, url], DEFAULT_TIMEOUT)?;
+    Ok(())
+}
+
+/// Rename a remote and/or change its addresses. `url` and `push_url` are the
+/// values shown to the user: an unchanged (redacted) value is left alone, so a
+/// stored credential is never replaced by `***`. An empty `push_url` removes a
+/// separate push address.
+pub fn edit_remote(
+    repo: &str,
+    name: &str,
+    new_name: &str,
+    url: &str,
+    push_url: &str,
+) -> Result<(), GitError> {
+    let root = resolve_root(repo)?;
+    let _guard = write_lock();
+    let current = remotes_at(&root)?
+        .into_iter()
+        .find(|r| r.name == name)
+        .ok_or_else(|| GitError::Unsupported(format!("There is no remote named \"{name}\".")))?;
+    if url != current.url {
+        validate_remote_url(url)?;
+    }
+    let push_changed = push_url != current.push_url.as_deref().unwrap_or("");
+    if push_changed && !push_url.is_empty() {
+        validate_remote_url(push_url)?;
+    }
+    let mut name = name.to_string();
+    if new_name != name {
+        validate_remote_name(&root, new_name)?;
+        if remotes_at(&root)?.iter().any(|r| r.name == new_name) {
+            return Err(GitError::InvalidRemote(format!(
+                "A remote named {new_name} already exists."
+            )));
+        }
+        run_git(
+            &root,
+            &["remote", "rename", "--", &name, new_name],
+            DEFAULT_TIMEOUT,
+        )?;
+        name = new_name.to_string();
+    }
+    if url != current.url {
+        run_git(
+            &root,
+            &["remote", "set-url", "--", &name, url],
+            DEFAULT_TIMEOUT,
+        )?;
+    }
+    if push_changed {
+        if push_url.is_empty() {
+            let key = format!("remote.{name}.pushurl");
+            run_git_with(
+                &root,
+                &["config", "--unset-all", &key],
+                &RunOptions {
+                    // 5: the key was not set.
+                    ok_codes: &[0, 5],
+                    ..RunOptions::default()
+                },
+            )?;
+        } else {
+            let key = format!("remote.{name}.pushurl");
+            run_git(
+                &root,
+                &["config", "--replace-all", &key, push_url],
+                DEFAULT_TIMEOUT,
+            )?;
+        }
+    }
+    Ok(())
+}
+
+/// Remove a remote and its remote-tracking branches. Local branches stay; their
+/// upstream setting is removed by Git.
+pub fn remove_remote(repo: &str, name: &str) -> Result<(), GitError> {
+    let root = resolve_root(repo)?;
+    let _guard = write_lock();
+    require_remote(&root, name)?;
+    run_git(&root, &["remote", "remove", "--", name], DEFAULT_TIMEOUT)?;
+    Ok(())
+}
+
 // ---------------------------------------------------------------- progress
 
 /// Parse a progress line such as `remote: Counting objects:  50% (5/10)` or
@@ -283,6 +430,7 @@ pub fn classify_remote_failure(code: i32, stderr: &str) -> GitError {
     } else if has(&[
         "repository not found",
         "does not appear to be a git repository",
+        "' does not exist",
         "returned error: 404",
         "not found\n",
     ]) {
@@ -317,7 +465,7 @@ pub fn classify_remote_failure(code: i32, stderr: &str) -> GitError {
 // ---------------------------------------------------------------- execution
 
 /// Marks a repository as busy with a network operation until dropped.
-struct NetworkGuard(std::path::PathBuf);
+pub(crate) struct NetworkGuard(std::path::PathBuf);
 
 fn busy_repos() -> &'static Mutex<std::collections::HashSet<std::path::PathBuf>> {
     static BUSY: OnceLock<Mutex<std::collections::HashSet<std::path::PathBuf>>> = OnceLock::new();
@@ -334,7 +482,7 @@ impl Drop for NetworkGuard {
 }
 
 /// One network operation per repository at a time; it can run for minutes.
-fn network_lock(root: &Path) -> Result<NetworkGuard, GitError> {
+pub(crate) fn network_lock(root: &Path) -> Result<NetworkGuard, GitError> {
     let mut busy = busy_repos().lock().unwrap_or_else(|e| e.into_inner());
     if !busy.insert(root.to_path_buf()) {
         return Err(GitError::Locked {
@@ -385,7 +533,7 @@ fn register(op_id: &str) -> (CancelToken, Registration) {
 /// SSH runs in batch mode so it fails instead of waiting for a password or
 /// host-key prompt nobody can answer, unless the user chose their own SSH
 /// command (`GIT_SSH_COMMAND`, `GIT_SSH` or `core.sshCommand`), which wins.
-fn network_env(root: &Path) -> Vec<(String, String)> {
+pub(crate) fn network_env(root: &Path) -> Vec<(String, String)> {
     if std::env::var_os("GIT_SSH_COMMAND").is_some() || std::env::var_os("GIT_SSH").is_some() {
         return Vec::new();
     }
@@ -406,7 +554,7 @@ fn network_env(root: &Path) -> Vec<(String, String)> {
     }
 }
 
-fn run_network(
+pub(crate) fn run_network(
     root: &Path,
     args: &[&str],
     op_id: &str,

@@ -83,6 +83,9 @@ are in the way (`checkoutConflict`); nothing is changed.
 | `cherry_pick(repo, oid)` / `revert_commit(repo, oid)` | `IntegrateResult` | Merge commits use their first parent (`-m 1`) |
 | `cherry_pick_many(repo, oids)` | `IntegrateResult` | Order given (oldest first), at most 100, no merge commits; `outcome.skipped` counts commits already on the branch |
 | `operation_step(repo, step)` | `IntegrateResult` | `continue`, `skip` or `abort` the operation in progress |
+| `add_remote(repo, name, url)` / `edit_remote(repo, name, newName, url, pushUrl)` / `remove_remote(repo, name)` | `()` | Names and addresses are validated; an unchanged (redacted) address is never written back |
+| `clone_repository(url, dest, opId, onProgress)` | `string` | Streams progress like fetch; `cancel_remote_operation(opId)` stops it and removes what it created |
+| `init_repository(path, branch)` | `string` | New or existing folder; `branch` empty means Git's default |
 | `list_worktrees(repo)` | `WorktreeInfo[]` | Branch or detached HEAD, locked, missing, main/open flags, number of changed files |
 | `add_worktree(repo, path, target)` | `string` | `target`: `newBranch` (name + start), `branch` or `detached`; returns the folder |
 | `remove_worktree(repo, path, force)` / `lock_worktree(repo, path, locked, reason)` / `prune_worktrees(repo)` | `()` / `()` / `number` | Never the main worktree or the open one |
@@ -182,6 +185,23 @@ progress (read from `rebase-merge/msgnum` and `end`).
 - The frontend model (`mergeModel.ts`) keeps, per change, the result lines and whether each
   side was taken, left out or is pending. Taking a second side appends it, like JetBrains.
   Changes that do not conflict are taken on open; Undo goes back to before that.
+
+## Remotes, clone and init
+
+- Remote names follow Git's rules plus no leading dash or dot and no spaces. Addresses must
+  not start with a dash (they would be read as options), may not use the `ext::` transport
+  (it runs commands), and may not contain a password (`https://user:secret@…`); user names
+  alone are fine. Everything is passed after `--`.
+- `list_remotes` shows addresses with the user part replaced by `***` (it can be a token).
+  `edit_remote` compares the submitted values with those redacted values and only writes what
+  actually changed, so saving a dialog with a hidden token never overwrites it with `***`.
+- Clone uses the same streaming runner as fetch (progress, cancel, SSH batch mode, no
+  prompts) and the same error classification. The destination must be a new folder or an
+  empty one; on failure or cancel, a folder Branchline created is deleted and an existing empty
+  folder is emptied again.
+- Init accepts an existing folder (files stay, untracked) or a new folder whose parent
+  exists, refuses a folder that already has `.git`, and sets the first branch with
+  `symbolic-ref`, which works on every supported Git version (`init -b` needs 2.28).
 
 ## Worktrees
 

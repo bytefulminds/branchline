@@ -4,6 +4,7 @@
 pub mod branches;
 pub mod commit;
 pub mod conflict;
+pub mod create;
 pub mod diff;
 pub mod integrate;
 pub mod log;

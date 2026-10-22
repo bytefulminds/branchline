@@ -106,3 +106,9 @@
 .bl-welcome__remove:focus-visible {
   opacity: 1;
 }
+.bl-welcome__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2);
+}

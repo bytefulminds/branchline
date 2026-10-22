@@ -7,6 +7,7 @@ use crate::error::GitError;
 use crate::git::branches::{self, BranchList, StartPoint};
 use crate::git::commit::{self, CommitDraft, CommitRequest};
 use crate::git::conflict::{self, ConflictFile, ResolveSide};
+use crate::git::create;
 use crate::git::diff::{self, DiffArea, FileDiff};
 use crate::git::integrate::{self, IntegrateOutcome, MergeRequest, Step};
 use crate::git::log::{self, CommitDetails, LogPage, RefInfo};
@@ -536,6 +537,51 @@ pub async fn lock_worktree(
 #[tauri::command]
 pub async fn prune_worktrees(repo: String) -> Result<usize, GitError> {
     blocking(move || worktrees::prune(&repo)).await
+}
+
+#[tauri::command]
+pub async fn add_remote(repo: String, name: String, url: String) -> Result<(), GitError> {
+    blocking(move || remote::add_remote(&repo, &name, &url)).await
+}
+
+/// Rename a remote and/or change its addresses (unchanged values are left alone).
+#[tauri::command]
+pub async fn edit_remote(
+    repo: String,
+    name: String,
+    new_name: String,
+    url: String,
+    push_url: String,
+) -> Result<(), GitError> {
+    blocking(move || remote::edit_remote(&repo, &name, &new_name, &url, &push_url)).await
+}
+
+#[tauri::command]
+pub async fn remove_remote(repo: String, name: String) -> Result<(), GitError> {
+    blocking(move || remote::remove_remote(&repo, &name)).await
+}
+
+/// Clone `url` into a new or empty folder; returns the folder. Progress streams
+/// to `on_progress`; `op_id` can be passed to `cancel_remote_operation`.
+#[tauri::command]
+pub async fn clone_repository(
+    url: String,
+    dest: String,
+    op_id: String,
+    on_progress: Channel<Progress>,
+) -> Result<String, GitError> {
+    blocking(move || {
+        create::clone(&url, &dest, &op_id, &mut |p| {
+            let _ = on_progress.send(p);
+        })
+    })
+    .await
+}
+
+/// Create a repository in a folder; returns the folder.
+#[tauri::command]
+pub async fn init_repository(path: String, branch: String) -> Result<String, GitError> {
+    blocking(move || create::init(&path, &branch)).await
 }
 
 /// Continue, skip or abort the merge, rebase, cherry-pick or revert in progress.

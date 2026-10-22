@@ -14,6 +14,8 @@ export function AppShell({
   controller,
   gitVersion,
   onOpen,
+  onClone,
+  onCreate,
   view,
   onView,
   children,
@@ -21,6 +23,8 @@ export function AppShell({
   controller: RepositoryController;
   gitVersion: GitVersion | GitError | null;
   onOpen: () => void;
+  onClone: () => void;
+  onCreate: () => void;
   view: WorkspaceView;
   onView: (view: WorkspaceView) => void;
   children: ReactNode;
@@ -32,7 +36,13 @@ export function AppShell({
   );
   return (
     <div className="bl-app">
-      <TitleBar controller={controller} onOpen={onOpen} onShowBranches={() => onView("branches")} />
+      <TitleBar
+        controller={controller}
+        onOpen={onOpen}
+        onClone={onClone}
+        onCreate={onCreate}
+        onShowBranches={() => onView("branches")}
+      />
       <div className="bl-app__body">
         <Sidebar
           controller={controller}

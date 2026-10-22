@@ -1,5 +1,7 @@
 import {
   ChevronDown,
+  CloudDownload,
+  FolderPlus,
   FolderGit2,
   FolderOpen,
   GitBranch,
@@ -32,10 +34,14 @@ const QUICK_SWITCH_LIMIT = 12;
 export function TitleBar({
   controller,
   onOpen,
+  onClone,
+  onCreate,
   onShowBranches,
 }: {
   controller: RepositoryController;
   onOpen: () => void;
+  onClone: () => void;
+  onCreate: () => void;
   onShowBranches: () => void;
 }) {
   const branchActions = useBranchActions();
@@ -64,6 +70,18 @@ export function TitleBar({
       icon: <FolderOpen size={16} aria-hidden />,
       shortcut: `${modKeyLabel}O`,
       onSelect: onOpen,
+    },
+    {
+      id: "clone",
+      label: "Clone repository…",
+      icon: <CloudDownload size={16} aria-hidden />,
+      onSelect: onClone,
+    },
+    {
+      id: "init",
+      label: "New repository…",
+      icon: <FolderPlus size={16} aria-hidden />,
+      onSelect: onCreate,
     },
     ...(state.status !== "idle"
       ? [
