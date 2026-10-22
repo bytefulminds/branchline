@@ -4,6 +4,7 @@ import type {
   BranchList,
   CommitDetails,
   CommitDraft,
+  ConflictFile,
   DiffArea,
   FileDiff,
   IntegrateResult,
@@ -20,6 +21,7 @@ import type {
   RemoteInfo,
   RemoteProgress,
   RemoteResult,
+  ResolveSide,
   StashInfo,
   StashResult,
   TagInfo,
@@ -221,6 +223,14 @@ export const gitService = {
   /** Rewrite the commits after `base`; `plan` is oldest first and names every commit once. */
   interactiveRebase: (repo: string, base: string, plan: PlanStep[], autostash: boolean) =>
     call<IntegrateResult>("interactive_rebase", { repo, base, plan, autostash }),
+  /** Three-way view of one conflicted file. */
+  conflictFile: (repo: string, path: string) => call<ConflictFile>("conflict_file", { repo, path }),
+  /** Save the merged text and mark the file as resolved. */
+  resolveConflictText: (repo: string, path: string, content: string, fingerprint: string) =>
+    call<RepositoryInfo>("resolve_conflict_text", { repo, path, content, fingerprint }),
+  /** Keep one side's whole file (or delete it) and mark it as resolved. */
+  resolveConflictSide: (repo: string, path: string, side: ResolveSide, fingerprint: string) =>
+    call<RepositoryInfo>("resolve_conflict_side", { repo, path, side, fingerprint }),
   /** Continue, skip or abort the merge, rebase, cherry-pick or revert in progress. */
   operationStep: (repo: string, step: OperationStep) =>
     call<IntegrateResult>("operation_step", { repo, step }),

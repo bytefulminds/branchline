@@ -16,6 +16,7 @@ import type {
   LineAction,
   RepositoryInfo,
 } from "../../types/git";
+import { MergeEditor } from "../conflicts/MergeEditor";
 import { OperationBanner } from "../integrate/OperationBanner";
 import { RepositoryOverview } from "../repository/RepositoryOverview";
 import type { RepositoryController } from "../repository/useRepository";
@@ -75,6 +76,7 @@ export function ChangesView({
   const stash = useStashActions();
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [mergePath, setMergePath] = useState<string | null>(null);
   const [listWidth, setListWidth] = usePersistentNumber("branchline.layout.fileListWidth", 380);
 
   const groups = useMemo(() => groupChanges(repo.changes), [repo.changes]);
@@ -247,6 +249,7 @@ export function ChangesView({
             selectedId={selected?.id ?? null}
             onSelect={(e) => setSelectedId(e.id)}
             onAction={(action, entries) => void onFileAction(action, entries)}
+            onOpenMerge={(e) => setMergePath(e.path)}
             busy={busy}
           />
         )}
@@ -272,11 +275,21 @@ export function ChangesView({
             busy={busy}
             onFileAction={(action, entries) => void onFileAction(action, entries)}
             onLineAction={onLineAction}
+            onOpenMerge={(e) => setMergePath(e.path)}
           />
         ) : (
           <RepositoryOverview repo={repo} />
         )}
       </div>
+      {mergePath && (
+        <MergeEditor
+          key={mergePath}
+          repoPath={repo.path}
+          path={mergePath}
+          run={controller.run}
+          onClose={() => setMergePath(null)}
+        />
+      )}
     </div>
   );
 }

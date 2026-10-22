@@ -1,4 +1,4 @@
-import { Check, CircleAlert, FileWarning, Minus, Plus, Undo2, X } from "lucide-react";
+import { Check, CircleAlert, FileWarning, GitMerge, Minus, Plus, Undo2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "../../components/Badge";
 import { Button } from "../../components/Button";
@@ -42,6 +42,8 @@ export interface DiffViewProps {
     diff: FileDiff,
     selections: HunkSelection[],
   ) => Promise<boolean>;
+  /** Open the merge editor for a conflicted file. */
+  onOpenMerge?: (entry: ChangeEntry) => void;
 }
 
 function formatBytes(n: number): string {
@@ -63,6 +65,7 @@ export function DiffView({
   busy,
   onFileAction,
   onLineAction,
+  onOpenMerge,
 }: DiffViewProps) {
   const area = diffAreaFor(entry);
   const [diff, setDiff] = useState<FileDiff | null>(null);
@@ -124,15 +127,28 @@ export function DiffView({
   const fileActions = (() => {
     if (entry.area === "conflicted")
       return (
-        <Button
-          size="sm"
-          variant="primary"
-          icon={<Check size={14} aria-hidden />}
-          disabled={busy}
-          onClick={() => onFileAction("stage", [entry])}
-        >
-          Mark as resolved
-        </Button>
+        <>
+          <Button
+            size="sm"
+            variant="ghost"
+            icon={<Check size={14} aria-hidden />}
+            disabled={busy}
+            onClick={() => onFileAction("stage", [entry])}
+          >
+            Mark as resolved
+          </Button>
+          {onOpenMerge && (
+            <Button
+              size="sm"
+              variant="primary"
+              icon={<GitMerge size={14} aria-hidden />}
+              disabled={busy}
+              onClick={() => onOpenMerge(entry)}
+            >
+              Resolve in merge editor
+            </Button>
+          )}
+        </>
       );
     if (entry.area === "staged")
       return (
@@ -252,7 +268,7 @@ export function DiffView({
           <CircleAlert size={16} aria-hidden />
           <span>
             {diff.hasConflictMarkers
-              ? "This file has conflict markers. Edit it to resolve them, then mark it as resolved."
+              ? "This file has conflicts. Resolve them in the merge editor, or edit the file yourself and mark it as resolved."
               : "No conflict markers remain. Mark the file as resolved to continue."}
           </span>
         </div>

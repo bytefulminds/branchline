@@ -6,6 +6,7 @@ use tauri::ipc::Channel;
 use crate::error::GitError;
 use crate::git::branches::{self, BranchList, StartPoint};
 use crate::git::commit::{self, CommitDraft, CommitRequest};
+use crate::git::conflict::{self, ConflictFile, ResolveSide};
 use crate::git::diff::{self, DiffArea, FileDiff};
 use crate::git::integrate::{self, IntegrateOutcome, MergeRequest, Step};
 use crate::git::log::{self, CommitDetails, LogPage, RefInfo};
@@ -459,6 +460,42 @@ pub async fn interactive_rebase(
 ) -> Result<IntegrateResult, GitError> {
     integrate_then_inspect(repo, move |r| {
         rebase_plan::interactive_rebase(r, &base, &plan, autostash)
+    })
+    .await
+}
+
+/// Three-way view of one conflicted file, for the merge editor.
+#[tauri::command]
+pub async fn conflict_file(repo: String, path: String) -> Result<ConflictFile, GitError> {
+    blocking(move || conflict::load(&repo, &path)).await
+}
+
+/// Save the merge editor's result as the resolved file and mark it as resolved.
+#[tauri::command]
+pub async fn resolve_conflict_text(
+    repo: String,
+    path: String,
+    content: String,
+    fingerprint: String,
+) -> Result<RepositoryInfo, GitError> {
+    blocking(move || {
+        conflict::resolve_with_text(&repo, &path, &content, &fingerprint)?;
+        repository::inspect(&repo)
+    })
+    .await
+}
+
+/// Resolve a conflicted file by keeping one side's version, or by deleting it.
+#[tauri::command]
+pub async fn resolve_conflict_side(
+    repo: String,
+    path: String,
+    side: ResolveSide,
+    fingerprint: String,
+) -> Result<RepositoryInfo, GitError> {
+    blocking(move || {
+        conflict::resolve_with_side(&repo, &path, side, &fingerprint)?;
+        repository::inspect(&repo)
     })
     .await
 }

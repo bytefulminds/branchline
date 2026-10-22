@@ -358,6 +358,37 @@ export interface IntegrateOutcome {
   skipped?: number;
 }
 
+export type ChangeSide = "ours" | "theirs" | "both" | "conflict";
+
+/** A run of lines in the three-way view; lines keep their line endings. */
+export type MergeSegment =
+  | { kind: "same"; lines: string[] }
+  | { kind: "change"; change: ChangeSide; base: string[]; ours: string[]; theirs: string[] };
+
+export interface ConflictSide {
+  /** Short name: a branch, "commit abc1234" or "Stashed changes". */
+  label: string;
+  /** What this side is, for example "Current branch". */
+  role: string;
+  commit: { oid: string; summary: string } | null;
+  /** False when this side deleted the file. */
+  exists: boolean;
+}
+
+export interface ConflictFile {
+  path: string;
+  conflict: ConflictKind;
+  ours: ConflictSide;
+  theirs: ConflictSide;
+  baseExists: boolean;
+  /** Null when only whole-file choices are possible (see `unmergeable`). */
+  segments: MergeSegment[] | null;
+  unmergeable: string | null;
+  fingerprint: string;
+}
+
+export type ResolveSide = "ours" | "theirs" | "delete";
+
 export interface IntegrateResult {
   outcome: IntegrateOutcome;
   repo: RepositoryInfo;

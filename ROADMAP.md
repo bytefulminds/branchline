@@ -61,7 +61,8 @@ Milestones are only marked complete when the behavior works against real Git and
 - [x] Interactive rebase: reorder by dragging, reword, squash, fixup, drop
 - [x] Drag a branch onto a branch or commit to merge or rebase
 - [x] Cherry-pick several commits at once
-- [ ] Conflict resolution
+- [x] Conflict resolution: three-pane merge editor (take ours or theirs per change, edit the
+      result), whole-file choices
 - [ ] Worktrees
 
 ## Milestone 6: Quality and release readiness

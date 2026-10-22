@@ -83,6 +83,9 @@ are in the way (`checkoutConflict`); nothing is changed.
 | `cherry_pick(repo, oid)` / `revert_commit(repo, oid)` | `IntegrateResult` | Merge commits use their first parent (`-m 1`) |
 | `cherry_pick_many(repo, oids)` | `IntegrateResult` | Order given (oldest first), at most 100, no merge commits; `outcome.skipped` counts commits already on the branch |
 | `operation_step(repo, step)` | `IntegrateResult` | `continue`, `skip` or `abort` the operation in progress |
+| `conflict_file(repo, path)` | `ConflictFile` | Sides, segments (same / ours / theirs / both / conflict) and a fingerprint |
+| `resolve_conflict_text(repo, path, content, fingerprint)` | `RepositoryInfo` | Writes the merged text and runs `git add` |
+| `resolve_conflict_side(repo, path, side, fingerprint)` | `RepositoryInfo` | `ours`, `theirs` (`checkout --ours/--theirs`, or `rm` when that side deleted the file) or `delete` |
 | `rebase_plan_commits(repo, base)` | `PlanCommit[]` | Commits after `base` on the current branch, oldest first |
 | `interactive_rebase(repo, base, plan, autostash)` | `IntegrateResult` | Plan: every commit once, oldest first |
 
@@ -152,6 +155,30 @@ progress (read from `rebase-merge/msgnum` and `end`).
   multi-pick because `-m 1` would apply to every commit.
 - During a rebase the commit box is disabled: a plain commit in the middle of a rebase would add
   an unrelated commit. Continue finishes the step instead.
+
+## Merge editor
+
+- The three-way view comes from the index stages of the unmerged path (1 base, 2 ours,
+  3 theirs, listed by `git ls-files -u`), never from parsing conflict markers. Each side is
+  compared with the base by `git diff --unified=0 --diff-algorithm=histogram <blob> <blob>`,
+  and the hunks are grouped as in diff3 (`conflict.rs`, `build_segments`): changes that overlap
+  or touch form one segment, which is a conflict unless both sides made the same change.
+  Without a base (added on both sides) every line is new on both sides.
+- Lines keep their line endings, so taking every change from one side rebuilds that version
+  byte for byte (tested). Typed text uses the file's dominant line ending, and a missing final
+  newline stays missing.
+- Sides are named for the operation: in a merge, the current branch and the merged branch
+  (from `MERGE_MSG`); in a rebase, the branch being rebased onto (stage 2) and the commit
+  being replayed (`REBASE_HEAD`, stage 3); in a cherry-pick or revert, the current branch and
+  the commit; after a stash apply, "Stashed changes".
+- Versions over 1 MB, binary or non-UTF-8 text, symbolic links, submodules and files deleted
+  on one side get whole-file choices only.
+- `conflict_file` returns a fingerprint of the stages and the working-tree file. Saving
+  recomputes it under the write lock and refuses on a mismatch, so a file edited elsewhere in
+  the meantime is never overwritten. Writes refuse to go through symbolic links.
+- The frontend model (`mergeModel.ts`) keeps, per change, the result lines and whether each
+  side was taken, left out or is pending. Taking a second side appends it, like JetBrains.
+  Changes that do not conflict are taken on open; Undo goes back to before that.
 
 ## Interactive rebase
 

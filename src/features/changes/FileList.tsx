@@ -1,4 +1,13 @@
-import { Check, ChevronDown, ChevronRight, FolderGit2, Minus, Plus, Undo2 } from "lucide-react";
+import {
+  Check,
+  ChevronDown,
+  ChevronRight,
+  FolderGit2,
+  GitMerge,
+  Minus,
+  Plus,
+  Undo2,
+} from "lucide-react";
 import { useEffect, useId, useMemo, useState } from "react";
 import { Count } from "../../components/Badge";
 import { StatusLetter } from "../../components/StatusLetter";
@@ -20,6 +29,8 @@ export interface FileListProps {
   selectedId: string | null;
   onSelect: (entry: ChangeEntry) => void;
   onAction: (action: FileAction, entries: ChangeEntry[]) => void;
+  /** Open the merge editor for a conflicted file. */
+  onOpenMerge?: (entry: ChangeEntry) => void;
   /** Disable actions while a write operation runs. */
   busy?: boolean;
 }
@@ -45,10 +56,12 @@ function RowActions({
   entry,
   busy,
   onAction,
+  onOpenMerge,
 }: {
   entry: ChangeEntry;
   busy?: boolean;
   onAction: FileListProps["onAction"];
+  onOpenMerge?: FileListProps["onOpenMerge"];
 }) {
   const act = (action: FileAction) => (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -58,6 +71,23 @@ function RowActions({
   if (entry.area === "conflicted") {
     return (
       <span className="bl-file-row__actions">
+        {onOpenMerge && (
+          <button
+            type="button"
+            tabIndex={-1}
+            disabled={busy}
+            className="bl-row-action"
+            aria-label={`Resolve ${entry.path} in the merge editor`}
+            data-tooltip="Resolve in merge editor"
+            data-tooltip-align="end"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenMerge(entry);
+            }}
+          >
+            <GitMerge size={14} aria-hidden />
+          </button>
+        )}
         <button
           type="button"
           tabIndex={-1}
@@ -111,7 +141,14 @@ function RowActions({
  * Keys: arrows, Home/End, PageUp/PageDown move; Space or Enter stages/unstages;
  * Delete or Backspace discards unstaged changes.
  */
-export function FileList({ groups, selectedId, onSelect, onAction, busy }: FileListProps) {
+export function FileList({
+  groups,
+  selectedId,
+  onSelect,
+  onAction,
+  onOpenMerge,
+  busy,
+}: FileListProps) {
   const baseId = useId();
   const [collapsed, setCollapsed] = useState<Record<ChangeArea, boolean>>({
     conflicted: false,
@@ -251,7 +288,7 @@ export function FileList({ groups, selectedId, onSelect, onAction, busy }: FileL
               )}
               <span className="bl-file-row__name truncate">{name}</span>
               {dir && <span className="bl-file-row__dir truncate">{dir}</span>}
-              <RowActions entry={entry} busy={busy} onAction={onAction} />
+              <RowActions entry={entry} busy={busy} onAction={onAction} onOpenMerge={onOpenMerge} />
             </div>
           );
         })}

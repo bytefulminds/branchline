@@ -29,7 +29,8 @@ reimplementing Git.
   "no newline at end of file" handling, binary detection and a guard for very large diffs.
 - Stage, unstage and discard whole files, single hunks or selected lines (click, shift-click for
   a range). Discarding always asks for confirmation; staged content is never discarded.
-- Conflicted files show their conflict markers and can be marked as resolved.
+- Conflicted files show their conflict markers and can be marked as resolved, or resolved in
+  the merge editor (below).
 - File filter, keyboard navigation in the file list (`Space`/`Enter` stages or unstages, `Delete`
   discards), resizable panels, a virtualized list that stays fast with thousands of files.
 - Automatic refresh through a file-system watcher (changes made in your editor or terminal show up
@@ -77,10 +78,19 @@ reimplementing Git.
 - When an operation stops with conflicts, a banner shows what is left (with rebase progress, for
   example "commit 2 of 5") and offers Continue, Skip commit and Abort. Local changes in the way
   can be stashed and reapplied automatically.
+- Merge editor for conflicts, in the style of JetBrains' merge tool: your side on the left, the
+  result in the middle and the incoming side on the right, each named for the operation (for
+  example "main" and "feature/x" in a merge, or the commit being cherry-picked). Changes that do
+  not conflict are taken right away; for each conflict, take one side (`»` / `«`), both, or
+  neither, or type the result yourself. Undo and redo, `Alt+↑` / `Alt+↓` (or `F7`) between
+  changes, "Use all" for one side's whole file, and editing the whole result as text. Saving
+  writes the file and marks it as resolved; it refuses if the file changed since the editor
+  opened it. Binary files, symbolic links and files deleted on one side get whole-file choices
+  (keep one version or delete the file).
 - `Ctrl+1` / `⌘1` Changes, `Ctrl+2` / `⌘2` History, `Ctrl+3` / `⌘3` Branches, `Ctrl+4` / `⌘4`
   Stashes, `Ctrl+5` / `⌘5` Tags.
 
-A conflict editor (choose ours or theirs, edit the result) and worktrees follow next.
+Worktrees follow next.
 
 ## Prerequisites
 
@@ -139,6 +149,7 @@ src/                     React + TypeScript frontend
   features/stash/        Stashes view, stash dialog and actions
   features/tags/         Tags view, tag dialog and actions
   features/integrate/    Merge, rebase, cherry-pick, revert and the operation banner
+  features/conflicts/    Merge editor (three panes) and its model
   layouts/               Window shell: title bar, sidebar, status bar, window controls
   services/              IPC wrappers, dialog, platform, local preferences
   styles/                Design tokens and base styles
@@ -152,6 +163,7 @@ src-tauri/               Rust backend
   src/git/tags.rs        Tag list, create and delete
   src/git/integrate.rs   Merge, rebase, cherry-pick, revert; continue, skip, abort
   src/git/rebase_plan.rs Interactive rebase plans
+  src/git/conflict.rs    Three-way view of a conflicted file; saving its resolution
   src/commands.rs        Tauri IPC commands (async, off the UI thread)
   src/error.rs           Error model shared with the frontend
   tests/                 Integration tests against real temporary repositories
@@ -217,8 +229,9 @@ is still to do.
 - Worktrees are not implemented yet, and remotes cannot be added or edited in Branchline yet;
   their navigation entries are visible but disabled.
 - The Tags view shows local tags; it does not show which of them already exist on a remote.
-- Conflicts are resolved in your editor for now (then mark them as resolved in Branchline);
-  there is no built-in conflict editor yet. A bisect can only be stopped from Branchline.
+- The merge editor works on text files up to 1 MB; larger files, binary files and symbolic
+  links are resolved by keeping one side's version. It has no syntax highlighting and no
+  word-level highlighting yet. A bisect can only be stopped from Branchline.
 - Interactive rebase cannot include merge commits, and cannot stop to edit a commit's content
   (`edit`); it covers reorder, reword, squash, fixup and drop. Reworded commits skip the
   `pre-commit` and `commit-msg` hooks, like Git's own reword skips `pre-commit`.
@@ -238,7 +251,6 @@ is still to do.
 - The diff view is unified only (no side-by-side view yet) and has no syntax highlighting yet.
 - Hunk and line operations are not available for untracked files, renames, copies and binary
   files; those are staged as a whole.
-- Conflicts can be inspected and marked as resolved, but not edited inside Branchline yet.
 - The watcher only applies the root `.gitignore` and `.git/info/exclude` when filtering events;
   changes in folders ignored by nested `.gitignore` files cause an extra (cheap) refresh.
 - The changed-file list is capped at 10,000 entries.
