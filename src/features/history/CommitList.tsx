@@ -7,6 +7,7 @@ import type { HeadState } from "../../types/git";
 import { Avatar } from "./Avatar";
 import { GraphCell } from "./GraphCell";
 import { RefBadges } from "./RefBadges";
+import type { SelectMode } from "./selection";
 import type { HistoryData } from "./useHistory";
 
 export const HISTORY_ROW_HEIGHT = 30;
@@ -31,7 +32,9 @@ export function CommitList({
   data,
   head,
   selectedOid,
+  selectedOids,
   onSelect,
+  onClearSelection,
   onNearEnd,
   loadingMore,
   onContextMenu,
@@ -39,8 +42,14 @@ export function CommitList({
 }: {
   data: HistoryData;
   head: HeadState;
+  /** The focused commit (shown in the details panel). */
   selectedOid: string | null;
-  onSelect: (oid: string) => void;
+  /** All selected commits; contains `selectedOid` unless several are selected. */
+  selectedOids: ReadonlySet<string>;
+  /** Select a commit: replace the selection, add/remove it, or extend a range to it. */
+  onSelect: (oid: string, mode?: SelectMode) => void;
+  /** Go back from several selected commits to just the focused one. */
+  onClearSelection?: () => void;
   onNearEnd: () => void;
   loadingMore: boolean;
   /** Open the commit's context menu at a screen position. */
@@ -77,6 +86,16 @@ export function CommitList({
       }
       return;
     }
+    if (e.key === "Escape" && selectedOids.size > 1) {
+      e.preventDefault();
+      onClearSelection?.();
+      return;
+    }
+    if (e.key === " " && (e.metaKey || e.ctrlKey) && activeIndex >= 0) {
+      e.preventDefault();
+      onSelect(data.commits[activeIndex]!.oid, "toggle");
+      return;
+    }
     let next: number;
     if (e.key === "ArrowDown") next = Math.min(count - 1, activeIndex + 1);
     else if (e.key === "ArrowUp") next = Math.max(0, activeIndex - 1);
@@ -86,8 +105,9 @@ export function CommitList({
     else if (e.key === "PageUp") next = Math.max(0, activeIndex - 20);
     else return;
     e.preventDefault();
-    onSelect(data.commits[next]!.oid);
+    onSelect(data.commits[next]!.oid, e.shiftKey ? "range" : "replace");
   };
+  const multi = selectedOids.size > 1;
 
   return (
     <div
@@ -95,6 +115,7 @@ export function CommitList({
       className="bl-commits"
       role="listbox"
       aria-label="Commits"
+      aria-multiselectable
       tabIndex={0}
       aria-activedescendant={activeIndex >= 0 ? `${baseId}-${activeIndex}` : undefined}
       onKeyDown={onKeyDown}
@@ -113,16 +134,24 @@ export function CommitList({
               key={commit.oid}
               id={`${baseId}-${index}`}
               role="option"
-              aria-selected={commit.oid === selectedOid}
+              aria-selected={multi ? selectedOids.has(commit.oid) : commit.oid === selectedOid}
               aria-setsize={data.total}
               aria-posinset={index + 1}
-              className={`bl-commit-row${isHead ? " bl-commit-row--head" : ""}`}
+              className={`bl-commit-row${isHead ? " bl-commit-row--head" : ""}${
+                multi && commit.oid === selectedOid ? " bl-commit-row--focus" : ""
+              }`}
               style={{ transform: `translateY(${index * HISTORY_ROW_HEIGHT}px)` }}
               {...rowProps?.(commit.oid)}
-              onClick={() => onSelect(commit.oid)}
+              onClick={(e) =>
+                onSelect(
+                  commit.oid,
+                  e.shiftKey ? "range" : e.metaKey || e.ctrlKey ? "toggle" : "replace",
+                )
+              }
               onContextMenu={(e) => {
                 e.preventDefault();
-                onSelect(commit.oid);
+                // Right-clicking one of several selected commits keeps the selection.
+                if (!(multi && selectedOids.has(commit.oid))) onSelect(commit.oid);
                 onContextMenu?.(commit.oid, { x: e.clientX, y: e.clientY });
               }}
             >

@@ -33,6 +33,8 @@ pub struct IntegrateOutcome {
     pub up_to_date: bool,
     /// The merge only moved the branch forward; no merge commit was made.
     pub fast_forward: bool,
+    /// Commits left out of a cherry-pick because their changes are already on the branch.
+    pub skipped: usize,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -115,7 +117,7 @@ pub(crate) fn conclude(repo: &str, out: &GitOutput) -> Result<IntegrateOutcome, 
         return Ok(IntegrateOutcome {
             up_to_date: all.contains("Already up to date") || all.contains("is up to date"),
             fast_forward: all.contains("Fast-forward"),
-            conflicts: false,
+            ..IntegrateOutcome::default()
         });
     }
     if inspect(repo)?.operation.is_some() && all.contains("CONFLICT") {
@@ -241,6 +243,42 @@ pub fn rebase(
     conclude(repo, &out)
 }
 
+/// Most commits picked in one go; more is almost certainly a mistake in the selection.
+pub const MAX_PICK: usize = 100;
+
+/// The step stopped because the commit has no changes left on this branch.
+fn now_empty(out: &GitOutput) -> bool {
+    let all = text(out);
+    out.code != 0 && (all.contains("is now empty") || all.contains("nothing to commit"))
+}
+
+fn short(oid: &str) -> &str {
+    &oid[..oid.len().min(7)]
+}
+
+/// Run a cherry-pick of `count` commits. Commits whose changes are already on the
+/// branch are skipped (Git would otherwise stop on each one), and the sequence goes on.
+fn pick(
+    repo: &str,
+    root: &Path,
+    args: &[&str],
+    count: usize,
+) -> Result<IntegrateOutcome, GitError> {
+    let mut out = git(root, args)?;
+    let mut skipped = 0;
+    while now_empty(&out)
+        && skipped < count
+        && inspect(repo)?.operation == Some(RepoOperation::CherryPick)
+    {
+        skipped += 1;
+        out = git(root, &["cherry-pick", "--skip"])?;
+    }
+    let mut outcome = conclude(repo, &out)?;
+    outcome.skipped = skipped;
+    outcome.up_to_date = skipped == count;
+    Ok(outcome)
+}
+
 /// Apply the changes of one commit on top of the current branch.
 pub fn cherry_pick(repo: &str, oid: &str) -> Result<IntegrateOutcome, GitError> {
     let root = resolve_root(repo)?;
@@ -253,17 +291,50 @@ pub fn cherry_pick(repo: &str, oid: &str) -> Result<IntegrateOutcome, GitError> 
         args.extend_from_slice(&["-m", "1"]);
     }
     args.push(oid);
-    let out = git(&root, &args)?;
-    let all = text(&out);
-    if out.code != 0 && (all.contains("is now empty") || all.contains("nothing to commit")) {
-        // The changes are already on this branch: nothing to apply.
-        git(&root, &["cherry-pick", "--skip"])?;
-        return Ok(IntegrateOutcome {
-            up_to_date: true,
-            ..IntegrateOutcome::default()
-        });
+    pick(repo, &root, &args, 1)
+}
+
+/// Apply the changes of several commits on top of the current branch, in the order
+/// given (the caller sends them oldest first). Stops at the first conflict; Continue
+/// then carries on with the rest.
+pub fn cherry_pick_many(repo: &str, oids: &[String]) -> Result<IntegrateOutcome, GitError> {
+    if oids.is_empty() {
+        return Err(GitError::Unsupported(
+            "Choose the commits to cherry-pick.".into(),
+        ));
     }
-    conclude(repo, &out)
+    if oids.len() > MAX_PICK {
+        return Err(GitError::Unsupported(format!(
+            "Cherry-pick at most {MAX_PICK} commits at a time."
+        )));
+    }
+    let mut seen = std::collections::HashSet::new();
+    for oid in oids {
+        validate_oid(oid)?;
+        if !seen.insert(oid.as_str()) {
+            return Err(GitError::Unsupported(format!(
+                "Commit {} is selected twice.",
+                short(oid)
+            )));
+        }
+    }
+    if let [oid] = oids {
+        return cherry_pick(repo, oid);
+    }
+    let root = resolve_root(repo)?;
+    let _guard = write_lock();
+    ready(repo)?;
+    for oid in oids {
+        if parent_count(&root, oid)? > 1 {
+            return Err(GitError::Unsupported(format!(
+                "Commit {} is a merge commit. Cherry-pick merge commits one at a time.",
+                short(oid)
+            )));
+        }
+    }
+    let mut args = vec!["cherry-pick"];
+    args.extend(oids.iter().map(String::as_str));
+    pick(repo, &root, &args, oids.len())
 }
 
 /// Create a commit that undoes one commit.

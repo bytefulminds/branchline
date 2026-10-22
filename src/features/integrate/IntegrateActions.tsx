@@ -31,6 +31,8 @@ export interface IntegrateActions {
   /** Ask, then rebase the current branch onto `onto`. */
   rebase: (onto: StartPoint, label: string) => void;
   cherryPick: (oid: string) => void;
+  /** Ask, then cherry-pick several commits; `oids` is oldest first. */
+  cherryPickMany: (oids: string[]) => void;
   revert: (oid: string) => void;
   /** Continue, skip or abort the operation in progress (abort asks first). */
   step: (step: OperationStep) => void;
@@ -43,6 +45,7 @@ const IntegrateContext = createContext<IntegrateActions>({
   merge: noop,
   rebase: noop,
   cherryPick: noop,
+  cherryPickMany: noop,
   revert: noop,
   step: noop,
   interactive: noop,
@@ -124,7 +127,9 @@ export function IntegrateActionsProvider({
       label: string,
       op: (path: string) => Promise<IntegrateResult>,
       messages: {
-        done: string;
+        done: string | ((outcome: IntegrateResult["outcome"]) => string);
+        /** Extra line under the success message. */
+        doneDetail?: (outcome: IntegrateResult["outcome"]) => string | undefined;
         upToDate?: string;
         fastForward?: string;
         failed: string;
@@ -161,7 +166,12 @@ export function IntegrateActionsProvider({
         toast({
           tone: "success",
           title:
-            r.outcome.fastForward && messages.fastForward ? messages.fastForward : messages.done,
+            r.outcome.fastForward && messages.fastForward
+              ? messages.fastForward
+              : typeof messages.done === "function"
+                ? messages.done(r.outcome)
+                : messages.done,
+          description: messages.doneDetail?.(r.outcome),
         });
       }
       return null;
@@ -264,6 +274,32 @@ export function IntegrateActionsProvider({
     [perform, repo],
   );
 
+  const cherryPickMany = useCallback(
+    async (oids: string[]) => {
+      if (oids.length === 0) return;
+      if (oids.length === 1) return cherryPick(oids[0]!);
+      const target = currentName(repo);
+      const n = oids.length;
+      const ok = await confirm({
+        title: `Cherry-pick ${n} commits onto ${target}?`,
+        description: `They are applied oldest first, each as a new commit on ${target}. Commits whose changes are already on ${target} are skipped. If one conflicts, the cherry-pick stops so you can resolve it; Continue then picks the rest.`,
+        confirmLabel: `Cherry-pick ${n} commits`,
+      });
+      if (!ok) return;
+      const plural = (k: number) => `${k} ${k === 1 ? "commit" : "commits"}`;
+      void perform("Cherry-picking", (path) => gitService.cherryPickMany(path, oids), {
+        done: (o) => `Cherry-picked ${plural(n - (o.skipped ?? 0))} onto ${target}`,
+        doneDetail: (o) =>
+          o.skipped
+            ? `${plural(o.skipped)} ${o.skipped === 1 ? "was" : "were"} already on ${target} and skipped.`
+            : undefined,
+        upToDate: `The changes of these ${n} commits are already on ${target}`,
+        failed: `Could not cherry-pick ${n} commits`,
+      });
+    },
+    [perform, repo, confirm, cherryPick],
+  );
+
   const revert = useCallback(
     (oid: string) => {
       const short = oid.slice(0, 7);
@@ -319,11 +355,12 @@ export function IntegrateActionsProvider({
       },
       rebase: (onto, label) => void rebase(onto, label),
       cherryPick,
+      cherryPickMany: (oids) => void cherryPickMany(oids),
       revert,
       step: (s) => void step(s),
       interactive: (base, label) => setIrebase({ base, label }),
     }),
-    [rebase, cherryPick, revert, step],
+    [rebase, cherryPick, cherryPickMany, revert, step],
   );
 
   return (

@@ -11,11 +11,12 @@ import {
   LogIn,
   Tag,
   Undo2,
+  X,
 } from "lucide-react";
 import { useContextMenu } from "../../components/ContextMenu";
 import type { MenuEntry } from "../../components/Menu";
 import { useBranchActions } from "../branches/BranchActions";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { EmptyState } from "../../components/EmptyState";
 import { Spinner } from "../../components/Spinner";
 import { Splitter } from "../../components/Splitter";
@@ -27,6 +28,8 @@ import { useTagActions } from "../tags/TagActions";
 import { useIntegrateActions } from "../integrate/IntegrateActions";
 import { useRefDrop } from "../integrate/refDrag";
 import { CommitList, graphColumnWidth, WorkInProgressRow } from "./CommitList";
+import { cherryPickProblem, MultiSelectionPanel } from "./MultiSelectionPanel";
+import { EMPTY_SELECTION, nextSelection, oldestFirst, single, type SelectMode } from "./selection";
 import { useHistory } from "./useHistory";
 import "./HistoryView.css";
 
@@ -40,7 +43,7 @@ export function HistoryView({
   const history = useHistory(repo);
   const branchActions = useBranchActions();
   const showMenu = useContextMenu();
-  const [selectedOid, setSelectedOid] = useState<string | null>(null);
+  const [selection, setSelection] = useState(EMPTY_SELECTION);
   const [openFile, setOpenFile] = useState<{ oid: string; file: CommitFile } | null>(null);
   const [detailsWidth, setDetailsWidth] = usePersistentNumber(
     "branchline.layout.commitDetailsWidth",
@@ -48,18 +51,73 @@ export function HistoryView({
   );
   const { data, loadMore } = history;
 
-  const select = useCallback((oid: string) => {
-    setSelectedOid(oid);
-    setOpenFile(null);
-  }, []);
+  const order = useMemo(() => data?.commits.map((c) => c.oid) ?? [], [data]);
+  const select = useCallback(
+    (oid: string, mode: SelectMode = "replace") => {
+      setSelection((current) =>
+        // Nothing chosen yet: the newest commit is the one shown, so ranges start there.
+        nextSelection(current.focus || !order[0] ? current : single(order[0]), oid, mode, order),
+      );
+      setOpenFile(null);
+    },
+    [order],
+  );
 
-  const selected = selectedOid ?? data?.commits[0]?.oid ?? null;
+  const selected = selection.focus ?? data?.commits[0]?.oid ?? null;
+  // Selected commits still in the list (a refresh can remove some), oldest first.
+  const picked = useMemo(() => {
+    if (!data || selection.oids.size < 2) return [];
+    const byOid = new Map(data.commits.map((c) => [c.oid, c]));
+    return oldestFirst(selection.oids, order).map((o) => byOid.get(o)!);
+  }, [data, order, selection.oids]);
+  const mergeOids = useMemo(
+    () => new Set(data?.commits.filter((_, i) => data.rows[i]?.isMerge).map((c) => c.oid)),
+    [data],
+  );
+  const clearSelection = useCallback(
+    () => setSelection((s) => (s.focus ? single(s.focus) : EMPTY_SELECTION)),
+    [],
+  );
 
   const tagActions = useTagActions();
   const integrate = useIntegrateActions();
   const drop = useRefDrop(repo);
   const current = repo.head.kind === "branch" ? repo.head.name : null;
   const busyOp = repo.operation !== null;
+  const pickProblem = cherryPickProblem({
+    commits: picked,
+    mergeOids,
+    busy: busyOp,
+    unborn: repo.head.kind === "unborn",
+  });
+  const target = current ?? "the detached HEAD";
+  const pickMany = () => {
+    integrate.cherryPickMany(picked.map((c) => c.oid));
+  };
+  const multiMenu = (): MenuEntry[] => [
+    {
+      id: "cherry-pick-many",
+      label: `Cherry-pick ${picked.length} commits onto ${target}…`,
+      description: pickProblem ?? "Oldest first",
+      icon: <Cherry size={16} />,
+      disabled: !!pickProblem,
+      onSelect: pickMany,
+    },
+    { type: "separator", id: "sep-multi" },
+    {
+      id: "copy-many",
+      label: "Copy commit ids",
+      icon: <Copy size={16} />,
+      onSelect: () =>
+        void navigator.clipboard?.writeText(picked.map((c) => c.oid).join("\n")).catch(() => {}),
+    },
+    {
+      id: "clear",
+      label: "Keep only this commit",
+      icon: <X size={16} />,
+      onSelect: clearSelection,
+    },
+  ];
   const commitMenu = (oid: string): MenuEntry[] => {
     const short = oid.slice(0, 7);
     const localBranches = (data?.refsByOid.get(oid) ?? []).filter((r) => r.kind === "branch");
@@ -170,7 +228,9 @@ export function HistoryView({
         data={data}
         head={repo.head}
         selectedOid={selected}
+        selectedOids={selection.oids}
         onSelect={select}
+        onClearSelection={clearSelection}
         onNearEnd={loadMore}
         loadingMore={history.loadingMore}
         rowProps={(oid) =>
@@ -183,7 +243,9 @@ export function HistoryView({
           })
         }
         onContextMenu={(oid, at) =>
-          showMenu(at, commitMenu(oid), `Actions for commit ${oid.slice(0, 7)}`)
+          picked.length > 1 && selection.oids.has(oid)
+            ? showMenu(at, multiMenu(), `Actions for ${picked.length} commits`)
+            : showMenu(at, commitMenu(oid), `Actions for commit ${oid.slice(0, 7)}`)
         }
       />
     );
@@ -239,16 +301,27 @@ export function HistoryView({
             onChange={setDetailsWidth}
           />
           <aside className="bl-history__details" style={{ width: detailsWidth }}>
-            <CommitDetailsPanel
-              key={selected}
-              repoPath={repo.path}
-              oid={selected}
-              refs={data.refsByOid.get(selected)}
-              head={repo.head}
-              selectedFile={openFile?.oid === selected ? openFile.file.path : null}
-              onOpenFile={(file, details) => setOpenFile({ oid: details.oid, file })}
-              onSelectCommit={select}
-            />
+            {picked.length > 1 ? (
+              <MultiSelectionPanel
+                commits={picked}
+                target={target}
+                problem={pickProblem}
+                onCherryPick={pickMany}
+                onSelectCommit={(oid) => select(oid)}
+                onClear={clearSelection}
+              />
+            ) : (
+              <CommitDetailsPanel
+                key={selected}
+                repoPath={repo.path}
+                oid={selected}
+                refs={data.refsByOid.get(selected)}
+                head={repo.head}
+                selectedFile={openFile?.oid === selected ? openFile.file.path : null}
+                onOpenFile={(file, details) => setOpenFile({ oid: details.oid, file })}
+                onSelectCommit={(oid) => select(oid)}
+              />
+            )}
           </aside>
         </>
       )}

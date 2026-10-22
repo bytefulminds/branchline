@@ -68,6 +68,10 @@ reimplementing Git.
 - Interactive rebase ("Rebase interactively from here…" on a commit in History): drag commits
   into a new order (or use `Alt+↑` / `Alt+↓`), and pick, reword, squash, fix up or drop each one.
   Branchline checks the plan before Git runs it.
+- Select several commits in History (`Ctrl`/`⌘`+click to add one, `Shift`+click or
+  `Shift+↑`/`↓` for a range, `Esc` to go back to one) and cherry-pick them in one go. They are
+  applied oldest first; commits already on the branch are skipped, and a conflict stops the
+  sequence until you Continue.
 - Drag a branch (in Branches, or its label in History) onto another branch or a commit to merge
   or rebase; a menu offers what is possible from there.
 - When an operation stops with conflicts, a banner shows what is left (with rebase progress, for
@@ -218,6 +222,8 @@ is still to do.
 - Interactive rebase cannot include merge commits, and cannot stop to edit a commit's content
   (`edit`); it covers reorder, reword, squash, fixup and drop. Reworded commits skip the
   `pre-commit` and `commit-msg` hooks, like Git's own reword skips `pre-commit`.
+- Merge commits cannot be part of a multi-commit cherry-pick; pick them one at a time. At most
+  100 commits are picked at once.
 - Applying a stash restores staged and unstaged changes separately when Git can; when it
   cannot, everything comes back unstaged. A staged rename that Git puts aside during a pull
   returns as a deleted and an added file.

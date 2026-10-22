@@ -354,6 +354,8 @@ export interface IntegrateOutcome {
   conflicts: boolean;
   upToDate: boolean;
   fastForward: boolean;
+  /** Commits left out of a cherry-pick because their changes were already on the branch. */
+  skipped?: number;
 }
 
 export interface IntegrateResult {

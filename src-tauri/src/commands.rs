@@ -429,6 +429,15 @@ pub async fn cherry_pick(repo: String, oid: String) -> Result<IntegrateResult, G
     integrate_then_inspect(repo, move |r| integrate::cherry_pick(r, &oid)).await
 }
 
+/// Cherry-pick several commits, in the order given (oldest first).
+#[tauri::command]
+pub async fn cherry_pick_many(
+    repo: String,
+    oids: Vec<String>,
+) -> Result<IntegrateResult, GitError> {
+    integrate_then_inspect(repo, move |r| integrate::cherry_pick_many(r, &oids)).await
+}
+
 #[tauri::command]
 pub async fn revert_commit(repo: String, oid: String) -> Result<IntegrateResult, GitError> {
     integrate_then_inspect(repo, move |r| integrate::revert(r, &oid)).await

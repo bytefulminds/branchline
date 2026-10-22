@@ -81,6 +81,7 @@ are in the way (`checkoutConflict`); nothing is changed.
 | `merge_into_current(repo, request)` | `IntegrateResult` | Source is a branch or commit; `noFf`, `autostash` |
 | `rebase_current(repo, onto, autostash)` | `IntegrateResult` | Current branch only (not a detached HEAD) |
 | `cherry_pick(repo, oid)` / `revert_commit(repo, oid)` | `IntegrateResult` | Merge commits use their first parent (`-m 1`) |
+| `cherry_pick_many(repo, oids)` | `IntegrateResult` | Order given (oldest first), at most 100, no merge commits; `outcome.skipped` counts commits already on the branch |
 | `operation_step(repo, step)` | `IntegrateResult` | `continue`, `skip` or `abort` the operation in progress |
 | `rebase_plan_commits(repo, base)` | `PlanCommit[]` | Commits after `base` on the current branch, oldest first |
 | `interactive_rebase(repo, base, plan, autostash)` | `IntegrateResult` | Plan: every commit once, oldest first |
@@ -144,6 +145,11 @@ progress (read from `rebase-merge/msgnum` and `end`).
 - A cherry-pick or revert whose changes are already on the branch is skipped and reported as up
   to date, so no empty operation is left behind. Merge commits are picked and reverted relative
   to their first parent.
+- Several commits are cherry-picked with one `git cherry-pick a b c`, which applies them in the
+  order given; the UI sends them oldest first (reverse History order). When Git stops on a
+  commit whose changes are already on the branch, Branchline runs `cherry-pick --skip` and the
+  sequence goes on. A conflict stops it; Continue picks the rest. Merge commits are refused in a
+  multi-pick because `-m 1` would apply to every commit.
 - During a rebase the commit box is disabled: a plain commit in the middle of a rebase would add
   an unrelated commit. Continue finishes the step instead.
 

@@ -72,6 +72,14 @@
   padding: 0 var(--space-3) 0 var(--space-2);
   cursor: pointer;
 }
+.bl-commit-row {
+  -webkit-user-select: none;
+  user-select: none;
+}
+.bl-commit-row--focus {
+  outline: 1px solid var(--color-accent);
+  outline-offset: -1px;
+}
 .bl-commit-row:hover {
   background: var(--color-hover);
 }
@@ -286,6 +294,61 @@
 }
 .bl-commit-details__note {
   margin-top: calc(-1 * var(--space-3));
+}
+.bl-multi__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.bl-multi__actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+.bl-multi__note {
+  margin: 0;
+}
+.bl-multi__list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: pick;
+}
+.bl-multi__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-2);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.bl-multi__item::before {
+  counter-increment: pick;
+  content: counter(pick);
+  flex: none;
+  width: 18px;
+  color: var(--color-text-muted);
+  font-size: var(--text-small-size);
+  text-align: right;
+}
+.bl-multi__item:hover {
+  background: var(--color-hover);
+}
+.bl-multi__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 .bl-section-label {
   color: var(--color-text-muted);

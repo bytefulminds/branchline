@@ -210,6 +210,9 @@ export const gitService = {
   rebaseCurrent: (repo: string, onto: StartPoint, autostash: boolean) =>
     call<IntegrateResult>("rebase_current", { repo, onto, autostash }),
   cherryPick: (repo: string, oid: string) => call<IntegrateResult>("cherry_pick", { repo, oid }),
+  /** Cherry-pick several commits in the order given (oldest first). */
+  cherryPickMany: (repo: string, oids: string[]) =>
+    call<IntegrateResult>("cherry_pick_many", { repo, oids }),
   revertCommit: (repo: string, oid: string) =>
     call<IntegrateResult>("revert_commit", { repo, oid }),
   /** Commits after `base` on the current branch, oldest first. */

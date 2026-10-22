@@ -57,6 +57,7 @@ pub fn run() {
             commands::merge_into_current,
             commands::rebase_current,
             commands::cherry_pick,
+            commands::cherry_pick_many,
             commands::revert_commit,
             commands::operation_step,
             commands::rebase_plan_commits,

@@ -60,7 +60,7 @@ Milestones are only marked complete when the behavior works against real Git and
 - [x] Merge, rebase, cherry-pick and revert, with continue, skip and abort
 - [x] Interactive rebase: reorder by dragging, reword, squash, fixup, drop
 - [x] Drag a branch onto a branch or commit to merge or rebase
-- [ ] Cherry-pick several commits at once
+- [x] Cherry-pick several commits at once
 - [ ] Conflict resolution
 - [ ] Worktrees
 

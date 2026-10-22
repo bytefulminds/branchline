@@ -6,7 +6,7 @@ use std::process::Command;
 
 use branchline_lib::git::branches::StartPoint;
 use branchline_lib::git::integrate::{
-    cherry_pick, merge, rebase, revert, step, MergeRequest, Step,
+    cherry_pick, cherry_pick_many, merge, rebase, revert, step, MergeRequest, Step, MAX_PICK,
 };
 use branchline_lib::git::repository::{inspect, RepoOperation};
 use tempfile::TempDir;
@@ -406,4 +406,120 @@ fn inputs_are_validated() {
         rebase(&s(d), &branch("feature"), false).unwrap_err().kind(),
         "unsupported"
     );
+}
+
+/// Three commits on feature after `feature work`: f1, f2, f3 (oldest first).
+fn three_on_feature(d: &Path) -> Vec<String> {
+    git(d, &["switch", "-q", "feature"]);
+    let ids = (1..=3)
+        .map(|i| commit(d, &format!("f{i}.txt"), "x\n", &format!("f{i}")))
+        .collect();
+    git(d, &["switch", "-q", "main"]);
+    ids
+}
+
+#[test]
+fn several_commits_are_picked_in_the_order_given() {
+    let t = repo();
+    let d = t.path();
+    let ids = three_on_feature(d);
+    // Oldest first, but leave f2 out and pick f3 before f1 to check the order is kept.
+    let out = cherry_pick_many(&s(d), &[ids[2].clone(), ids[0].clone()]).unwrap();
+    assert!(
+        !out.conflicts && !out.up_to_date && out.skipped == 0,
+        "{out:?}"
+    );
+    assert_eq!(git(d, &["log", "-2", "--format=%s"]), "f1\nf3");
+    assert!(!d.join("f2.txt").exists());
+    assert_eq!(operation(d), None);
+}
+
+#[test]
+fn commits_already_on_the_branch_are_skipped() {
+    let t = repo();
+    let d = t.path();
+    let ids = three_on_feature(d);
+    cherry_pick(&s(d), &ids[1]).unwrap();
+    let before = git(d, &["rev-list", "--count", "HEAD"]);
+
+    let out = cherry_pick_many(&s(d), &ids).unwrap();
+    assert_eq!(out.skipped, 1, "{out:?}");
+    assert!(!out.up_to_date);
+    assert_eq!(operation(d), None);
+    assert_eq!(git(d, &["log", "-3", "--format=%s"]), "f3\nf1\nf2");
+    let after: usize = git(d, &["rev-list", "--count", "HEAD"]).parse().unwrap();
+    assert_eq!(after, before.parse::<usize>().unwrap() + 2);
+
+    // Everything is there now: nothing to do, nothing left in progress.
+    let again = cherry_pick_many(&s(d), &ids).unwrap();
+    assert!(again.up_to_date && again.skipped == 3, "{again:?}");
+    assert_eq!(operation(d), None);
+}
+
+#[test]
+fn a_conflict_stops_the_sequence_and_continue_picks_the_rest() {
+    let t = repo();
+    let d = t.path();
+    conflicting(d);
+    git(d, &["switch", "-q", "feature"]);
+    commit(d, "after.txt", "after\n", "after the conflict");
+    git(d, &["switch", "-q", "main"]);
+    let ids: Vec<String> = git(d, &["rev-list", "--reverse", "main..feature"])
+        .lines()
+        .map(String::from)
+        .collect();
+    assert_eq!(ids.len(), 3);
+
+    let out = cherry_pick_many(&s(d), &ids).unwrap();
+    assert!(out.conflicts, "{out:?}");
+    assert_eq!(operation(d), Some(RepoOperation::CherryPick));
+    assert!(
+        d.join("feature.txt").exists(),
+        "the first commit was applied"
+    );
+    assert!(!d.join("after.txt").exists());
+
+    write(d, "a.txt", "one\nBOTH\nthree\n");
+    git(d, &["add", "a.txt"]);
+    step(&s(d), Step::Continue).unwrap();
+    assert_eq!(operation(d), None);
+    assert!(
+        d.join("after.txt").exists(),
+        "the rest was applied after continuing"
+    );
+    assert_eq!(
+        git(d, &["log", "-3", "--format=%s"]),
+        "after the conflict\nfeature edits a\nfeature work"
+    );
+}
+
+#[test]
+fn several_commits_are_validated_before_anything_runs() {
+    let t = repo();
+    let d = t.path();
+    let ids = three_on_feature(d);
+    let head = git(d, &["rev-parse", "HEAD"]);
+    let unsupported = |oids: Vec<String>| {
+        let err = cherry_pick_many(&s(d), &oids).unwrap_err();
+        assert_eq!(err.kind(), "unsupported", "{err:?}");
+        err.to_string()
+    };
+    assert!(unsupported(vec![]).contains("Choose"));
+    assert!(unsupported(vec![ids[0].clone(), ids[0].clone()]).contains("twice"));
+    assert!(unsupported(vec![ids[0].clone(); MAX_PICK + 1]).contains("at most"));
+    for bad in ["--abort", "HEAD", "main"] {
+        assert!(
+            cherry_pick_many(&s(d), &[ids[0].clone(), bad.into()]).is_err(),
+            "{bad}"
+        );
+    }
+
+    // A merge commit among several is refused; nothing is applied.
+    commit(d, "main.txt", "m\n", "main work");
+    git(d, &["merge", "-q", "--no-ff", "--no-edit", "feature"]);
+    let merge_commit = git(d, &["rev-parse", "HEAD"]);
+    git(d, &["switch", "-q", "-c", "other", &head]);
+    assert!(unsupported(vec![ids[0].clone(), merge_commit]).contains("merge commit"));
+    assert!(!d.join("f1.txt").exists());
+    assert_eq!(operation(d), None);
 }
