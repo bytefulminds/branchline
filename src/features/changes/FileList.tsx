@@ -39,7 +39,7 @@ export const ROW_HEIGHT = 28;
 
 type Row =
   | { type: "header"; area: ChangeArea; count: number }
-  | { type: "entry"; entry: ChangeEntry; index: number };
+  | { type: "entry"; entry: ChangeEntry; index: number; area: ChangeArea };
 
 /** The action Space/Enter performs for an entry. */
 export function primaryAction(entry: ChangeEntry): FileAction {
@@ -52,6 +52,40 @@ const ACTION_LABEL: Record<FileAction, string> = {
   discard: "Discard changes",
 };
 
+/**
+ * Mouse shortcuts on a row. They are not buttons: interactive elements inside a list option
+ * cannot be used reliably with screen readers. Keyboard and screen reader users stage with
+ * Space or Enter and discard with Delete (or use the command palette).
+ */
+function RowAction({
+  label,
+  danger,
+  disabled,
+  onClick,
+  children,
+}: {
+  label: string;
+  danger?: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <span
+      className={`bl-row-action${danger ? " bl-row-action--danger" : ""}`}
+      data-disabled={disabled || undefined}
+      data-tooltip={label}
+      data-tooltip-align="end"
+      onClick={(e) => {
+        e.stopPropagation();
+        if (!disabled) onClick();
+      }}
+    >
+      {children}
+    </span>
+  );
+}
+
 function RowActions({
   entry,
   busy,
@@ -63,74 +97,47 @@ function RowActions({
   onAction: FileListProps["onAction"];
   onOpenMerge?: FileListProps["onOpenMerge"];
 }) {
-  const act = (action: FileAction) => (e: React.MouseEvent) => {
-    e.stopPropagation();
-    onAction(action, [entry]);
-  };
-  // Buttons are mouse affordances; keyboard users use Space, Enter and Delete on the list.
   if (entry.area === "conflicted") {
     return (
-      <span className="bl-file-row__actions">
+      <span className="bl-file-row__actions" aria-hidden="true">
         {onOpenMerge && (
-          <button
-            type="button"
-            tabIndex={-1}
+          <RowAction
+            label="Resolve in merge editor"
             disabled={busy}
-            className="bl-row-action"
-            aria-label={`Resolve ${entry.path} in the merge editor`}
-            data-tooltip="Resolve in merge editor"
-            data-tooltip-align="end"
-            onClick={(e) => {
-              e.stopPropagation();
-              onOpenMerge(entry);
-            }}
+            onClick={() => onOpenMerge(entry)}
           >
             <GitMerge size={14} aria-hidden />
-          </button>
+          </RowAction>
         )}
-        <button
-          type="button"
-          tabIndex={-1}
+        <RowAction
+          label="Mark as resolved"
           disabled={busy}
-          className="bl-row-action"
-          aria-label={`Mark ${entry.path} as resolved`}
-          data-tooltip="Mark as resolved"
-          data-tooltip-align="end"
-          onClick={act("stage")}
+          onClick={() => onAction("stage", [entry])}
         >
           <Check size={14} aria-hidden />
-        </button>
+        </RowAction>
       </span>
     );
   }
   return (
-    <span className="bl-file-row__actions">
+    <span className="bl-file-row__actions" aria-hidden="true">
       {entry.area === "unstaged" && (
-        <button
-          type="button"
-          tabIndex={-1}
+        <RowAction
+          label="Discard changes"
+          danger
           disabled={busy}
-          className="bl-row-action bl-row-action--danger"
-          aria-label={`Discard changes to ${entry.path}`}
-          data-tooltip="Discard changes"
-          data-tooltip-align="end"
-          onClick={act("discard")}
+          onClick={() => onAction("discard", [entry])}
         >
           <Undo2 size={14} aria-hidden />
-        </button>
+        </RowAction>
       )}
-      <button
-        type="button"
-        tabIndex={-1}
+      <RowAction
+        label={ACTION_LABEL[primaryAction(entry)]}
         disabled={busy}
-        className="bl-row-action"
-        aria-label={`${ACTION_LABEL[primaryAction(entry)]} ${entry.path}`}
-        data-tooltip={ACTION_LABEL[primaryAction(entry)]}
-        data-tooltip-align="end"
-        onClick={act(primaryAction(entry))}
+        onClick={() => onAction(primaryAction(entry), [entry])}
       >
         {entry.area === "staged" ? <Minus size={14} aria-hidden /> : <Plus size={14} aria-hidden />}
-      </button>
+      </RowAction>
     </span>
   );
 }
@@ -166,7 +173,7 @@ export function FileList({
       rows.push({ type: "header", area, count: list.length });
       if (collapsed[area]) continue;
       for (const entry of list) {
-        rows.push({ type: "entry", entry, index: entries.length });
+        rows.push({ type: "entry", entry, index: entries.length, area });
         entries.push(entry);
       }
     }
@@ -225,74 +232,97 @@ export function FileList({
       onScroll={virtual.onScroll}
     >
       <div className="bl-file-list__canvas" style={{ height: virtual.totalHeight }}>
-        {visibleRows.map((row, i) => {
-          const top = (virtual.start + i) * ROW_HEIGHT;
-          if (row.type === "header") {
-            const isCollapsed = collapsed[row.area];
-            const all = groups[row.area];
-            return (
-              <div
-                key={`h-${row.area}`}
-                role="presentation"
-                className={`bl-file-group bl-file-group--${row.area}`}
-                style={{ transform: `translateY(${top}px)` }}
-              >
-                <button
-                  type="button"
-                  className="bl-file-group__toggle"
-                  aria-expanded={!isCollapsed}
-                  tabIndex={-1}
-                  onClick={() => setCollapsed((c) => ({ ...c, [row.area]: !c[row.area] }))}
-                >
-                  {isCollapsed ? (
-                    <ChevronRight size={14} aria-hidden />
-                  ) : (
-                    <ChevronDown size={14} aria-hidden />
-                  )}
-                  <span className="bl-file-group__label">{AREA_LABEL[row.area]}</span>
-                </button>
-                <Count value={row.count} tone={row.area === "conflicted" ? "error" : "neutral"} />
-                {row.area !== "conflicted" && (
-                  <button
-                    type="button"
-                    tabIndex={-1}
-                    disabled={busy}
-                    className="bl-file-group__action"
-                    onClick={() => onAction(row.area === "staged" ? "unstage" : "stage", all)}
-                  >
-                    {row.area === "staged" ? "Unstage all" : "Stage all"}
-                  </button>
-                )}
-              </div>
-            );
-          }
-          const { entry, index } = row;
-          const { name, dir } = splitPath(entry.path);
-          const selected = entry.id === selectedId;
-          return (
-            <div
-              key={entry.id}
-              id={optionId(index)}
-              role="option"
-              aria-selected={selected}
-              aria-setsize={entries.length}
-              aria-posinset={index + 1}
-              className="bl-file-row"
-              style={{ transform: `translateY(${top}px)` }}
-              title={entry.originalPath ? `${entry.originalPath} → ${entry.path}` : entry.path}
-              onClick={() => onSelect(entry)}
-            >
-              <StatusLetter status={entry.status} />
-              {entry.isSubmodule && (
-                <FolderGit2 size={14} aria-label="Submodule" className="bl-file-row__sub" />
-              )}
-              <span className="bl-file-row__name truncate">{name}</span>
-              {dir && <span className="bl-file-row__dir truncate">{dir}</span>}
-              <RowActions entry={entry} busy={busy} onAction={onAction} onOpenMerge={onOpenMerge} />
-            </div>
-          );
-        })}
+        {groupByArea(visibleRows, virtual.start).map((group) => (
+          // Options are grouped per area so screen readers announce "Staged changes" and so on.
+          <div
+            key={group.area}
+            role="group"
+            aria-label={`${AREA_LABEL[group.area]} (${groups[group.area].length})`}
+            className="bl-file-list__group"
+          >
+            {group.rows.map(({ row, position }) => renderRow(row, position))}
+          </div>
+        ))}
       </div>
     </div>
   );
+
+  function renderRow(row: Row, position: number) {
+    const top = position * ROW_HEIGHT;
+    if (row.type === "header") {
+      const isCollapsed = collapsed[row.area];
+      const all = groups[row.area];
+      return (
+        <div
+          key={`h-${row.area}`}
+          aria-hidden="true"
+          className={`bl-file-group bl-file-group--${row.area}`}
+          style={{ transform: `translateY(${top}px)` }}
+        >
+          <button
+            type="button"
+            className="bl-file-group__toggle"
+            aria-expanded={!isCollapsed}
+            tabIndex={-1}
+            onClick={() => setCollapsed((c) => ({ ...c, [row.area]: !c[row.area] }))}
+          >
+            {isCollapsed ? (
+              <ChevronRight size={14} aria-hidden />
+            ) : (
+              <ChevronDown size={14} aria-hidden />
+            )}
+            <span className="bl-file-group__label">{AREA_LABEL[row.area]}</span>
+          </button>
+          <Count value={row.count} tone={row.area === "conflicted" ? "error" : "neutral"} />
+          {row.area !== "conflicted" && (
+            <button
+              type="button"
+              tabIndex={-1}
+              disabled={busy}
+              className="bl-file-group__action"
+              onClick={() => onAction(row.area === "staged" ? "unstage" : "stage", all)}
+            >
+              {row.area === "staged" ? "Unstage all" : "Stage all"}
+            </button>
+          )}
+        </div>
+      );
+    }
+    const { entry, index } = row;
+    const { name, dir } = splitPath(entry.path);
+    const selected = entry.id === selectedId;
+    return (
+      <div
+        key={entry.id}
+        id={optionId(index)}
+        role="option"
+        aria-selected={selected}
+        aria-setsize={entries.length}
+        aria-posinset={index + 1}
+        className="bl-file-row"
+        style={{ transform: `translateY(${top}px)` }}
+        title={entry.originalPath ? `${entry.originalPath} → ${entry.path}` : entry.path}
+        onClick={() => onSelect(entry)}
+      >
+        <StatusLetter status={entry.status} />
+        {entry.isSubmodule && (
+          <FolderGit2 size={14} aria-label="Submodule" className="bl-file-row__sub" />
+        )}
+        <span className="bl-file-row__name truncate">{name}</span>
+        {dir && <span className="bl-file-row__dir truncate">{dir}</span>}
+        <RowActions entry={entry} busy={busy} onAction={onAction} onOpenMerge={onOpenMerge} />
+      </div>
+    );
+  }
+}
+
+/** Consecutive visible rows of the same area, with their absolute row positions. */
+function groupByArea(rows: Row[], start: number) {
+  const groups: { area: ChangeArea; rows: { row: Row; position: number }[] }[] = [];
+  rows.forEach((row, i) => {
+    const last = groups[groups.length - 1];
+    if (last?.area === row.area) last.rows.push({ row, position: start + i });
+    else groups.push({ area: row.area, rows: [{ row, position: start + i }] });
+  });
+  return groups;
 }

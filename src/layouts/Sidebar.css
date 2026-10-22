@@ -1,3 +1,8 @@
+.bl-sidebar-frame {
+  display: flex;
+  flex: none;
+  min-height: 0;
+}
 .bl-sidebar {
   display: flex;
   flex-direction: column;

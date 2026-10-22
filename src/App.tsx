@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ConfirmProvider } from "./components/ConfirmDialog";
 import { ToastProvider, useToast } from "./components/Toast";
 import { ChangesView } from "./features/changes/ChangesView";
@@ -28,6 +28,11 @@ import { WorktreeActionsProvider } from "./features/worktrees/WorktreeActions";
 import { WorktreesView } from "./features/worktrees/WorktreesView";
 import { ContextMenuProvider } from "./components/ContextMenu";
 import { AppShell } from "./layouts/AppShell";
+import { AppCommandPalette, type AppCommandHandlers } from "./features/commands/AppCommands";
+import { ShortcutsDialog } from "./features/commands/ShortcutsDialog";
+import { AboutDialog } from "./features/updates/AboutDialog";
+import { useUpdates } from "./features/updates/useUpdates";
+import { markFirstFrame, runMeasurement } from "./features/measure/measure";
 import type { WorkspaceView } from "./layouts/Sidebar";
 import { pickRepositoryFolder } from "./services/dialog";
 import { gitService } from "./services/git";
@@ -56,6 +61,7 @@ function Workspace() {
     refreshOnFocus: settings.general.refreshOnFocus,
   });
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [overlay, setOverlay] = useState<"palette" | "shortcuts" | "about" | null>(null);
   const [gitVersion, setGitVersion] = useState<GitVersion | GitError | null>(null);
   const [view, setView] = useState<WorkspaceView>("changes");
   const [creating, setCreating] = useState<"clone" | "init" | null>(null);
@@ -97,7 +103,24 @@ function Workspace() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
-      if (isPrimaryModifier(e) && !e.shiftKey && !e.altKey && key === "o") {
+      const target = e.target as HTMLElement | null;
+      const typing =
+        !!target &&
+        (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
+      if (
+        isPrimaryModifier(e) &&
+        !e.altKey &&
+        ((key === "k" && !e.shiftKey) || (key === "p" && e.shiftKey))
+      ) {
+        e.preventDefault();
+        setOverlay((o) => (o === "palette" ? null : "palette"));
+      } else if (
+        (isPrimaryModifier(e) && !e.altKey && e.key === "/") ||
+        (e.key === "?" && !typing)
+      ) {
+        e.preventDefault();
+        setOverlay("shortcuts");
+      } else if (isPrimaryModifier(e) && !e.shiftKey && !e.altKey && key === "o") {
         e.preventDefault();
         void openPicker();
       } else if (isPrimaryModifier(e) && !e.shiftKey && !e.altKey && key in VIEW_KEYS) {
@@ -115,6 +138,41 @@ function Workspace() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [openPicker, refresh]);
+
+  const updates = useUpdates();
+
+  // `--measure-startup=<file>`: time the first frame and a few interactions, then quit.
+  const firstFrame = useRef<Promise<number | null> | null>(null);
+  firstFrame.current ??= markFirstFrame();
+  const measured = useRef(false);
+  useEffect(() => {
+    if (state.status !== "ready" || measured.current) return;
+    measured.current = true;
+    void firstFrame.current?.then((ms) => {
+      if (ms === null) return;
+      void runMeasurement(
+        {
+          setView,
+          openPalette: () => setOverlay("palette"),
+          closePalette: () => setOverlay(null),
+        },
+        ms,
+      );
+    });
+  }, [state.status]);
+  const commandHandlers = useMemo<AppCommandHandlers>(
+    () => ({
+      onView: setView,
+      onOpen: () => void openPicker(),
+      onClone: () => setCreating("clone"),
+      onCreate: () => setCreating("init"),
+      onSettings: () => setSettingsOpen(true),
+      onShortcuts: () => setOverlay("shortcuts"),
+      onAbout: () => setOverlay("about"),
+      onCheckForUpdates: () => void updates.check({ quiet: false }),
+    }),
+    [openPicker, updates],
+  );
 
   // New clones and repositories go next to the most recent one by default.
   const defaultParent = controller.recent[0] ? parentOf(controller.recent[0].path) : "";
@@ -213,6 +271,7 @@ function Workspace() {
                   onClone={() => setCreating("clone")}
                   onCreate={() => setCreating("init")}
                   onSettings={() => setSettingsOpen(true)}
+                  onCommands={() => setOverlay("palette")}
                   view={view}
                   onView={setView}
                 >
@@ -229,6 +288,20 @@ function Workspace() {
                     {content}
                   </FileHistoryProvider>
                 </AppShell>
+                {overlay === "palette" && (
+                  <AppCommandPalette
+                    controller={controller}
+                    handlers={commandHandlers}
+                    onClose={() => setOverlay(null)}
+                  />
+                )}
+                {overlay === "shortcuts" && <ShortcutsDialog onClose={() => setOverlay(null)} />}
+                {overlay === "about" && (
+                  <AboutDialog
+                    onClose={() => setOverlay(null)}
+                    onCheckForUpdates={() => void updates.check({ quiet: false })}
+                  />
+                )}
                 {settingsOpen && (
                   <SettingsView
                     repoPath={state.status === "ready" ? state.repo.path : null}

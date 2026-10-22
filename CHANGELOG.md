@@ -1,0 +1,56 @@
+# Changelog
+
+All notable changes to Branchline. The format follows
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow
+[Semantic Versioning](https://semver.org/). The section of a version is also its release
+description on GitLab.
+
+## [Unreleased]
+
+## [0.1.0] - 2026-10-22
+
+The first public release: a fast, local-first Git client for macOS, Windows and Linux that
+drives the Git you already have installed.
+
+### Working tree and commits
+
+- Changed files grouped into conflicts, unstaged and staged, with a filter and keyboard
+  control. Stage, unstage and discard whole files, single hunks or selected lines.
+- Diffs in one column or side by side, with syntax highlighting for about 40 languages.
+- Commit and amend, with a resizable message box and optional message suggestions from your
+  own Ollama server (nothing leaves your network).
+- A three-pane merge editor for conflicts.
+
+### History and branches
+
+- History of all branches, remote branches and tags with a commit graph, page by page on very
+  large repositories.
+- Search commits by message, author or id, and filter by author, file or folder, dates and the
+  current branch. "Show file history" from any diff.
+- Branches, tags, stashes and worktrees: create, switch, rename, delete, apply and lock.
+- Merge, rebase, interactive rebase, cherry-pick (one or many) and revert, with an operation
+  banner to continue, skip or abort.
+
+### Remotes
+
+- Fetch, pull (fast-forward, merge or rebase) and push with live progress and Cancel. Force
+  push only with lease, after a confirmation.
+- Clone and create repositories; add, edit and remove remotes.
+
+### Everywhere
+
+- Command palette (`Ctrl+K` / `⌘K`) with every action, and a keyboard shortcut overview
+  (`Ctrl+/` / `⌘/`).
+- Settings for Git behavior, identity and commit signing, editor and diff, confirmations and
+  AI suggestions.
+- Accessibility review: automated checks on every screen, full keyboard control, screen
+  reader labels and contrast of at least 4.5:1.
+- Updates: Branchline checks for new releases and installs them after asking.
+
+### Known limitations
+
+- The macOS and Windows builds are not signed yet. See the installation notes in the README.
+- See "Known limitations" in the README for the rest.
+
+[Unreleased]: https://gitlab.com/bytefulminds/branchline/-/compare/v0.1.0...main
+[0.1.0]: https://gitlab.com/bytefulminds/branchline/-/releases/v0.1.0

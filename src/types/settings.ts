@@ -10,6 +10,7 @@ export interface Settings {
     refreshOnFocus: boolean;
     /** 0 is off. */
     autoFetchMinutes: number;
+    checkForUpdates: boolean;
   };
   git: {
     defaultPullMode: PullMode;
@@ -43,7 +44,12 @@ export interface Settings {
 }
 
 export const DEFAULT_SETTINGS: Settings = {
-  general: { openLastRepository: false, refreshOnFocus: true, autoFetchMinutes: 0 },
+  general: {
+    openLastRepository: false,
+    refreshOnFocus: true,
+    autoFetchMinutes: 0,
+    checkForUpdates: true,
+  },
   git: { defaultPullMode: "fastForward", pruneOnFetch: true, pushFollowTags: false },
   editor: {
     externalEditor: "",

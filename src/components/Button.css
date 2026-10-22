@@ -133,15 +133,16 @@
   color: var(--color-text-secondary);
   cursor: pointer;
 }
-.bl-row-action:hover:not(:disabled) {
+.bl-row-action:hover:not(:disabled, [data-disabled]) {
   background: var(--color-accent-subtle-strong);
   color: var(--color-accent);
 }
-.bl-row-action--danger:hover:not(:disabled) {
+.bl-row-action--danger:hover:not(:disabled, [data-disabled]) {
   background: var(--color-error-subtle);
   color: var(--color-error-text);
 }
-.bl-row-action:disabled {
+.bl-row-action:disabled,
+.bl-row-action[data-disabled] {
   opacity: 0.4;
   cursor: not-allowed;
 }

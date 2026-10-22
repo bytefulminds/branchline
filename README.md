@@ -9,10 +9,32 @@ Branchline is a fast, local-first, open-source Git desktop client for Windows, m
 It is built with Tauri 2, React, TypeScript and Rust, and drives the native Git CLI instead of
 reimplementing Git.
 
-> **Status:** early development. Milestones 0 to 5 are complete and Milestone 6 is in progress:
-> Branchline opens a local repository, stages files, hunks and lines, creates and amends commits,
-> shows the full history with a commit graph, manages branches, fetches, pulls and pushes, and
-> manages stashes and tags, and merges, rebases, cherry-picks and reverts. See [ROADMAP.md](ROADMAP.md).
+> **Status:** first release, 0.1.0. Branchline covers the daily Git work: staging (down to
+> single lines), commits, history with a graph and search, branches, remotes, stashes, tags,
+> worktrees, merge, rebase (also interactive), cherry-pick, revert and a merge editor. See
+> [CHANGELOG.md](CHANGELOG.md) and [ROADMAP.md](ROADMAP.md).
+
+## Install
+
+Download the installer for your system from the
+[releases page](https://gitlab.com/bytefulminds/branchline/-/releases). Branchline needs
+[Git](https://git-scm.com/downloads) 2.20 or newer. It checks for updates after starting and
+installs them when you agree (Settings > General to turn that off).
+
+| System | File | Notes |
+|---|---|---|
+| macOS 11 or newer (Apple silicon and Intel) | `.dmg` | Drag Branchline to Applications |
+| Windows 10 and 11 | `-setup.exe` (or `.msi`) | |
+| Linux | `.AppImage`, `.deb` or `.rpm` | AppImage: make it executable (`chmod +x`) and run it. Updates install for the AppImage only |
+
+The 0.1.0 installers are not signed with Apple or Microsoft certificates yet, so the system
+asks before the first launch:
+
+- **macOS:** open Branchline once, choose Done, then go to System Settings > Privacy &
+  Security and choose "Open Anyway" next to the Branchline message.
+- **Windows:** in the "Windows protected your PC" window choose "More info", then "Run anyway".
+
+Updates are signed with Branchline's own update key, so only genuine releases are installed.
 
 ## What works today
 
@@ -130,10 +152,18 @@ reimplementing Git.
 - Commit message suggestions: with AI commit messages on, "Suggest message" in the commit box
   writes a summary and description for the staged changes with your Ollama model. The text
   streams in, Esc or Stop cancels it, and a message you had typed can be restored with Undo.
+- Command palette (`Ctrl+K` / `⌘K`, or the button in the title bar): every action, view,
+  branch and recent repository by typing a few letters. `Ctrl+/` / `⌘/` or `?` shows every
+  keyboard shortcut.
+- Works with the keyboard and screen readers: lists, diffs (arrow keys and `Space` select
+  lines), dialogs and panels. See [docs/accessibility.md](docs/accessibility.md).
+- About Branchline (version, links) and update checks, from the command palette.
 - `Ctrl+1` / `⌘1` Changes, `Ctrl+2` / `⌘2` History, `Ctrl+3` / `⌘3` Branches, `Ctrl+4` / `⌘4`
   Stashes, `Ctrl+5` / `⌘5` Tags, `Ctrl+6` / `⌘6` Worktrees, `Ctrl+7` / `⌘7` Remotes.
 
-## Prerequisites
+## Building from source
+
+### Prerequisites
 
 | | |
 |---|---|
@@ -151,7 +181,7 @@ Platform requirements for Tauri 2 (full details: <https://v2.tauri.app/start/pre
     libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
   ```
 
-## Getting started
+### Getting started
 
 ```sh
 npm install
@@ -162,7 +192,7 @@ npx tauri dev -- -- /path/to/repo     # open a repository on launch
 `npm run dev` starts only the web frontend in a browser. It renders, but Git features need the
 desktop shell and will say so.
 
-## Scripts
+### Scripts
 
 | Command | What it does |
 |---|---|
@@ -174,11 +204,14 @@ desktop shell and will say so.
 | `npm run lint` / `npm run format` | ESLint / Prettier |
 | `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets` | Rust lints |
 | `cargo run --release --manifest-path src-tauri/Cargo.toml --example inspect -- <repo> [runs]` | Time repository inspection |
+| `node scripts/measure-startup.mjs <binary> <repo>` | Time startup and interactions of a built app ([docs/performance.md](docs/performance.md)) |
+| `node scripts/release/bump-version.mjs <version>` | Set the version everywhere before a release ([docs/releasing.md](docs/releasing.md)) |
 
 ## Project structure
 
 ```
-docs/                    Design system notes and architecture
+docs/                    Architecture, design system, accessibility, performance, releasing
+scripts/                 Startup measurement and release scripts
 public/                  Static assets (logo mark)
 src/                     React + TypeScript frontend
   components/            Shared UI components (Button, Menu, Badge, Toast, Splitter, ...)
@@ -193,6 +226,9 @@ src/                     React + TypeScript frontend
   features/conflicts/    Merge editor (three panes) and its model
   features/worktrees/    Worktrees view, new worktree dialog and actions
   features/settings/     Settings screen and provider
+  features/commands/     Command palette, keyboard shortcut map
+  features/updates/      Update checks and the About dialog
+  features/measure/      Startup and interaction timing (--measure-startup)
   layouts/               Window shell: title bar, sidebar, status bar, window controls
   services/              IPC wrappers, dialog, platform, local preferences
   styles/                Design tokens and base styles
@@ -213,6 +249,7 @@ src-tauri/               Rust backend
   src/settings.rs        Settings file (JSON in the app's configuration folder)
   src/open.rs            Open in editor or terminal, show in the file manager
   src/ai.rs              Commit message suggestions from an Ollama server
+  src/measure.rs         Startup timing report
   src/commands.rs        Tauri IPC commands (async, off the UI thread)
   src/error.rs           Error model shared with the frontend
   tests/                 Integration tests against real temporary repositories
@@ -245,38 +282,18 @@ See [docs/architecture.md](docs/architecture.md) for how the layers fit together
   changed files, the branch name and recent commit subjects. Unstaged files are never sent.
   The address may not contain credentials, redirects are not followed, and system proxies
   are skipped for `localhost`. Settings warn when the server is not on this computer.
-- The webview has a strict CSP and only the Tauri permissions it needs (window controls and the
-  folder picker).
+- The webview has a strict CSP and only the Tauri permissions it needs (window controls, the
+  folder picker, the app version, installing updates and restarting). Web links open in the
+  browser only for Branchline's own GitLab pages and ollama.com.
+- Updates are only installed when their signature matches the update key built into
+  Branchline, and only after you agree.
 
 ## Performance
 
-Measured, not assumed. Inspection runs `rev-parse` twice, `status` once and `show` once.
-
-| Repository | Changed paths | Median inspect time |
-|---|---|---|
-| Small demo repository | 5 | 22 ms |
-| git/git (82k commits, 4.9k files) | 500 | 33 ms |
-| Synthetic, 12,000 untracked files | 12,000 (10,000 returned) | 34 ms |
-
-Release build, Linux x86_64 container, warm file cache, 10 runs each
-(`examples/inspect.rs`).
-
-History on git/git (85,000 commits, 1,021 refs), `examples/history.rs`:
-
-| | First page (300 commits) | Every later page, at any depth |
-|---|---|---|
-| Without a commit-graph file (fresh clone) | 1.03 s | about 30 ms |
-| With a commit-graph file (`git commit-graph write --reachable`) | 0.30 s | about 33 ms |
-
-The first page includes one walk over the whole history to get the correct order (children
-before parents), which Git can only do quickly with a commit-graph file. Git writes that file
-during `git gc` and `git maintenance`; Branchline does not write it for you. Numbers on your machine will differ; macOS and Windows have not been
-measured yet.
-
-Startup (release build, same container, Xvfb with software rendering and no GPU): the window maps
-within 50 ms and the first UI frame is painted after about 1.1 s (5 runs, 1.06 to 1.12 s,
-measured by polling screenshots). This is a pessimistic environment; a native desktop measurement
-is still to do.
+On a modest Linux machine with software rendering, Branchline shows a repository about a
+second after starting, switches views in tens of milliseconds and opens History on git/git
+(82,000 commits) in about half a second. Long lists are virtualized and history loads page
+by page. Method and all numbers per platform: [docs/performance.md](docs/performance.md).
 
 ## Known limitations
 

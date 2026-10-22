@@ -9,6 +9,7 @@ pub mod ai;
 pub mod commands;
 pub mod error;
 pub mod git;
+pub mod measure;
 pub mod open;
 pub mod settings;
 pub mod watcher;
@@ -18,18 +19,26 @@ pub mod window;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_opener::init())
         .manage(watcher::WatcherState::default())
         .setup(|app| {
             use tauri::Manager;
             if let Ok(dir) = app.path().app_config_dir() {
                 settings::init(dir.join("settings.json"));
             }
-            Ok(window::create_main(app)?)
+            window::create_main(app)?;
+            measure::mark_window_created();
+            Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             commands::git_version,
             commands::inspect_repository,
             commands::launch_repository_path,
+            commands::measure_mode,
+            commands::measure_elapsed,
+            commands::finish_measurement,
             commands::file_diff,
             commands::stage_files,
             commands::unstage_files,

@@ -89,6 +89,7 @@ are in the way (`checkoutConflict`); nothing is changed.
 | `get_settings()` / `save_settings(value)` | `Settings` | Saved values come back clamped |
 | `get_identity(repo?)` / `set_identity(scope, repo?, values)` | `Identity` / `()` | `scope`: `global` or `repository` |
 | `open_in_editor(repo, path?)` / `open_terminal(repo)` / `reveal_in_file_manager(repo, path?)` | `()` | Uses the editor and terminal from the settings |
+| `measure_mode()` / `measure_elapsed()` / `finish_measurement(report)` | `boolean` / `number` / `()` | Startup timing with `--measure-startup=<file>` (docs/performance.md); finishing writes the report and quits |
 | `ai_server_info(url)` | `AiServerInfo` | Ollama version and chat models (embedding models left out) |
 | `suggest_commit_message(repo, opId, onText)` | `string` | Uses the AI settings; streams the cleaned text so far; `cancel_remote_operation(opId)` stops it |
 | `list_worktrees(repo)` | `WorktreeInfo[]` | Branch or detached HEAD, locked, missing, main/open flags, number of changed files |
@@ -226,6 +227,21 @@ progress (read from `rebase-merge/msgnum` and `end`).
 - Addresses: `http` or `https`, host and port only (no credentials, path or query).
   Redirects are not followed; proxies from the environment are skipped for loopback hosts.
 - Nothing is contacted while the feature is off, except when the user clicks Test.
+
+## Updates, links and the command palette
+
+- Updates use the Tauri updater plugin. `latest.json` is published with every release
+  (docs/releasing.md); the app reads it from the latest GitLab release, checks the minisign
+  signature against the public key in `tauri.conf.json`, and installs only after the user
+  agrees, then restarts through the process plugin. The automatic check runs once, 8 seconds
+  after start, in release builds only, and can be turned off.
+- Web links go through the opener plugin, whose permission only allows Branchline's GitLab
+  pages and ollama.com.
+- The command palette (`features/commands`) builds its list from the same action providers
+  the views use (branches, remotes, stashes, tags, worktrees, integrate), so a command and
+  its button always behave the same. Matching is a small fuzzy subsequence match that
+  prefers word starts. `shortcuts.ts` is the single list of shortcuts shown in the palette
+  and the overview.
 
 ## Remotes, clone and init
 

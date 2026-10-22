@@ -22,6 +22,7 @@ import { StatusLetter } from "../../components/StatusLetter";
 import { splitPath } from "../../lib/format";
 import { useElementSize, useVirtualRows } from "../../lib/useVirtualRows";
 import { gitService } from "../../services/git";
+import { isPrimaryModifier } from "../../services/platform";
 import type { FileDiff, GitError, HunkSelection, LineAction } from "../../types/git";
 import { STATUS_META, type ChangeEntry } from "./changeModel";
 import {
@@ -51,6 +52,8 @@ export function diffRowHeight(fontSize: number): number {
 }
 export { formatBytes };
 const EMPTY: LineSelection = new Map();
+
+type LinePos = { hunk: number; line: number };
 
 export interface DiffViewProps {
   repoPath: string;
@@ -96,7 +99,9 @@ export function DiffView({
   const [error, setError] = useState<GitError | null>(null);
   const [force, setForce] = useState(false);
   const [selection, setSelection] = useState<LineSelection>(EMPTY);
-  const anchor = useRef<{ hunk: number; line: number } | null>(null);
+  const anchor = useRef<LinePos | null>(null);
+  // The line the keyboard is on (arrow keys), shown with an outline and read out.
+  const [cursor, setCursor] = useState<LinePos | null>(null);
   const requestId = useRef(0);
   // The view is keyed per file by its parent, so only refreshes and `force` reload here.
   const requestKey = `${repoPath}|${revision}|${force}`;
@@ -111,7 +116,10 @@ export function DiffView({
         if (id !== requestId.current) return;
         setDiff((prev) => {
           // A changed diff invalidates selected line indices.
-          if (prev?.fingerprint !== d.fingerprint) setSelection(EMPTY);
+          if (prev?.fingerprint !== d.fingerprint) {
+            setSelection(EMPTY);
+            setCursor(null);
+          }
           return d;
         });
         setError(null);
@@ -130,6 +138,61 @@ export function DiffView({
   const { name, dir } = splitPath(entry.path);
   const count = selectionCount(selection);
   const partial = !!diff?.supportsPartial && !busy;
+
+  const changeLines = useMemo(() => {
+    const out: LinePos[] = [];
+    diff?.hunks.forEach((h, hunk) =>
+      h.lines.forEach((l, line) => l.kind !== "context" && out.push({ hunk, line })),
+    );
+    return out;
+  }, [diff]);
+
+  /** Arrow keys move between changed lines, Space selects, Shift extends. */
+  const onDiffKey = (e: React.KeyboardEvent): boolean => {
+    if (!diff || !partial || changeLines.length === 0) return false;
+    const at = cursor
+      ? changeLines.findIndex((c) => c.hunk === cursor.hunk && c.line === cursor.line)
+      : -1;
+    if ((e.key === "ArrowDown" || e.key === "ArrowUp") && !e.altKey && !isPrimaryModifier(e)) {
+      const next =
+        changeLines[
+          e.key === "ArrowDown"
+            ? Math.min(changeLines.length - 1, at + 1)
+            : Math.max(0, at < 0 ? 0 : at - 1)
+        ]!;
+      e.preventDefault();
+      if (e.shiftKey) {
+        const from = anchor.current?.hunk === next.hunk ? anchor.current : (cursor ?? next);
+        if (from.hunk === next.hunk) {
+          anchor.current = from;
+          setSelection((s) => selectRange(diff, s, next.hunk, from.line, next.line));
+        }
+      }
+      setCursor(next);
+      return true;
+    }
+    if (e.key === " " && cursor) {
+      e.preventDefault();
+      if (e.shiftKey && anchor.current?.hunk === cursor.hunk) {
+        const from = anchor.current;
+        setSelection((s) => selectRange(diff, s, cursor.hunk, from.line, cursor.line));
+      } else {
+        setSelection((s) => toggleLine(s, cursor.hunk, cursor.line));
+        anchor.current = cursor;
+      }
+      return true;
+    }
+    return false;
+  };
+  const cursorLine = cursor ? diff?.hunks[cursor.hunk]?.lines[cursor.line] : undefined;
+  const cursorText =
+    cursor && cursorLine
+      ? `${cursorLine.kind === "add" ? "Added" : "Removed"} line ${
+          cursorLine.newLine ?? cursorLine.oldLine
+        }: ${cursorLine.content.trim() || "empty line"}${
+          selection.get(cursor.hunk)?.has(cursor.line) ? ", selected" : ", not selected"
+        }`
+      : "";
 
   const lineAction = async (action: LineAction, selections: HunkSelection[]) => {
     if (!diff) return;
@@ -330,7 +393,15 @@ export function DiffView({
         onHunkAction={(action, hunk) => void lineAction(action, [{ hunk, lines: null }])}
         onShowLarge={() => setForce(true)}
         onClearSelection={() => setSelection(EMPTY)}
+        cursor={cursor}
+        onKey={onDiffKey}
       />
+      <p className="visually-hidden" aria-live="polite">
+        {cursorText}
+      </p>
+      <p id="bl-diff-keyboard-hint" hidden>
+        Arrow keys move between changed lines. Space selects a line, Shift extends the selection.
+      </p>
     </section>
   );
 }
@@ -372,6 +443,8 @@ export function DiffBody({
   onHunkAction = () => {},
   onShowLarge,
   onClearSelection = () => {},
+  cursor = null,
+  onKey = () => false,
 }: {
   diff: FileDiff | null;
   /** File path, used to pick the syntax colors. */
@@ -389,6 +462,10 @@ export function DiffBody({
   onHunkAction?: (action: LineAction, hunk: number) => void;
   onShowLarge: () => void;
   onClearSelection?: () => void;
+  /** Line the keyboard is on. */
+  cursor?: LinePos | null;
+  /** Diff keys (arrows, Space); returns true when handled. */
+  onKey?: (e: React.KeyboardEvent) => boolean;
 }) {
   const { settings } = useSettings();
   const rowHeight = diffRowHeight(settings.editor.codeFontSize);
@@ -447,6 +524,8 @@ export function DiffBody({
     onLineClick,
     onHunkAction,
     onClearSelection,
+    cursor,
+    onKey,
   };
   return split ? (
     <SplitDiff {...shared} />
@@ -465,6 +544,20 @@ interface LayoutProps {
   onLineClick: (e: React.MouseEvent, hunk: number, line: number) => void;
   onHunkAction: (action: LineAction, hunk: number) => void;
   onClearSelection: () => void;
+  cursor: LinePos | null;
+  onKey: (e: React.KeyboardEvent) => boolean;
+}
+
+/** Read out with the focused diff when lines can be selected. */
+const KEYBOARD_HINT_ID = "bl-diff-keyboard-hint";
+
+function scrollKeys(
+  e: React.KeyboardEvent,
+  onKey: (e: React.KeyboardEvent) => boolean,
+  onClearSelection: () => void,
+) {
+  if (onKey(e)) return;
+  if (e.key === "Escape") onClearSelection();
 }
 
 function HunkActions({
@@ -502,9 +595,19 @@ function UnifiedDiff({
   onLineClick,
   onHunkAction,
   onClearSelection,
+  cursor,
+  onKey,
 }: LayoutProps & { rows: DiffRow[]; conflict: boolean }) {
   const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
   const virtual = useVirtualRows(scrollEl, rows.length, rowHeight, 20);
+  const { scrollToRow } = virtual;
+  useEffect(() => {
+    if (!cursor) return;
+    const index = rows.findIndex(
+      (r) => r.type === "line" && r.hunk === cursor.hunk && r.line === cursor.line,
+    );
+    if (index >= 0) scrollToRow(index);
+  }, [cursor, rows, scrollToRow]);
   const width = useMemo(() => longestLine(diff), [diff]);
   const viewport = useElementSize(scrollEl).width;
 
@@ -516,7 +619,8 @@ function UnifiedDiff({
       onScroll={virtual.onScroll}
       tabIndex={0}
       aria-label="Diff"
-      onKeyDown={(e) => e.key === "Escape" && onClearSelection()}
+      aria-describedby={partial ? KEYBOARD_HINT_ID : undefined}
+      onKeyDown={(e) => scrollKeys(e, onKey, onClearSelection)}
     >
       <div
         className="bl-diff__canvas mono"
@@ -566,6 +670,7 @@ function UnifiedDiff({
           const selectable = partial && line.kind !== "context";
           const selected = selection.get(row.hunk)?.has(row.line) ?? false;
           const isMarker = conflict && CONFLICT_MARKER.test(line.content);
+          const isCursor = cursor?.hunk === row.hunk && cursor.line === row.line;
           return (
             <div
               key={`l${row.hunk}-${row.line}`}
@@ -575,11 +680,11 @@ function UnifiedDiff({
                 selectable && "bl-diff-row--selectable",
                 selected && "bl-diff-row--selected",
                 isMarker && "bl-diff-row--conflict",
+                isCursor && "bl-diff-row--cursor",
               ]
                 .filter(Boolean)
                 .join(" ")}
               style={style}
-              aria-selected={selectable ? selected : undefined}
               onClick={selectable ? (e) => onLineClick(e, row.hunk, row.line) : undefined}
             >
               <span className="bl-diff-gutter" aria-hidden>
@@ -595,6 +700,7 @@ function UnifiedDiff({
                   content={line.content}
                   tokens={isMarker ? null : (syntax?.[row.hunk]?.[row.line] ?? null)}
                 />
+                {selected && <span className="visually-hidden"> (selected)</span>}
               </span>
             </div>
           );
@@ -618,11 +724,24 @@ function SplitDiff({
   onLineClick,
   onHunkAction,
   onClearSelection,
+  cursor,
+  onKey,
 }: LayoutProps) {
   const rows = useMemo(() => splitRows(diff), [diff]);
   const [leftEl, setLeftEl] = useState<HTMLDivElement | null>(null);
   const [rightEl, setRightEl] = useState<HTMLDivElement | null>(null);
   const virtual = useVirtualRows(rightEl, rows.length, rowHeight, 20);
+  const { scrollToRow } = virtual;
+  useEffect(() => {
+    if (!cursor) return;
+    const index = rows.findIndex(
+      (r) =>
+        r.type === "pair" &&
+        r.hunk === cursor.hunk &&
+        (r.left === cursor.line || r.right === cursor.line),
+    );
+    if (index >= 0) scrollToRow(index);
+  }, [cursor, rows, scrollToRow]);
   const widths = useMemo(
     () => ({
       old: longestLine(diff, 4000, (kind) => kind !== "add"),
@@ -681,6 +800,8 @@ function SplitDiff({
           const line = hunk.lines[index]!;
           const selectable = partial && line.kind !== "context";
           const selected = selection.get(row.hunk)?.has(index) ?? false;
+          const isCursor =
+            line.kind !== "context" && cursor?.hunk === row.hunk && cursor.line === index;
           return (
             <div
               key={key}
@@ -689,11 +810,11 @@ function SplitDiff({
                 `bl-diff-row--${line.kind}`,
                 selectable && "bl-diff-row--selectable",
                 selected && "bl-diff-row--selected",
+                isCursor && "bl-diff-row--cursor",
               ]
                 .filter(Boolean)
                 .join(" ")}
               style={style}
-              aria-selected={selectable ? selected : undefined}
               onClick={selectable ? (e) => onLineClick(e, row.hunk, index) : undefined}
             >
               <span className="bl-diff-gutter" aria-hidden>
@@ -707,6 +828,7 @@ function SplitDiff({
               <span className="bl-diff-content">
                 <span className="visually-hidden">{SPOKEN_KIND[line.kind]}</span>
                 <LineText content={line.content} tokens={syntax?.[row.hunk]?.[index] ?? null} />
+                {selected && <span className="visually-hidden"> (selected)</span>}
                 {line.noNewline && (
                   <span className="bl-diff-nonewline" title="No newline at end of file">
                     <span className="visually-hidden">No newline at end of file</span>
@@ -724,13 +846,14 @@ function SplitDiff({
     <div
       className="bl-diff-split"
       style={{ "--diff-row-height": `${rowHeight}px` } as React.CSSProperties}
-      onKeyDown={(e) => e.key === "Escape" && onClearSelection()}
+      onKeyDown={(e) => scrollKeys(e, onKey, onClearSelection)}
     >
       <div
         ref={setLeftEl}
         className="bl-diff__scroll bl-diff-split__old"
         tabIndex={0}
         aria-label="Old version"
+        aria-describedby={partial ? KEYBOARD_HINT_ID : undefined}
         onScroll={(e) => {
           if (rightEl && rightEl.scrollTop !== e.currentTarget.scrollTop)
             rightEl.scrollTo?.({ top: e.currentTarget.scrollTop, behavior: "instant" });
@@ -743,6 +866,7 @@ function SplitDiff({
         className="bl-diff__scroll bl-diff-split__new"
         tabIndex={0}
         aria-label="New version"
+        aria-describedby={partial ? KEYBOARD_HINT_ID : undefined}
         onScroll={(e) => {
           virtual.onScroll(e);
           if (leftEl && leftEl.scrollTop !== e.currentTarget.scrollTop)

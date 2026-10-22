@@ -712,6 +712,33 @@ pub fn unwatch_repository(state: tauri::State<'_, crate::watcher::WatcherState>)
 ///
 /// Only the first non-flag argument is considered; it is validated by
 /// `inspect_repository` like any other path the user picks.
+/// Whether the app was started to measure startup (`--measure-startup=<file>`).
+#[tauri::command]
+pub fn measure_mode() -> bool {
+    crate::measure::output().is_some()
+}
+
+/// Milliseconds since the process started.
+#[tauri::command]
+pub fn measure_elapsed() -> f64 {
+    crate::measure::elapsed_ms()
+}
+
+/// Write the timing report and quit. Does nothing unless started in measure mode.
+#[tauri::command]
+pub fn finish_measurement(
+    app: tauri::AppHandle,
+    report: serde_json::Value,
+) -> Result<(), GitError> {
+    let Some(path) = crate::measure::output() else {
+        return Ok(());
+    };
+    crate::measure::write_report(&path, report)
+        .map_err(|e| GitError::Internal(format!("cannot write {}: {e}", path.display())))?;
+    app.exit(0);
+    Ok(())
+}
+
 #[tauri::command]
 pub fn launch_repository_path() -> Option<String> {
     launch_path_from_args(std::env::args_os().skip(1))

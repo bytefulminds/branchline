@@ -96,3 +96,6 @@ Fontsource, so the app works offline.
     on the plain, added and removed diff rows and on selected rows, which is why comments are
     `#9AA8BC` rather than a darker grey. Color is never the only signal: the `+`/`−` gutter
     and row tints mark changes.
+11. **Muted text on raised surfaces.** `--color-text-muted` (`#8391A7`) reaches only 4.0:1 on
+    `--color-surface-elevated`. Menus, dialogs, toasts and the command palette use
+    `--color-text-muted-elevated` (`#A3B0C2`, 5.8:1, and 4.6:1 on a highlighted row) instead.

@@ -44,6 +44,15 @@ import "./HistoryView.css";
 /** Search and filters per repository, kept while switching views. */
 const savedFilters = new Map<string, { filter: LogFilter; open: boolean }>();
 
+let searchRequested = false;
+const searchListeners = new Set<() => void>();
+
+/** Focus the History search box: now if History is shown, otherwise when it opens. */
+export function requestHistorySearch() {
+  if (searchListeners.size) searchListeners.forEach((focus) => focus());
+  else searchRequested = true;
+}
+
 /** Make History open filtered to this file or folder (the next time it is shown). */
 export function showFileHistory(repoPath: string, path: string) {
   savedFilters.set(repoPath, { filter: { ...EMPTY_FILTER, path }, open: true });
@@ -81,7 +90,21 @@ export function HistoryView({
       }
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    // After the command palette closes and gives focus back.
+    const focusSearch = () =>
+      window.setTimeout(() => {
+        searchRef.current?.focus();
+        searchRef.current?.select();
+      }, 0);
+    searchListeners.add(focusSearch);
+    if (searchRequested) {
+      searchRequested = false;
+      focusSearch();
+    }
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      searchListeners.delete(focusSearch);
+    };
   }, []);
   const branchActions = useBranchActions();
   const showMenu = useContextMenu();

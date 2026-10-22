@@ -23,6 +23,9 @@ thiserror = "2"
 notify = "8"
 ignore = "0.4"
 ureq = { version = "3", features = ["json"] }
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
+tauri-plugin-opener = "2"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

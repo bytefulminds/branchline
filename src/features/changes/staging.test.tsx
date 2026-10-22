@@ -6,6 +6,14 @@ import App from "../../App";
 import { diffFor, openButton, REPO, setup, installTauriTestEnvironment } from "../../test/harness";
 import type { RepositoryInfo } from "../../types/git";
 
+/** The mouse-only icon on a file row (hidden from assistive tech; the keyboard uses Space). */
+function rowAction(list: HTMLElement, path: string, tooltip: string): HTMLElement {
+  const row = [...list.querySelectorAll<HTMLElement>('[role="option"]')].find((o) =>
+    (o.getAttribute("title") ?? "").endsWith(path),
+  )!;
+  return row.querySelector<HTMLElement>(`[data-tooltip="${tooltip}"]`)!;
+}
+
 installTauriTestEnvironment();
 
 /** REPO after staging src/app.ts. */
@@ -40,7 +48,7 @@ describe("staging", () => {
     const { user, calls, list } = await openRepo((cmd) =>
       cmd === "stage_files" ? STAGED : undefined,
     );
-    await user.click(within(list).getByRole("button", { name: "Stage src/app.ts", hidden: true }));
+    await user.click(rowAction(list, "src/app.ts", "Stage"));
     expect(calls.find((c) => c.cmd === "stage_files")?.args).toEqual({
       repo: REPO.path,
       paths: ["src/app.ts"],
@@ -67,7 +75,7 @@ describe("staging", () => {
     const { user, calls, list } = await openRepo((cmd) =>
       cmd === "unstage_files" ? REPO : undefined,
     );
-    await user.click(within(list).getByRole("button", { name: "Unstage lib/b.rs", hidden: true }));
+    await user.click(rowAction(list, "lib/b.rs", "Unstage"));
     expect(calls.find((c) => c.cmd === "unstage_files")?.args).toEqual({
       repo: REPO.path,
       paths: ["lib/a.rs", "lib/b.rs"],
@@ -78,9 +86,7 @@ describe("staging", () => {
     const { user, calls, list } = await openRepo((cmd) =>
       cmd === "discard_files" ? REPO : undefined,
     );
-    await user.click(
-      within(list).getByRole("button", { name: "Discard changes to src/app.ts", hidden: true }),
-    );
+    await user.click(rowAction(list, "src/app.ts", "Discard changes"));
     const dialog = await screen.findByRole("alertdialog", { name: "Discard changes to app.ts?" });
     // Cancel has focus for destructive dialogs.
     expect(within(dialog).getByRole("button", { name: "Cancel" })).toHaveFocus();
@@ -88,9 +94,7 @@ describe("staging", () => {
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
     expect(calls.some((c) => c.cmd === "discard_files")).toBe(false);
 
-    await user.click(
-      within(list).getByRole("button", { name: "Discard changes to src/app.ts", hidden: true }),
-    );
+    await user.click(rowAction(list, "src/app.ts", "Discard changes"));
     await user.click(
       within(await screen.findByRole("alertdialog")).getByRole("button", {
         name: "Discard changes",

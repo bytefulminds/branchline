@@ -34,13 +34,26 @@
     "category": "DeveloperTool",
     "shortDescription": "Git desktop client",
     "longDescription": "Branchline is a fast, local-first, open-source Git desktop client.",
-    "copyright": "MIT License",
+    "copyright": "Copyright © 2026 Branchline contributors. MIT License.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "homepage": "https://gitlab.com/bytefulminds/branchline",
+    "publisher": "Bytefulminds"
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDlBOTA3MkI2QjY1M0E5MTkKUldRWnFWTzJ0bktRbWdIbTBydmdTZk42Z0NLMjVLeDJNdzJOa3BJSXk2RndsTm91YU0wZ2ZlMFcK",
+      "endpoints": [
+        "https://gitlab.com/bytefulminds/branchline/-/releases/permalink/latest/downloads/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

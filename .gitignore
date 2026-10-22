@@ -26,3 +26,10 @@ CLAUDE.local.md
 *.swp
 .DS_Store
 Thumbs.db
+
+# CI and release outputs
+release-files/
+perf-*.json
+.cargo/
+.rustup/
+.npm/

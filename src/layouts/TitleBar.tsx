@@ -1,6 +1,7 @@
 import {
   ChevronDown,
   Code2,
+  Command,
   FolderSearch,
   SquareTerminal,
   Settings,
@@ -42,6 +43,7 @@ export function TitleBar({
   onClone,
   onCreate,
   onSettings,
+  onCommands,
   onShowBranches,
 }: {
   controller: RepositoryController;
@@ -49,6 +51,7 @@ export function TitleBar({
   onClone: () => void;
   onCreate: () => void;
   onSettings: () => void;
+  onCommands: () => void;
   onShowBranches: () => void;
 }) {
   const branchActions = useBranchActions();
@@ -238,6 +241,11 @@ export function TitleBar({
         label={`Open repository (${modKeyLabel}O)`}
         icon={<FolderOpen size={16} aria-hidden />}
         onClick={onOpen}
+      />
+      <IconButton
+        label={`Commands (${modKeyLabel}K)`}
+        icon={<Command size={16} aria-hidden />}
+        onClick={onCommands}
       />
       <IconButton
         label={`Settings (${modKeyLabel},)`}

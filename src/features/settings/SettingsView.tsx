@@ -69,6 +69,12 @@ function GeneralSection({ s, set }: { s: Settings; set: Setter }) {
           onChange={(v) => set((x) => ({ ...x, general: { ...x.general, autoFetchMinutes: v } }))}
         />
       </Field>
+      <Toggle
+        label="Check for updates"
+        help="Looks for a new Branchline release shortly after starting and asks before installing it. Only the release page on GitLab is contacted."
+        checked={s.general.checkForUpdates}
+        onChange={(v) => set((x) => ({ ...x, general: { ...x.general, checkForUpdates: v } }))}
+      />
     </>
   );
 }

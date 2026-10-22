@@ -69,8 +69,9 @@ Milestones are only marked complete when the behavior works against real Git and
 - [x] Settings: general, Git, identity and signing, editor and diff, confirmations
 - [x] Commit message suggestions from a local AI model (Ollama)
 
-## Milestone 6: Quality and release readiness
+## Milestone 6: Quality and release readiness (done for 0.1.0)
 
-- [ ] Startup and interaction performance measurements on all platforms
-- [ ] Accessibility review, keyboard shortcut map, command palette
-- [ ] Signed packaging and release workflow
+- [x] Startup and interaction performance measurements (built-in measure mode; Linux measured, macOS and Windows in each release pipeline)
+- [x] Accessibility review, keyboard shortcut map, command palette
+- [x] Release workflow: GitLab CI builds for Linux, macOS and Windows, GitLab release, signed updates
+- [ ] Code signing with Apple and Microsoft certificates (prepared, see docs/releasing.md)

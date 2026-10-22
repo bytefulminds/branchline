@@ -120,11 +120,11 @@ export function CommitDetailsPanel({
       </div>
 
       <dl className="bl-commit-details__meta">
-        <div className="bl-person">
-          <Avatar name={details.authorName} email={details.authorEmail} size={28} />
-          <div>
-            <dt className="visually-hidden">Author</dt>
-            <dd>
+        <div>
+          <dt className="visually-hidden">Author</dt>
+          <dd className="bl-person">
+            <Avatar name={details.authorName} email={details.authorEmail} size={28} />
+            <div>
               <span className="bl-person__name">{details.authorName}</span>
               <span className="text-small text-muted selectable"> {details.authorEmail}</span>
               <br />
@@ -136,8 +136,8 @@ export function CommitDetailsPanel({
                 Authored {relativeTime(details.authorDate)} ·{" "}
                 {new Date(details.authorDate).toLocaleString()}
               </time>
-            </dd>
-          </div>
+            </div>
+          </dd>
         </div>
         {committedSeparately && (
           <div className="text-small text-secondary">

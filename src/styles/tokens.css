@@ -27,6 +27,8 @@
   /* Reference value #64748B is below WCAG AA on every surface; lightened (see docs). */
   --color-text-muted: #8391a7;
   --color-text-on-accent: #0f172a;
+  /* Muted text on raised surfaces (menus, dialogs, toasts): #8391A7 is only 4.0:1 there. */
+  --color-text-muted-elevated: #a3b0c2;
 
   /* Accent */
   --color-accent: #00d1a0;
@@ -163,4 +165,12 @@
     --duration-fast: 0ms;
     --duration-normal: 0ms;
   }
+}
+
+/* Raised surfaces get a lighter muted text so it stays at 4.5:1 (see docs/design-system.md). */
+.bl-menu,
+.bl-dialog,
+.bl-palette,
+.bl-toast {
+  --color-text-muted: var(--color-text-muted-elevated);
 }

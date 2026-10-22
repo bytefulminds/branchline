@@ -1,0 +1,150 @@
+# Branchline CI: checks on every merge request and on main; installers and a GitLab release
+# for every version tag (v0.1.0, v0.2.0, ...). See docs/releasing.md.
+#
+# Linux runs on GitLab's shared runners. macOS and Windows run on the Bytefulminds group
+# runners; set MACOS_RUNNER_TAG and WINDOWS_RUNNER_TAG (Settings > CI/CD > Variables) if
+# their tags are not "macos" and "windows".
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+/
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "web"
+
+stages:
+  - check
+  - build
+  - release
+  - measure
+
+variables:
+  MACOS_RUNNER_TAG: macos
+  WINDOWS_RUNNER_TAG: windows
+  # The update key was made without a password; an empty value keeps Tauri from asking.
+  TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+  npm_config_cache: $CI_PROJECT_DIR/.npm
+  CARGO_TERM_COLOR: always
+
+.release-tag: &release-tag
+  if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+/
+
+# Debian with Node 22, Rust and the WebKitGTK libraries Tauri builds against.
+.linux:
+  image: node:22-bookworm
+  variables:
+    CARGO_HOME: $CI_PROJECT_DIR/.cargo
+    RUSTUP_HOME: $CI_PROJECT_DIR/.rustup
+  cache:
+    key: linux-$CI_JOB_NAME_SLUG
+    paths: [.npm/, .cargo/registry/, .rustup/, src-tauri/target/]
+  before_script:
+    - apt-get update -qq
+    - >-
+      apt-get install -y -qq --no-install-recommends libwebkit2gtk-4.1-dev
+      libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev patchelf file rpm
+      xvfb xauth dbus-x11 > /dev/null
+    - >-
+      command -v "$CARGO_HOME/bin/cargo" || curl --proto '=https' --tlsv1.2 -sSf
+      https://sh.rustup.rs | sh -s -- -y --profile minimal --component clippy,rustfmt
+    - export PATH="$CARGO_HOME/bin:$PATH"
+    - rustup default stable
+    - npm ci --no-audit --no-fund
+
+check:
+  extends: .linux
+  stage: check
+  script:
+    - npm run check
+    - cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+
+build:linux:
+  extends: .linux
+  stage: build
+  rules: [*release-tag]
+  variables:
+    # linuxdeploy (AppImage) cannot mount FUSE in a container.
+    APPIMAGE_EXTRACT_AND_RUN: "1"
+    NO_STRIP: "true"
+  script:
+    - npx tauri build --config src-tauri/tauri.release.conf.json --bundles appimage,deb,rpm
+    - node scripts/release/collect.mjs src-tauri/target/release/bundle release-files linux
+  artifacts:
+    expire_in: 1 week
+    paths: [release-files/, src-tauri/target/release/branchline]
+
+build:macos:
+  stage: build
+  tags: [$MACOS_RUNNER_TAG]
+  rules: [*release-tag]
+  script:
+    - rustup target add aarch64-apple-darwin x86_64-apple-darwin
+    - npm ci --no-audit --no-fund
+    # One app for Apple silicon and Intel. Without Apple certificates it is signed ad hoc;
+    # set APPLE_SIGNING_IDENTITY and friends to sign and notarize (docs/releasing.md).
+    - >-
+      npx tauri build --target universal-apple-darwin
+      --config src-tauri/tauri.release.conf.json --bundles app,dmg
+    - >-
+      node scripts/release/collect.mjs src-tauri/target/universal-apple-darwin/release/bundle
+      release-files macos
+  artifacts:
+    expire_in: 1 week
+    paths:
+      - release-files/
+      - src-tauri/target/universal-apple-darwin/release/branchline
+
+build:windows:
+  stage: build
+  tags: [$WINDOWS_RUNNER_TAG]
+  rules: [*release-tag]
+  script:
+    - npm ci --no-audit --no-fund
+    - npx tauri build --config src-tauri/tauri.release.conf.json --bundles nsis,msi
+    - node scripts/release/collect.mjs src-tauri/target/release/bundle release-files windows
+  artifacts:
+    expire_in: 1 week
+    paths: [release-files/, src-tauri/target/release/branchline.exe]
+
+release:
+  image: node:22-bookworm-slim
+  stage: release
+  rules: [*release-tag]
+  needs: [check, build:linux, build:macos, build:windows]
+  script:
+    - node scripts/release/publish.mjs release-files
+  artifacts:
+    paths: [release-files/latest.json]
+
+# Startup and interaction times on each platform, against this repository. Informational:
+# a runner without a desktop session cannot show windows, so these may not pass everywhere.
+.measure:
+  stage: measure
+  allow_failure: true
+  rules: [*release-tag]
+  artifacts:
+    paths: [perf-*.json]
+
+measure:linux:
+  extends: [.linux, .measure]
+  needs: [build:linux]
+  script:
+    - >-
+      xvfb-run -a dbus-run-session -- node scripts/measure-startup.mjs
+      src-tauri/target/release/branchline "$CI_PROJECT_DIR" 5 perf-linux.json
+
+measure:macos:
+  extends: .measure
+  tags: [$MACOS_RUNNER_TAG]
+  needs: [build:macos]
+  script:
+    - >-
+      node scripts/measure-startup.mjs src-tauri/target/universal-apple-darwin/release/branchline
+      "$CI_PROJECT_DIR" 5 perf-macos.json
+
+measure:windows:
+  extends: .measure
+  tags: [$WINDOWS_RUNNER_TAG]
+  needs: [build:windows]
+  script:
+    - node scripts/measure-startup.mjs src-tauri/target/release/branchline.exe "$CI_PROJECT_DIR" 5 perf-windows.json

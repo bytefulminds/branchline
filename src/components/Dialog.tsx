@@ -68,34 +68,39 @@ export function Dialog({
       className="bl-dialog-backdrop"
       onPointerDown={(e) => e.target === e.currentTarget && onCancel()}
     >
-      <form
-        ref={ref}
-        className={`bl-dialog${size === "wide" ? " bl-dialog--wide" : ""}`}
+      {/* The dialog role sits on a wrapper: a form may not take the dialog role. */}
+      <div
+        className="bl-dialog-frame"
         role={role}
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={description ? descId : undefined}
-        onKeyDown={onKeyDown}
-        onSubmit={(e) => {
-          e.preventDefault();
-          onSubmit?.();
-        }}
       >
-        <div className="bl-dialog__body">
-          <div className="bl-dialog__text">
-            <h2 id={titleId} className="text-h3">
-              {title}
-            </h2>
-            {description && (
-              <div id={descId} className="bl-dialog__description">
-                {description}
-              </div>
-            )}
-            {children}
+        <form
+          ref={ref}
+          className={`bl-dialog${size === "wide" ? " bl-dialog--wide" : ""}`}
+          onKeyDown={onKeyDown}
+          onSubmit={(e) => {
+            e.preventDefault();
+            onSubmit?.();
+          }}
+        >
+          <div className="bl-dialog__body">
+            <div className="bl-dialog__text">
+              <h2 id={titleId} className="text-h3">
+                {title}
+              </h2>
+              {description && (
+                <div id={descId} className="bl-dialog__description">
+                  {description}
+                </div>
+              )}
+              {children}
+            </div>
           </div>
-        </div>
-        <div className="bl-dialog__actions">{actions}</div>
-      </form>
+          <div className="bl-dialog__actions">{actions}</div>
+        </form>
+      </div>
     </div>
   );
 }

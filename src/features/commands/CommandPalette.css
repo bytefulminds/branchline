@@ -1,0 +1,184 @@
+.bl-kbd {
+  display: inline-block;
+  padding: 2px 6px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-background);
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+/* Command palette */
+.bl-palette-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-toast);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 12vh var(--space-6) var(--space-6);
+  background: rgb(2 6 23 / 50%);
+  animation: bl-fade-in var(--duration-fast) var(--ease-standard);
+}
+.bl-palette {
+  display: flex;
+  flex-direction: column;
+  width: min(620px, 100%);
+  max-height: min(520px, 76vh);
+  overflow: hidden;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-xl);
+  background: var(--color-surface-elevated);
+  box-shadow: var(--shadow-popover);
+  animation: bl-dialog-in var(--duration-normal) var(--ease-standard);
+}
+.bl-palette__search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-4);
+  border-bottom: 1px solid var(--color-border-strong);
+  color: var(--color-text-muted);
+}
+.bl-palette__search input {
+  flex: 1;
+  height: 48px;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-primary);
+  font: inherit;
+  font-size: 15px;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.bl-palette__search input:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+.bl-palette__search input::placeholder {
+  color: var(--color-text-muted);
+}
+.bl-palette__list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-1);
+}
+.bl-palette__empty {
+  margin: 0;
+  padding: var(--space-4);
+  color: var(--color-text-muted);
+  text-align: center;
+}
+.bl-palette__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 36px;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-md);
+  color: var(--color-text-primary);
+  cursor: pointer;
+}
+.bl-palette__item--active {
+  background: var(--color-accent-subtle);
+  box-shadow: inset 2px 0 0 var(--color-accent);
+}
+.bl-palette__item[aria-disabled="true"] {
+  cursor: default;
+  color: var(--color-text-muted);
+}
+.bl-palette__icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 16px;
+  color: var(--color-text-secondary);
+}
+.bl-palette__text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+.bl-palette__title mark {
+  background: transparent;
+  color: var(--color-accent);
+  font-weight: var(--weight-semibold);
+}
+.bl-palette__reason {
+  color: var(--color-text-muted);
+  font-size: 11px;
+}
+.bl-palette__group {
+  flex: none;
+  color: var(--color-text-muted);
+  font-size: var(--text-small-size);
+}
+.bl-palette__enter {
+  flex: none;
+  color: var(--color-accent);
+}
+
+/* Shortcut overview */
+.bl-shortcuts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: var(--space-5) var(--space-6);
+  margin-top: var(--space-3);
+}
+.bl-shortcuts__title {
+  margin: 0 0 var(--space-2);
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.bl-shortcuts dl {
+  margin: 0;
+}
+.bl-shortcuts__row {
+  display: grid;
+  grid-template-columns: 11rem 1fr;
+  align-items: baseline;
+  gap: var(--space-3);
+  padding: 5px 0;
+  border-bottom: 1px solid var(--color-border);
+  font-size: var(--text-small-size);
+}
+.bl-shortcuts__row dd {
+  margin: 0;
+  color: var(--color-text-secondary);
+}
+.bl-shortcuts__row dt {
+  min-width: 0;
+}
+.bl-shortcuts__row kbd {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* About */
+.bl-about {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin-top: var(--space-3);
+}
+.bl-about p {
+  margin: 0 0 var(--space-1);
+}
+.bl-about__name {
+  font-size: 16px;
+  font-weight: var(--weight-semibold);
+}
+.bl-about__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin: var(--space-4) 0 0 calc(-1 * var(--space-2));
+}

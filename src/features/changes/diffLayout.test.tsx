@@ -140,3 +140,25 @@ describe("syntax", () => {
     expect(splitRows(diff).filter((r) => r.type === "pair")).toHaveLength(4);
   });
 });
+
+describe("keyboard line selection", () => {
+  it("moves between changed lines with the arrows and selects with Space", async () => {
+    const { user } = await openDiff();
+    const diff = screen.getByRole("region", { name: "Changes in src/app.ts" });
+    const body = within(diff).getByLabelText("Diff");
+    expect(body).toHaveAccessibleDescription(/Arrow keys move between changed lines/);
+    body.focus();
+    await user.keyboard("{ArrowDown}");
+    // The first changed line, skipping the unchanged ones above it.
+    expect(screen.getByText(/^Removed line 3:/)).toHaveTextContent(
+      'const name = "old";, not selected',
+    );
+    await user.keyboard(" ");
+    expect(screen.getByText("1 line selected")).toBeInTheDocument();
+    await user.keyboard("{Shift>}{ArrowDown}{ArrowDown}{/Shift}");
+    expect(screen.getByText("3 lines selected")).toBeInTheDocument();
+    expect(screen.getByText(/^Added line 4:/)).toHaveTextContent("selected");
+    await user.keyboard("{Escape}");
+    expect(screen.queryByText(/lines? selected/)).toBeNull();
+  });
+});

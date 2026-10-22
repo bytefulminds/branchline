@@ -2,6 +2,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import App from "../../App";
+import { audit } from "../../test/axe";
 import { installTauriTestEnvironment, openButton, REPO, setup } from "../../test/harness";
 import type { ConflictFile, MergeSegment, RepositoryInfo } from "../../types/git";
 import {
@@ -169,6 +170,11 @@ async function openEditor(file: ConflictFile = FILE) {
 }
 
 describe("merge editor", () => {
+  it("passes the accessibility audit", async () => {
+    await openEditor();
+    await audit("merge editor");
+  });
+
   it("takes changes per side and saves the result", async () => {
     const { user, calls, editor } = await openEditor();
     expect(within(editor).getByRole("status")).toHaveTextContent("1 conflict left");

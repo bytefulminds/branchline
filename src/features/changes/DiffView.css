@@ -342,3 +342,10 @@
 .bl-diff-content .hljs-strong {
   font-weight: var(--weight-semibold, 600);
 }
+
+/* Keyboard position in a diff (arrow keys) */
+.bl-diff__scroll:focus-visible .bl-diff-row--cursor,
+.bl-diff-split:focus-within .bl-diff-row--cursor {
+  outline: 2px solid var(--focus-ring-color);
+  outline-offset: -2px;
+}

@@ -45,6 +45,8 @@ pub struct GeneralSettings {
     pub refresh_on_focus: bool,
     /// Fetch all remotes in the background every this many minutes; 0 is off.
     pub auto_fetch_minutes: u32,
+    /// Look for a new Branchline release shortly after starting.
+    pub check_for_updates: bool,
 }
 
 impl Default for GeneralSettings {
@@ -53,6 +55,7 @@ impl Default for GeneralSettings {
             open_last_repository: false,
             refresh_on_focus: true,
             auto_fetch_minutes: 0,
+            check_for_updates: true,
         }
     }
 }

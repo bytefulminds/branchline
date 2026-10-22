@@ -17,6 +17,7 @@ export function AppShell({
   onClone,
   onCreate,
   onSettings,
+  onCommands,
   view,
   onView,
   children,
@@ -27,6 +28,7 @@ export function AppShell({
   onClone: () => void;
   onCreate: () => void;
   onSettings: () => void;
+  onCommands: () => void;
   view: WorkspaceView;
   onView: (view: WorkspaceView) => void;
   children: ReactNode;
@@ -44,6 +46,7 @@ export function AppShell({
         onClone={onClone}
         onCreate={onCreate}
         onSettings={onSettings}
+        onCommands={onCommands}
         onShowBranches={() => onView("branches")}
       />
       <div className="bl-app__body">
@@ -53,14 +56,16 @@ export function AppShell({
           width={sidebarWidth}
           view={view}
           onView={onView}
-        />
-        <Splitter
-          label="Resize sidebar"
-          value={sidebarWidth}
-          min={180}
-          max={420}
-          side="left"
-          onChange={setSidebarWidth}
+          resizer={
+            <Splitter
+              label="Resize sidebar"
+              value={sidebarWidth}
+              min={180}
+              max={420}
+              side="left"
+              onChange={setSidebarWidth}
+            />
+          }
         />
         <main className="bl-app__workspace">{children}</main>
       </div>
