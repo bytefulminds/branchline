@@ -113,6 +113,10 @@ export type GitErrorKind =
   | "remoteRejected"
   | "noUpstream"
   | "diverged"
+  /** `detail` is the folder of the worktree that has the branch checked out. */
+  | "branchInWorktree"
+  /** `detail` is the worktree folder. */
+  | "worktreeDirty"
   | "parse"
   | "internal"
   /** Frontend-only: the app is not running inside the Tauri shell. */
@@ -249,7 +253,33 @@ export interface BranchInfo {
   upstreamGone: boolean;
   tipTime: number;
   tipSummary: string;
+  /** Folder of another worktree where this local branch is checked out. */
+  worktreePath?: string | null;
 }
+
+export interface WorktreeInfo {
+  path: string;
+  /** Folder name. */
+  name: string;
+  head: string | null;
+  /** Checked-out branch; null when detached. */
+  branch: string | null;
+  detached: boolean;
+  bare: boolean;
+  /** Set when locked; the reason may be empty. */
+  locked: string | null;
+  /** Set when the folder is gone. */
+  prunable: string | null;
+  isMain: boolean;
+  /** Open in Branchline right now. */
+  isCurrent: boolean;
+  changes: number | null;
+}
+
+export type WorktreeTarget =
+  | { kind: "newBranch"; name: string; start: StartPoint }
+  | { kind: "branch"; name: string }
+  | { kind: "detached"; start: StartPoint };
 
 export interface BranchList {
   local: BranchInfo[];

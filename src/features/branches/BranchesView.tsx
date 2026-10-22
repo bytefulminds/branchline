@@ -4,6 +4,8 @@ import {
   ArrowUpFromLine,
   Check,
   Cloud,
+  FolderInput,
+  FolderPlus,
   GitBranch,
   GitBranchPlus,
   GitMerge,
@@ -21,11 +23,12 @@ import { anchorOf, useContextMenu } from "../../components/ContextMenu";
 import { EmptyState } from "../../components/EmptyState";
 import type { MenuEntry } from "../../components/Menu";
 import { Spinner } from "../../components/Spinner";
-import { relativeTime } from "../../lib/format";
+import { displayPath, relativeTime } from "../../lib/format";
 import type { BranchInfo, RepositoryInfo } from "../../types/git";
 import { useIntegrateActions } from "../integrate/IntegrateActions";
 import { refDragProps, useRefDrop } from "../integrate/refDrag";
 import { useRemoteActions } from "../remote/RemoteActions";
+import { useWorktreeActions } from "../worktrees/WorktreeActions";
 import { useBranchActions } from "./BranchActions";
 import "./BranchesView.css";
 
@@ -61,6 +64,7 @@ function Tracking({ branch }: { branch: BranchInfo }) {
 
 export function BranchesView({ repo }: { repo: RepositoryInfo }) {
   const actions = useBranchActions();
+  const worktrees = useWorktreeActions();
   const remote = useRemoteActions();
   const integrate = useIntegrateActions();
   const drop = useRefDrop(repo);
@@ -101,12 +105,28 @@ export function BranchesView({ repo }: { repo: RepositoryInfo }) {
     },
   ];
   const localMenu = (b: BranchInfo): MenuEntry[] => [
+    b.worktreePath
+      ? {
+          id: "open-worktree",
+          label: "Open its worktree",
+          description: displayPath(b.worktreePath),
+          icon: <FolderInput size={16} />,
+          onSelect: () => worktrees.open(b.worktreePath!),
+        }
+      : {
+          id: "switch",
+          label: "Switch to branch",
+          icon: <Check size={16} />,
+          disabled: b.isCurrent,
+          onSelect: () => actions.switchTo(b.name),
+        },
     {
-      id: "switch",
-      label: "Switch to branch",
-      icon: <Check size={16} />,
-      disabled: b.isCurrent,
-      onSelect: () => actions.switchTo(b.name),
+      id: "worktree",
+      label: "Open in new worktree…",
+      description: "Work on it in a second folder",
+      icon: <FolderPlus size={16} />,
+      disabled: b.isCurrent || !!b.worktreePath,
+      onSelect: () => worktrees.create({ mode: "branch", branch: b.name }),
     },
     {
       id: "create",
@@ -135,7 +155,7 @@ export function BranchesView({ repo }: { repo: RepositoryInfo }) {
       label: "Delete…",
       icon: <Trash2 size={16} />,
       danger: true,
-      disabled: b.isCurrent,
+      disabled: b.isCurrent || !!b.worktreePath,
       onSelect: () => actions.remove(b.name),
     },
   ];
@@ -152,6 +172,18 @@ export function BranchesView({ repo }: { repo: RepositoryInfo }) {
       icon: <GitBranchPlus size={16} />,
       onSelect: () => actions.create({ kind: "branch", name: b.name }, b.name),
     },
+    {
+      id: "worktree",
+      label: "Check out in new worktree…",
+      icon: <FolderPlus size={16} />,
+      onSelect: () =>
+        worktrees.create({
+          mode: "new",
+          start: { kind: "branch", name: b.name },
+          startLabel: b.name,
+          name: b.name.slice((b.remote?.length ?? 0) + 1),
+        }),
+    },
     { type: "separator", id: "sep" },
     ...integrateEntries(b),
   ];
@@ -162,7 +194,7 @@ export function BranchesView({ repo }: { repo: RepositoryInfo }) {
       className={`bl-branch${b.isCurrent ? " bl-branch--current" : ""}`}
       {...refDragProps({ name: b.name, remote })}
       {...(remote ? {} : drop(`branch:${b.name}`, { kind: "branch", name: b.name }))}
-      onDoubleClick={primary}
+      onDoubleClick={b.worktreePath ? () => worktrees.open(b.worktreePath!) : primary}
       onContextMenu={(e) => {
         e.preventDefault();
         showMenu({ x: e.clientX, y: e.clientY }, entries, `Actions for ${b.name}`);
@@ -177,6 +209,11 @@ export function BranchesView({ repo }: { repo: RepositoryInfo }) {
             {remote ? b.name.slice((b.remote?.length ?? 0) + 1) : b.name}
           </span>
           {b.isCurrent && <span className="bl-branch__badge">Current</span>}
+          {b.worktreePath && (
+            <span className="bl-tag-kind" title={`Checked out in ${b.worktreePath}`}>
+              worktree
+            </span>
+          )}
         </span>
         <span className="bl-branch__meta text-small">
           {!remote && <Tracking branch={b} />}
@@ -190,10 +227,16 @@ export function BranchesView({ repo }: { repo: RepositoryInfo }) {
         {relativeTime(b.tipTime * 1000)}
       </time>
       <span className="bl-branch__actions">
-        {!b.isCurrent && (
-          <Button size="sm" variant="secondary" onClick={primary}>
-            {remote ? "Check out" : "Switch"}
+        {b.worktreePath ? (
+          <Button size="sm" variant="secondary" onClick={() => worktrees.open(b.worktreePath!)}>
+            Open worktree
           </Button>
+        ) : (
+          !b.isCurrent && (
+            <Button size="sm" variant="secondary" onClick={primary}>
+              {remote ? "Check out" : "Switch"}
+            </Button>
+          )
         )}
         <button
           type="button"

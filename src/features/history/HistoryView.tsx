@@ -3,6 +3,7 @@ import {
   Cherry,
   CircleAlert,
   Copy,
+  FolderPlus,
   GitBranchPlus,
   GitCommitHorizontal,
   GitMerge,
@@ -27,6 +28,7 @@ import { CommitDiffView } from "./CommitDiffView";
 import { useTagActions } from "../tags/TagActions";
 import { useIntegrateActions } from "../integrate/IntegrateActions";
 import { useRefDrop } from "../integrate/refDrag";
+import { useWorktreeActions } from "../worktrees/WorktreeActions";
 import { CommitList, graphColumnWidth, WorkInProgressRow } from "./CommitList";
 import { cherryPickProblem, MultiSelectionPanel } from "./MultiSelectionPanel";
 import { EMPTY_SELECTION, nextSelection, oldestFirst, single, type SelectMode } from "./selection";
@@ -81,6 +83,7 @@ export function HistoryView({
 
   const tagActions = useTagActions();
   const integrate = useIntegrateActions();
+  const worktrees = useWorktreeActions();
   const drop = useRefDrop(repo);
   const current = repo.head.kind === "branch" ? repo.head.name : null;
   const busyOp = repo.operation !== null;
@@ -135,6 +138,19 @@ export function HistoryView({
         label: "Create branch here…",
         icon: <GitBranchPlus size={16} />,
         onSelect: () => branchActions.create({ kind: "commit", oid }, `commit ${short}`),
+      },
+      {
+        id: "worktree",
+        label: "Create worktree here…",
+        description: "A second folder starting at this commit",
+        icon: <FolderPlus size={16} />,
+        disabled: busyOp,
+        onSelect: () =>
+          worktrees.create({
+            mode: "new",
+            start: { kind: "commit", oid },
+            startLabel: `commit ${short}`,
+          }),
       },
       {
         id: "detach",

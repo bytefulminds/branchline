@@ -17,6 +17,8 @@ import { StashActionsProvider } from "./features/stash/StashActions";
 import { StashesView } from "./features/stash/StashesView";
 import { TagActionsProvider } from "./features/tags/TagActions";
 import { TagsView } from "./features/tags/TagsView";
+import { WorktreeActionsProvider } from "./features/worktrees/WorktreeActions";
+import { WorktreesView } from "./features/worktrees/WorktreesView";
 import { ContextMenuProvider } from "./components/ContextMenu";
 import { AppShell } from "./layouts/AppShell";
 import type { WorkspaceView } from "./layouts/Sidebar";
@@ -31,6 +33,7 @@ const VIEW_KEYS: Record<string, WorkspaceView> = {
   "3": "branches",
   "4": "stashes",
   "5": "tags",
+  "6": "worktrees",
 };
 
 function Workspace() {
@@ -77,12 +80,7 @@ function Workspace() {
       if (isPrimaryModifier(e) && !e.shiftKey && !e.altKey && key === "o") {
         e.preventDefault();
         void openPicker();
-      } else if (
-        isPrimaryModifier(e) &&
-        !e.shiftKey &&
-        !e.altKey &&
-        ["1", "2", "3", "4", "5"].includes(key)
-      ) {
+      } else if (isPrimaryModifier(e) && !e.shiftKey && !e.altKey && key in VIEW_KEYS) {
         e.preventDefault();
         setView(VIEW_KEYS[key]!);
       } else if ((isPrimaryModifier(e) && key === "r") || e.key === "F5") {
@@ -128,6 +126,8 @@ function Workspace() {
           />
         ) : view === "branches" ? (
           <BranchesView key={state.repo.path} repo={state.repo} />
+        ) : view === "worktrees" ? (
+          <WorktreesView repo={state.repo} busy={controller.operation !== null} />
         ) : view === "tags" ? (
           <TagsView key={state.repo.path} repo={state.repo} busy={controller.operation !== null} />
         ) : view === "stashes" ? (
@@ -166,15 +166,20 @@ function Workspace() {
               repo={state.status === "ready" ? state.repo : null}
               controller={controller}
             >
-              <AppShell
+              <WorktreeActionsProvider
+                repo={state.status === "ready" ? state.repo : null}
                 controller={controller}
-                gitVersion={gitVersion}
-                onOpen={openPicker}
-                view={view}
-                onView={setView}
               >
-                {content}
-              </AppShell>
+                <AppShell
+                  controller={controller}
+                  gitVersion={gitVersion}
+                  onOpen={openPicker}
+                  view={view}
+                  onView={setView}
+                >
+                  {content}
+                </AppShell>
+              </WorktreeActionsProvider>
             </TagActionsProvider>
           </IntegrateActionsProvider>
         </StashActionsProvider>

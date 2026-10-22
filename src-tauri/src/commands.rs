@@ -17,6 +17,7 @@ use crate::git::repository::{self, RepositoryInfo};
 use crate::git::runner::{self, GitVersion};
 use crate::git::stash::{self, StashInfo, StashOutcome};
 use crate::git::tags::{self, TagInfo};
+use crate::git::worktrees::{self, WorktreeInfo, WorktreeTarget};
 
 async fn blocking<T, F>(f: F) -> Result<T, GitError>
 where
@@ -148,7 +149,8 @@ pub async fn create_commit(
 
 #[tauri::command]
 pub async fn list_branches(repo: String) -> Result<BranchList, GitError> {
-    blocking(move || branches::list_branches(&repository::resolve_root(&repo)?)).await
+    blocking(move || branches::list_branches_with_worktrees(&repository::resolve_root(&repo)?))
+        .await
 }
 
 /// Live validation for branch name inputs; resolves to an error message or null.
@@ -498,6 +500,42 @@ pub async fn resolve_conflict_side(
         repository::inspect(&repo)
     })
     .await
+}
+
+#[tauri::command]
+pub async fn list_worktrees(repo: String) -> Result<Vec<WorktreeInfo>, GitError> {
+    blocking(move || worktrees::list(&repo)).await
+}
+
+/// Create a worktree; returns its folder.
+#[tauri::command]
+pub async fn add_worktree(
+    repo: String,
+    path: String,
+    target: WorktreeTarget,
+) -> Result<String, GitError> {
+    blocking(move || worktrees::add(&repo, &path, &target)).await
+}
+
+#[tauri::command]
+pub async fn remove_worktree(repo: String, path: String, force: bool) -> Result<(), GitError> {
+    blocking(move || worktrees::remove(&repo, &path, force)).await
+}
+
+#[tauri::command]
+pub async fn lock_worktree(
+    repo: String,
+    path: String,
+    locked: bool,
+    reason: String,
+) -> Result<(), GitError> {
+    blocking(move || worktrees::set_locked(&repo, &path, locked, &reason)).await
+}
+
+/// Forget worktrees whose folders were deleted; returns how many.
+#[tauri::command]
+pub async fn prune_worktrees(repo: String) -> Result<usize, GitError> {
+    blocking(move || worktrees::prune(&repo)).await
 }
 
 /// Continue, skip or abort the merge, rebase, cherry-pick or revert in progress.

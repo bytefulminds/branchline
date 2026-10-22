@@ -116,6 +116,12 @@ pub enum GitError {
     #[error("Your branch and its upstream have diverged, so a fast-forward is not possible. Pull with merge or rebase instead.")]
     Diverged { detail: String },
 
+    #[error("{branch} is checked out in another worktree ({path}). Open that worktree instead.")]
+    BranchInWorktree { branch: String, path: String },
+
+    #[error("This worktree has uncommitted or untracked files.")]
+    WorktreeDirty { path: String },
+
     #[error("Unexpected Git output: {0}")]
     Parse(String),
 
@@ -161,6 +167,8 @@ impl GitError {
             GitError::RemoteRejected { .. } => "remoteRejected",
             GitError::NoUpstream { .. } => "noUpstream",
             GitError::Diverged { .. } => "diverged",
+            GitError::BranchInWorktree { .. } => "branchInWorktree",
+            GitError::WorktreeDirty { .. } => "worktreeDirty",
             GitError::Parse(_) => "parse",
             GitError::Internal(_) => "internal",
         }
@@ -185,6 +193,10 @@ impl GitError {
             | GitError::RemoteRejected { detail }
             | GitError::TagConflict { detail }
             | GitError::Diverged { detail } => Some(detail.as_str()),
+            // The folder, so the UI can offer to open or clean up that worktree.
+            GitError::BranchInWorktree { path, .. } | GitError::WorktreeDirty { path } => {
+                Some(path.as_str())
+            }
             GitError::GitFailed { stderr, .. } => Some(stderr.as_str()),
             _ => None,
         }

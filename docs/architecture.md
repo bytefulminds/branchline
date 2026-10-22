@@ -83,6 +83,9 @@ are in the way (`checkoutConflict`); nothing is changed.
 | `cherry_pick(repo, oid)` / `revert_commit(repo, oid)` | `IntegrateResult` | Merge commits use their first parent (`-m 1`) |
 | `cherry_pick_many(repo, oids)` | `IntegrateResult` | Order given (oldest first), at most 100, no merge commits; `outcome.skipped` counts commits already on the branch |
 | `operation_step(repo, step)` | `IntegrateResult` | `continue`, `skip` or `abort` the operation in progress |
+| `list_worktrees(repo)` | `WorktreeInfo[]` | Branch or detached HEAD, locked, missing, main/open flags, number of changed files |
+| `add_worktree(repo, path, target)` | `string` | `target`: `newBranch` (name + start), `branch` or `detached`; returns the folder |
+| `remove_worktree(repo, path, force)` / `lock_worktree(repo, path, locked, reason)` / `prune_worktrees(repo)` | `()` / `()` / `number` | Never the main worktree or the open one |
 | `conflict_file(repo, path)` | `ConflictFile` | Sides, segments (same / ours / theirs / both / conflict) and a fingerprint |
 | `resolve_conflict_text(repo, path, content, fingerprint)` | `RepositoryInfo` | Writes the merged text and runs `git add` |
 | `resolve_conflict_side(repo, path, side, fingerprint)` | `RepositoryInfo` | `ours`, `theirs` (`checkout --ours/--theirs`, or `rm` when that side deleted the file) or `delete` |
@@ -179,6 +182,25 @@ progress (read from `rebase-merge/msgnum` and `end`).
 - The frontend model (`mergeModel.ts`) keeps, per change, the result lines and whether each
   side was taken, left out or is pending. Taking a second side appends it, like JetBrains.
   Changes that do not conflict are taken on open; Undo goes back to before that.
+
+## Worktrees
+
+- `git worktree list --porcelain` is the source of truth. Remove, lock and unlock only accept a
+  folder that Git lists (compared after resolving symbolic links), so the UI cannot point Git at
+  an arbitrary folder. The main worktree and the one open in Branchline are never removed.
+- A new worktree's folder must be absolute, have an existing parent, be missing or empty, and
+  lie outside the repository (a worktree inside it would show up as untracked files). Branch
+  names go through the same checks as new branches, and every path is passed after `--`.
+- `git worktree remove` refuses a folder with changes; that becomes `worktreeDirty` and the UI
+  asks again before `--force`. Locked worktrees must be unlocked first. A worktree whose folder
+  is gone is cleaned up with `git worktree prune`.
+- Git refuses to check out a branch that another worktree has (`switch`, `branch -d` and
+  `worktree add` all say "used by worktree at" or, in older Git, "checked out at"); these become
+  `branchInWorktree` with the folder in `detail`, and the UI offers to open that worktree.
+  `list_branches` adds `worktreePath` to such branches.
+- A linked worktree opens like any repository: its Git directory (`.git/worktrees/<name>`)
+  holds its own HEAD, index and in-progress operations, while branches, tags and stashes are
+  shared.
 
 ## Interactive rebase
 

@@ -87,10 +87,14 @@ reimplementing Git.
   writes the file and marks it as resolved; it refuses if the file changed since the editor
   opened it. Binary files, symbolic links and files deleted on one side get whole-file choices
   (keep one version or delete the file).
+- Worktrees: extra working folders for the same repository, each with its own branch checked
+  out. Create one with a new branch (from the current branch, any branch or a commit in
+  History) or for an existing branch, open it in Branchline, lock or unlock it, and remove it
+  (the branch stays; uncommitted changes are only deleted after a second confirmation).
+  Worktrees whose folder was deleted can be cleaned up. Branches checked out in another
+  worktree are marked in Branches and offer "Open worktree" instead of Switch.
 - `Ctrl+1` / `⌘1` Changes, `Ctrl+2` / `⌘2` History, `Ctrl+3` / `⌘3` Branches, `Ctrl+4` / `⌘4`
-  Stashes, `Ctrl+5` / `⌘5` Tags.
-
-Worktrees follow next.
+  Stashes, `Ctrl+5` / `⌘5` Tags, `Ctrl+6` / `⌘6` Worktrees.
 
 ## Prerequisites
 
@@ -150,6 +154,7 @@ src/                     React + TypeScript frontend
   features/tags/         Tags view, tag dialog and actions
   features/integrate/    Merge, rebase, cherry-pick, revert and the operation banner
   features/conflicts/    Merge editor (three panes) and its model
+  features/worktrees/    Worktrees view, new worktree dialog and actions
   layouts/               Window shell: title bar, sidebar, status bar, window controls
   services/              IPC wrappers, dialog, platform, local preferences
   styles/                Design tokens and base styles
@@ -164,6 +169,7 @@ src-tauri/               Rust backend
   src/git/integrate.rs   Merge, rebase, cherry-pick, revert; continue, skip, abort
   src/git/rebase_plan.rs Interactive rebase plans
   src/git/conflict.rs    Three-way view of a conflicted file; saving its resolution
+  src/git/worktrees.rs   Worktree list, add, remove, lock and prune
   src/commands.rs        Tauri IPC commands (async, off the UI thread)
   src/error.rs           Error model shared with the frontend
   tests/                 Integration tests against real temporary repositories
@@ -226,8 +232,10 @@ is still to do.
 
 ## Known limitations
 
-- Worktrees are not implemented yet, and remotes cannot be added or edited in Branchline yet;
-  their navigation entries are visible but disabled.
+- Remotes cannot be added or edited in Branchline yet; their navigation entry is visible but
+  disabled.
+- New worktrees go in a folder outside the repository. Branchline shows one repository (or
+  worktree) per window; opening a worktree switches the window to it.
 - The Tags view shows local tags; it does not show which of them already exist on a remote.
 - The merge editor works on text files up to 1 MB; larger files, binary files and symbolic
   links are resolved by keeping one side's version. It has no syntax highlighting and no

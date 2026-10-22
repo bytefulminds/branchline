@@ -17,3 +17,4 @@ pub mod runner;
 pub mod stash;
 pub mod status;
 pub mod tags;
+pub mod worktrees;

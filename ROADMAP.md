@@ -63,7 +63,7 @@ Milestones are only marked complete when the behavior works against real Git and
 - [x] Cherry-pick several commits at once
 - [x] Conflict resolution: three-pane merge editor (take ours or theirs per change, edit the
       result), whole-file choices
-- [ ] Worktrees
+- [x] Worktrees: create (new or existing branch, or a commit), open, lock, remove, clean up
 
 ## Milestone 6: Quality and release readiness
 

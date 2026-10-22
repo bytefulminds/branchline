@@ -27,6 +27,8 @@ import type {
   TagInfo,
   RepositoryInfo,
   StartPoint,
+  WorktreeInfo,
+  WorktreeTarget,
 } from "../types/git";
 
 /** Normalize anything thrown by `invoke` into the backend's error shape. */
@@ -223,6 +225,16 @@ export const gitService = {
   /** Rewrite the commits after `base`; `plan` is oldest first and names every commit once. */
   interactiveRebase: (repo: string, base: string, plan: PlanStep[], autostash: boolean) =>
     call<IntegrateResult>("interactive_rebase", { repo, base, plan, autostash }),
+  listWorktrees: (repo: string) => call<WorktreeInfo[]>("list_worktrees", { repo }),
+  /** Create a worktree; resolves to its folder. */
+  addWorktree: (repo: string, path: string, target: WorktreeTarget) =>
+    call<string>("add_worktree", { repo, path, target }),
+  removeWorktree: (repo: string, path: string, force: boolean) =>
+    call<void>("remove_worktree", { repo, path, force }),
+  lockWorktree: (repo: string, path: string, locked: boolean, reason: string) =>
+    call<void>("lock_worktree", { repo, path, locked, reason }),
+  /** Forget worktrees whose folders were deleted; resolves to how many. */
+  pruneWorktrees: (repo: string) => call<number>("prune_worktrees", { repo }),
   /** Three-way view of one conflicted file. */
   conflictFile: (repo: string, path: string) => call<ConflictFile>("conflict_file", { repo, path }),
   /** Save the merged text and mark the file as resolved. */

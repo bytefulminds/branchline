@@ -1,0 +1,46 @@
+.bl-worktree__branch {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  max-width: 50%;
+  color: var(--color-accent);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.bl-worktree__branch--missing {
+  color: var(--color-warning);
+}
+.bl-worktree--missing .bl-branch__name {
+  color: var(--color-text-secondary);
+}
+.bl-worktree__locked {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.bl-worktree-dialog__modes {
+  margin-bottom: var(--space-3);
+}
+.bl-worktree-dialog__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--space-3);
+}
+.bl-worktree-dialog__path {
+  display: flex;
+  gap: var(--space-2);
+}
+.bl-worktree-dialog__path .bl-button {
+  flex: none;
+}
+.bl-worktree-dialog__hint {
+  margin: var(--space-1) 0 0;
+}
+select.bl-input {
+  height: 32px;
+  padding-top: 0;
+  padding-bottom: 0;
+}

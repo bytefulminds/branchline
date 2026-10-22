@@ -11,3 +11,10 @@ export async function pickRepositoryFolder(): Promise<string | null> {
   });
   return typeof selected === "string" ? selected : null;
 }
+
+/** Show the native folder picker for any folder. Resolves to `null` when cancelled. */
+export async function pickFolder(title: string, defaultPath?: string): Promise<string | null> {
+  if (!isTauri()) return null;
+  const selected = await open({ directory: true, multiple: false, title, defaultPath });
+  return typeof selected === "string" ? selected : null;
+}

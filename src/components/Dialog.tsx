@@ -31,7 +31,10 @@ export function Dialog({
 
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
-    const first = ref.current?.querySelector<HTMLElement>("[autofocus], input, textarea, button");
+    // `data-autofocus` picks a field explicitly (React does not render `autofocus`).
+    const first =
+      ref.current?.querySelector<HTMLElement>("[data-autofocus]") ??
+      ref.current?.querySelector<HTMLElement>("[autofocus], input, textarea, button");
     first?.focus();
     return () => previous?.focus?.();
   }, []);

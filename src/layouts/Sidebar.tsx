@@ -16,11 +16,12 @@ import {
   type RepositoryController,
 } from "../features/repository/useRepository";
 import { useTagActions } from "../features/tags/TagActions";
+import { useWorktreeActions } from "../features/worktrees/WorktreeActions";
 import { displayPath } from "../lib/format";
 import { modKeyLabel } from "../services/platform";
 import "./Sidebar.css";
 
-export type WorkspaceView = "changes" | "history" | "branches" | "stashes" | "tags";
+export type WorkspaceView = "changes" | "history" | "branches" | "stashes" | "tags" | "worktrees";
 
 const MAX_SIDEBAR_RECENT = 6;
 
@@ -64,7 +65,6 @@ function NavItem({
 /** Repository areas planned for later milestones. Shown disabled, never with fake data. */
 const UPCOMING: { label: string; icon: ReactNode }[] = [
   { label: "Remotes", icon: <Cloud size={16} /> },
-  { label: "Worktrees", icon: <FolderTree size={16} /> },
 ];
 
 export function Sidebar({
@@ -85,6 +85,7 @@ export function Sidebar({
   const currentPath = currentRepositoryPath(state);
   const conflicts = repo?.changes.filter((c) => c.conflict).length ?? 0;
   const { tags } = useTagActions();
+  const { worktrees } = useWorktreeActions();
 
   return (
     <nav className="bl-sidebar" style={{ width }} aria-label="Repository navigation">
@@ -156,6 +157,14 @@ export function Sidebar({
               active={view === "tags"}
               onClick={() => onView("tags")}
               count={tags?.length || undefined}
+            />
+            <NavItem
+              icon={<FolderTree size={16} />}
+              label="Worktrees"
+              title={`Worktrees (${modKeyLabel}6)`}
+              active={view === "worktrees"}
+              onClick={() => onView("worktrees")}
+              count={worktrees && worktrees.length > 1 ? worktrees.length : undefined}
             />
             {UPCOMING.map((item) => (
               <NavItem

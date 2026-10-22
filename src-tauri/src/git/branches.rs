@@ -31,6 +31,8 @@ pub struct BranchInfo {
     /// Committer time of the tip, seconds since the Unix epoch.
     pub tip_time: i64,
     pub tip_summary: String,
+    /// Folder of another worktree where this local branch is checked out.
+    pub worktree_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -87,6 +89,7 @@ pub fn parse_branches(output: &[u8]) -> BranchList {
                 upstream_gone: gone,
                 tip_time,
                 tip_summary: summary.to_string(),
+                worktree_path: None,
             });
         } else if let Some(name) = refname.strip_prefix("refs/remotes/") {
             if name.ends_with("/HEAD") {
@@ -104,6 +107,7 @@ pub fn parse_branches(output: &[u8]) -> BranchList {
                 upstream_gone: false,
                 tip_time,
                 tip_summary: summary.to_string(),
+                worktree_path: None,
             });
         }
     }
@@ -122,6 +126,19 @@ pub fn list_branches(root: &Path) -> Result<BranchList, GitError> {
         DEFAULT_TIMEOUT,
     )?;
     Ok(parse_branches(&out.stdout))
+}
+
+/// Branches plus, for local branches checked out in another worktree, that folder.
+pub fn list_branches_with_worktrees(root: &Path) -> Result<BranchList, GitError> {
+    let mut list = list_branches(root)?;
+    let elsewhere = super::worktrees::branches_elsewhere(root);
+    for b in &mut list.local {
+        b.worktree_path = elsewhere
+            .iter()
+            .find(|(name, _)| name == &b.name)
+            .map(|(_, path)| path.clone());
+    }
+    Ok(list)
 }
 
 /// Validate a new local branch name. Returns a user-facing reason when invalid.
@@ -158,6 +175,7 @@ fn find_local<'a>(list: &'a BranchList, name: &str) -> Result<&'a BranchInfo, Gi
 
 /// Map Git's "your local changes would be overwritten" refusal to a clear error.
 fn checkout_error(e: GitError) -> GitError {
+    let e = super::worktrees::branch_in_use_error(e);
     match e {
         GitError::GitFailed { stderr, .. }
             if stderr.contains("would be overwritten by checkout")
@@ -346,7 +364,7 @@ pub fn delete_branch(repo: &str, name: &str, force: bool) -> Result<(), GitError
                 branch: name.to_string(),
             })
         }
-        Err(e) => Err(e),
+        Err(e) => Err(super::worktrees::branch_in_use_error(e)),
     }
 }
 

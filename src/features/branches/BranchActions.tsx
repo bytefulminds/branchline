@@ -58,10 +58,11 @@ export function BranchActionsProvider({
   children,
 }: {
   repo: RepositoryInfo | null;
-  controller: Pick<RepositoryController, "run">;
+  controller: Pick<RepositoryController, "run"> & Partial<Pick<RepositoryController, "open">>;
   children: ReactNode;
 }) {
   const { branches } = useBranches(repo);
+  const openRepo = controller.open;
   const confirm = useConfirm();
   const toast = useToast();
   const [dialog, setDialog] = useState<DialogState>(null);
@@ -88,9 +89,22 @@ export function BranchActionsProvider({
         });
         return;
       }
+      if (error.kind === "branchInWorktree") {
+        const folder = error.detail;
+        toast({
+          tone: "error",
+          title,
+          description: error.message,
+          actions:
+            folder && openRepo
+              ? [{ label: "Open that worktree", onClick: () => void openRepo(folder) }]
+              : undefined,
+        });
+        return;
+      }
       toast({ tone: "error", title, description: error.detail ?? error.message });
     },
-    [toast],
+    [toast, openRepo],
   );
 
   const switchTo = useCallback(
