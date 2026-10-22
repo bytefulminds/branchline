@@ -178,3 +178,22 @@ describe("commit box", () => {
     }
   });
 });
+
+describe("commit message size", () => {
+  it("resizes the description from the line above the summary and resets on Enter", async () => {
+    const { user } = await openRepo(REPO);
+    const handle = screen.getByRole("separator", { name: "Resize commit message" });
+    const description = screen.getByRole("textbox", { name: "Commit description" });
+    expect(handle).toHaveAttribute("aria-orientation", "horizontal");
+    expect(description.style.height).toBe("64px");
+    handle.focus();
+    await user.keyboard("{ArrowUp}{ArrowUp}");
+    expect(description.style.height).toBe("96px");
+    await user.keyboard("{ArrowDown}");
+    expect(description.style.height).toBe("80px");
+    await user.keyboard("{Enter}");
+    expect(description.style.height).toBe("64px");
+    await user.keyboard("{Home}");
+    expect(description.style.height).toBe("40px");
+  });
+});

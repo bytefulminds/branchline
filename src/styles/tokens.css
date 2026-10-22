@@ -69,6 +69,18 @@
   --graph-6: #fb923c;
   --graph-7: #a3e635;
   --graph-lane-width: 14px;
+
+  /* Syntax colors in diffs (see docs/design-system.md); all at least 4.5:1 on the diff rows */
+  --syntax-keyword: #c792ea;
+  --syntax-string: #a5d6a7;
+  --syntax-number: #f78c6c;
+  --syntax-comment: #9aa8bc;
+  --syntax-function: #82aaff;
+  --syntax-type: #ffcb6b;
+  --syntax-tag: #f78c8c;
+  --syntax-attribute: #ffcb6b;
+  --syntax-meta: #89ddff;
+  --syntax-variable: #f8fafc;
   --history-row-height: 30px;
 
   /* Interaction */

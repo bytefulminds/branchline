@@ -1,12 +1,13 @@
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, History } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { Button } from "../../components/Button";
+import { Button, IconButton } from "../../components/Button";
 import { Spinner } from "../../components/Spinner";
 import { StatusLetter } from "../../components/StatusLetter";
 import { splitPath } from "../../lib/format";
 import { gitService } from "../../services/git";
 import type { CommitFile, FileDiff, GitError } from "../../types/git";
 import { DiffBody } from "../changes/DiffView";
+import { DiffLayoutToggle } from "../changes/DiffLayoutToggle";
 import { diffRows } from "../changes/diffModel";
 import { fileStatus } from "./CommitDetailsPanel";
 
@@ -17,6 +18,7 @@ export function CommitDiffView({
   file,
   onBack,
   backLabel = "History",
+  onShowHistory,
 }: {
   repoPath: string;
   oid: string;
@@ -24,6 +26,8 @@ export function CommitDiffView({
   onBack: () => void;
   /** Text of the back button (where it returns to). */
   backLabel?: string;
+  /** Show the commits that changed this file. */
+  onShowHistory?: (path: string) => void;
 }) {
   const [diff, setDiff] = useState<FileDiff | null>(null);
   const [error, setError] = useState<GitError | null>(null);
@@ -86,9 +90,21 @@ export function CommitDiffView({
           )}
           {loading && diff && <Spinner size={14} label="Loading" />}
         </div>
+        <div className="bl-diff__actions">
+          <DiffLayoutToggle />
+          {onShowHistory && (
+            <IconButton
+              size="sm"
+              label="Show file history"
+              icon={<History size={14} aria-hidden />}
+              onClick={() => onShowHistory(file.path)}
+            />
+          )}
+        </div>
       </header>
       <DiffBody
         diff={diff}
+        path={file.path}
         rows={rows}
         error={error}
         loading={loading}

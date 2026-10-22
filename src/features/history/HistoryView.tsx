@@ -11,13 +11,19 @@ import {
   ListOrdered,
   LogIn,
   Tag,
+  SearchX,
   Undo2,
   X,
 } from "lucide-react";
 import { useContextMenu } from "../../components/ContextMenu";
 import type { MenuEntry } from "../../components/Menu";
 import { useBranchActions } from "../branches/BranchActions";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Button } from "../../components/Button";
+import { useDebouncedValue } from "../../lib/useDebouncedValue";
+import { isPrimaryModifier } from "../../services/platform";
+import type { LogFilter } from "../../types/git";
+import { activeFilterCount, HistoryFilterBar, HistorySearch } from "./HistoryFilters";
 import { EmptyState } from "../../components/EmptyState";
 import { Spinner } from "../../components/Spinner";
 import { Splitter } from "../../components/Splitter";
@@ -32,8 +38,21 @@ import { useWorktreeActions } from "../worktrees/WorktreeActions";
 import { CommitList, graphColumnWidth, WorkInProgressRow } from "./CommitList";
 import { cherryPickProblem, MultiSelectionPanel } from "./MultiSelectionPanel";
 import { EMPTY_SELECTION, nextSelection, oldestFirst, single, type SelectMode } from "./selection";
-import { useHistory } from "./useHistory";
+import { EMPTY_FILTER, isFiltering, useHistory } from "./useHistory";
 import "./HistoryView.css";
+
+/** Search and filters per repository, kept while switching views. */
+const savedFilters = new Map<string, { filter: LogFilter; open: boolean }>();
+
+/** Make History open filtered to this file or folder (the next time it is shown). */
+export function showFileHistory(repoPath: string, path: string) {
+  savedFilters.set(repoPath, { filter: { ...EMPTY_FILTER, path }, open: true });
+}
+
+/** Test helper: forget searches. */
+export function resetHistoryFilters() {
+  savedFilters.clear();
+}
 
 export function HistoryView({
   repo,
@@ -42,7 +61,28 @@ export function HistoryView({
   repo: RepositoryInfo;
   onShowChanges: () => void;
 }) {
-  const history = useHistory(repo);
+  const saved = savedFilters.get(repo.path);
+  const [filter, setFilter] = useState<LogFilter>(saved?.filter ?? EMPTY_FILTER);
+  const [filtersOpen, setFiltersOpen] = useState(saved?.open ?? false);
+  useEffect(() => {
+    savedFilters.set(repo.path, { filter, open: filtersOpen });
+  }, [repo.path, filter, filtersOpen]);
+  // Typing only searches once it pauses; clearing everything applies at once.
+  const debounced = useDebouncedValue(filter, 300);
+  const applied = isFiltering(filter) ? debounced : EMPTY_FILTER;
+  const history = useHistory(repo, applied);
+  const searchRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() === "f" && isPrimaryModifier(e) && !e.shiftKey && !e.altKey) {
+        e.preventDefault();
+        searchRef.current?.focus();
+        searchRef.current?.select();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   const branchActions = useBranchActions();
   const showMenu = useContextMenu();
   const [selection, setSelection] = useState(EMPTY_SELECTION);
@@ -52,6 +92,14 @@ export function HistoryView({
     400,
   );
   const { data, loadMore } = history;
+  // A new search starts with nothing selected (the first result is shown).
+  const appliedKey = JSON.stringify(applied);
+  const [selectionFor, setSelectionFor] = useState(appliedKey);
+  if (selectionFor !== appliedKey) {
+    setSelectionFor(appliedKey);
+    setSelection(EMPTY_SELECTION);
+    setOpenFile(null);
+  }
 
   const order = useMemo(() => data?.commits.map((c) => c.oid) ?? [], [data]);
   const select = useCallback(
@@ -230,6 +278,18 @@ export function HistoryView({
         <Spinner size={18} /> Loading history…
       </div>
     );
+  } else if (data.commits.length === 0 && data.filtered) {
+    list = (
+      <EmptyState
+        icon={<SearchX size={22} aria-hidden />}
+        title="No matching commits"
+        description="Try other words or fewer filters."
+      >
+        <Button size="sm" onClick={() => setFilter(EMPTY_FILTER)}>
+          Clear search and filters
+        </Button>
+      </EmptyState>
+    );
   } else if (data.commits.length === 0) {
     list = (
       <EmptyState
@@ -249,6 +309,7 @@ export function HistoryView({
         onClearSelection={clearSelection}
         onNearEnd={loadMore}
         loadingMore={history.loadingMore}
+        highlight={data.filtered ? applied.text : ""}
         rowProps={(oid) =>
           drop(oid, {
             kind: "commit",
@@ -280,18 +341,46 @@ export function HistoryView({
             oid={openFile.oid}
             file={openFile.file}
             onBack={() => setOpenFile(null)}
+            onShowHistory={(path) => {
+              setFilter({ ...EMPTY_FILTER, path });
+              setFiltersOpen(true);
+              setOpenFile(null);
+            }}
           />
         ) : (
           <>
             <div className="bl-history__header">
               <h1 className="text-h2">History</h1>
-              <span className="text-small text-secondary">
+              <span className="text-small text-secondary bl-history__count" aria-live="polite">
                 {data
-                  ? `${data.total.toLocaleString()} ${data.total === 1 ? "commit" : "commits"}`
+                  ? `${data.total.toLocaleString()} ${data.filtered ? "matching " : ""}${
+                      data.total === 1 ? "commit" : "commits"
+                    }`
                   : ""}
               </span>
               {history.loading && data && <Spinner size={14} label="Updating history" />}
+              <HistorySearch
+                ref={searchRef}
+                value={filter.text}
+                onChange={(text) => setFilter((f) => ({ ...f, text }))}
+                filtersOpen={filtersOpen}
+                filterCount={activeFilterCount(filter)}
+                onToggleFilters={() => setFiltersOpen((o) => !o)}
+              />
             </div>
+            {filtersOpen && (
+              <HistoryFilterBar
+                filter={filter}
+                onChange={setFilter}
+                error={data ? history.error : null}
+              />
+            )}
+            {!filtersOpen && data && history.error && (
+              <p className="bl-history__filter-error bl-history__filter-error--bar" role="alert">
+                <CircleAlert size={14} aria-hidden />
+                {history.error.message}
+              </p>
+            )}
             {repo.totalChanges > 0 && (
               <WorkInProgressRow count={repo.totalChanges} onOpen={onShowChanges} />
             )}

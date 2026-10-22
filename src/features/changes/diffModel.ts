@@ -73,10 +73,15 @@ export function toSelections(sel: LineSelection): HunkSelection[] {
 }
 
 /** Longest line in characters (tabs count as 4), capped for layout purposes. */
-export function longestLine(diff: FileDiff, cap = 4000): number {
+export function longestLine(
+  diff: FileDiff,
+  cap = 4000,
+  include: (kind: string) => boolean = () => true,
+): number {
   let max = 0;
   for (const h of diff.hunks)
     for (const l of h.lines) {
+      if (!include(l.kind)) continue;
       let n = l.content.length;
       for (const c of l.content) if (c === "\t") n += 3;
       if (n > max) max = n;
@@ -86,3 +91,41 @@ export function longestLine(diff: FileDiff, cap = 4000): number {
 }
 
 export const CONFLICT_MARKER = /^(<{7}|={7}|>{7}|\|{7})( |$)/;
+
+/**
+ * A row of the side-by-side layout: the old line on the left, the new line on the right
+ * (line indices into the hunk). Unchanged lines fill both sides; a block of removed lines
+ * followed by added lines is paired up top to bottom, leaving the shorter side empty.
+ */
+export type SplitRow =
+  | { type: "hunk"; hunk: number }
+  | { type: "pair"; hunk: number; left: number | null; right: number | null };
+
+export function splitRows(diff: FileDiff, showHunkHeaders = true): SplitRow[] {
+  const rows: SplitRow[] = [];
+  diff.hunks.forEach((hunk, h) => {
+    if (showHunkHeaders) rows.push({ type: "hunk", hunk: h });
+    let deletes: number[] = [];
+    let adds: number[] = [];
+    const flush = () => {
+      for (let k = 0; k < Math.max(deletes.length, adds.length); k++)
+        rows.push({ type: "pair", hunk: h, left: deletes[k] ?? null, right: adds[k] ?? null });
+      deletes = [];
+      adds = [];
+    };
+    hunk.lines.forEach((line, i) => {
+      if (line.kind === "delete") {
+        // Removed lines after added ones start a new block.
+        if (adds.length) flush();
+        deletes.push(i);
+      } else if (line.kind === "add") {
+        adds.push(i);
+      } else {
+        flush();
+        rows.push({ type: "pair", hunk: h, left: i, right: i });
+      }
+    });
+    flush();
+  });
+  return rows;
+}

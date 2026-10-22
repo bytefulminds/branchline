@@ -15,7 +15,8 @@ import { InitDialog } from "./features/repository/InitDialog";
 import { separatorOf } from "./features/worktrees/WorktreeDialog";
 import { BranchActionsProvider } from "./features/branches/BranchActions";
 import { BranchesView } from "./features/branches/BranchesView";
-import { HistoryView } from "./features/history/HistoryView";
+import { HistoryView, showFileHistory } from "./features/history/HistoryView";
+import { FileHistoryProvider } from "./features/history/fileHistory";
 import { IntegrateActionsProvider } from "./features/integrate/IntegrateActions";
 import { RemoteActionsProvider } from "./features/remote/RemoteActions";
 import { StashActionsProvider } from "./features/stash/StashActions";
@@ -215,7 +216,18 @@ function Workspace() {
                   view={view}
                   onView={setView}
                 >
-                  {content}
+                  <FileHistoryProvider
+                    value={
+                      state.status === "ready"
+                        ? (path: string) => {
+                            showFileHistory(state.repo.path, path);
+                            setView("history");
+                          }
+                        : null
+                    }
+                  >
+                    {content}
+                  </FileHistoryProvider>
                 </AppShell>
                 {settingsOpen && (
                   <SettingsView

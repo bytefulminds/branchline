@@ -7,6 +7,7 @@ import {
   diffRows,
   selectRange,
   selectionCount,
+  splitRows,
   toSelections,
   toggleLine,
   type LineSelection,
@@ -75,5 +76,46 @@ describe("nextSelection", () => {
     );
     expect(nextSelection([a], [aStaged], a.id)).toBe(aStaged.id);
     expect(nextSelection([a], [], a.id)).toBeNull();
+  });
+
+  it("pairs removed and added lines side by side", () => {
+    const diff = diffFor({ path: "f", area: "unstaged" });
+    const line = (kind: "context" | "add" | "delete", content: string) => ({
+      kind,
+      content,
+      oldLine: null,
+      newLine: null,
+      noNewline: false,
+      crlf: false,
+    });
+    const d = {
+      ...diff,
+      hunks: [
+        {
+          ...diff.hunks[0]!,
+          lines: [
+            line("context", "a"), // 0
+            line("delete", "b"), // 1
+            line("delete", "c"), // 2
+            line("add", "B"), // 3
+            line("context", "d"), // 4
+            line("add", "E"), // 5
+            line("add", "F"), // 6
+            line("delete", "g"), // 7
+          ],
+        },
+      ],
+    };
+    expect(splitRows(d)).toEqual([
+      { type: "hunk", hunk: 0 },
+      { type: "pair", hunk: 0, left: 0, right: 0 },
+      { type: "pair", hunk: 0, left: 1, right: 3 },
+      { type: "pair", hunk: 0, left: 2, right: null },
+      { type: "pair", hunk: 0, left: 4, right: 4 },
+      { type: "pair", hunk: 0, left: null, right: 5 },
+      { type: "pair", hunk: 0, left: null, right: 6 },
+      { type: "pair", hunk: 0, left: 7, right: null },
+    ]);
+    expect(splitRows(d, false)[0]).toEqual({ type: "pair", hunk: 0, left: 0, right: 0 });
   });
 });

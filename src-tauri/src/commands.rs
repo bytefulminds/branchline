@@ -11,7 +11,7 @@ use crate::git::create;
 use crate::git::diff::{self, DiffArea, FileDiff};
 use crate::git::identity::{self, ConfigScope, Identity, IdentityValues};
 use crate::git::integrate::{self, IntegrateOutcome, MergeRequest, Step};
-use crate::git::log::{self, CommitDetails, LogPage, RefInfo};
+use crate::git::log::{self, CommitDetails, LogFilter, LogPage, RefInfo};
 use crate::git::ops::{self, LineRequest};
 use crate::git::rebase_plan::{self, PlanCommit, PlanStep};
 use crate::git::remote::{self, Progress, PullMode, PushRequest, RemoteInfo, RemoteOutcome};
@@ -111,8 +111,21 @@ pub async fn apply_lines(repo: String, request: LineRequest) -> Result<Repositor
 
 /// One page of history (newest first).
 #[tauri::command]
-pub async fn log_page(repo: String, skip: usize, limit: usize) -> Result<LogPage, GitError> {
-    blocking(move || log::log_page(&repository::resolve_root(&repo)?, skip, limit)).await
+pub async fn log_page(
+    repo: String,
+    skip: usize,
+    limit: usize,
+    filter: Option<LogFilter>,
+) -> Result<LogPage, GitError> {
+    blocking(move || {
+        log::log_page(
+            &repository::resolve_root(&repo)?,
+            skip,
+            limit,
+            filter.as_ref(),
+        )
+    })
+    .await
 }
 
 #[tauri::command]

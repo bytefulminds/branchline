@@ -45,7 +45,7 @@ Native Git CLI
 | `apply_lines(repo, request)` | `RepositoryInfo` | Stage, unstage or discard hunks or lines |
 | `watch_repository(repo)` / `unwatch_repository` | none | Emits `repository-changed` events |
 
-| `log_page(repo, skip, limit)` | `LogPage` | History in `--date-order`, paged from a cached topology |
+| `log_page(repo, skip, limit, filter?)` | `LogPage` | History in `--date-order`, paged from a cached topology; with a `LogFilter` only matches (`total` counts them) |
 | `list_refs(repo)` | `RefInfo[]` | Branches, remote branches and tags (annotated tags peeled) |
 | `commit_details(repo, oid)` | `CommitDetails` | Message, people, parents, files against the first parent |
 | `commit_file_diff(repo, oid, path, originalPath, force)` | `FileDiff` | Read-only diff of one file in a commit |
@@ -351,3 +351,35 @@ The graph layout (`src/features/history/graph.ts`) is a pure, incremental functi
 lanes to the right, and lanes that expect the same commit converge at its row. The state carries
 over between pages. A randomized test lays out 500 random histories in random page sizes and
 checks that every line leaving a row enters the next one and that all lanes close.
+
+### Search and filters
+
+- `LogFilter` has a text (message, author or start of a commit id), an author, a file or folder,
+  a date range (`YYYY-MM-DD`, inclusive days) and "current branch only". Input is validated:
+  no control characters, at most 200 characters, paths through `validate_relative`, dates in
+  that exact form. Values are passed as `--grep=`, `--author=` and `--since=` arguments and after
+  `--`, so text can never become an option; `--fixed-strings` and `--regexp-ignore-case` make
+  them plain, case-insensitive text.
+- The author, path, dates and branch go into one `rev-list` (all must match). The text is matched
+  in separate lookups (message, author, commit id prefix) and combined, because Git requires
+  both `--grep` and `--author` to match when given together.
+- The matching ids are kept in the cached history order (so results stay in graph order) and
+  cached per filter, so paging through results costs the same as paging through history. The
+  UI shows results without graph lines; neighbours in a result list are rarely parent and child.
+- The UI waits until typing pauses (300 ms) before searching. Search and filters are kept per
+  repository while switching views. "Show file history" sets the path filter and opens History.
+
+## Diff layout and syntax highlighting
+
+- `splitRows` pairs a block of removed lines with the added lines that follow it, top to bottom,
+  and fills the shorter side with empty rows. Rows keep hunk and line indices, so line selection,
+  hunk actions and partial staging are the same code in both layouts.
+- Side by side uses two scroll containers with the same virtual window: the right one drives it,
+  the left one follows its vertical position, and each scrolls sideways on its own.
+- Syntax highlighting uses highlight.js grammars through `lowlight`, loaded with a dynamic import
+  on first use (its own bundle chunk). Each hunk is highlighted twice, as the old text (unchanged
+  and removed lines) and the new text (unchanged and added lines), and the result is split back
+  into lines. Tokens are only used when they rebuild the line exactly. Diffs over 400 KB or
+  with lines over 2,000 characters are not highlighted. Conflict views stay plain.
+- The layout and highlighting are settings (`editor.diffLayout`, `editor.syntaxHighlighting`).
+  Unknown values in a hand-edited settings file fall back to the default for that field only.

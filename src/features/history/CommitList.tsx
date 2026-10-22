@@ -6,6 +6,7 @@ import { useVirtualRows } from "../../lib/useVirtualRows";
 import type { HeadState } from "../../types/git";
 import { Avatar } from "./Avatar";
 import { GraphCell } from "./GraphCell";
+import { Highlight } from "./HistoryFilters";
 import { RefBadges } from "./RefBadges";
 import type { SelectMode } from "./selection";
 import type { HistoryData } from "./useHistory";
@@ -39,6 +40,7 @@ export function CommitList({
   loadingMore,
   onContextMenu,
   rowProps,
+  highlight = "",
 }: {
   data: HistoryData;
   head: HeadState;
@@ -56,6 +58,8 @@ export function CommitList({
   onContextMenu?: (oid: string, at: { x: number; y: number }) => void;
   /** Extra props per row, for example to accept dropped branches. */
   rowProps?: (oid: string) => Record<string, unknown>;
+  /** Search text to mark in the commit summaries. */
+  highlight?: string;
 }) {
   const baseId = useId();
   const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
@@ -165,7 +169,7 @@ export function CommitList({
                   isHeadCommit={isHead}
                 />
                 <span className={`truncate${row.isMerge ? " bl-commit-row__merge" : ""}`}>
-                  {commit.summary}
+                  <Highlight text={commit.summary} query={highlight} />
                 </span>
               </span>
               <span className="bl-commit-row__author">

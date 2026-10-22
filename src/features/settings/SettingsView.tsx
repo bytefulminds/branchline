@@ -13,7 +13,13 @@ import { Button, IconButton } from "../../components/Button";
 import { platform } from "../../services/platform";
 import { settingsService } from "../../services/settings";
 import type { GitError } from "../../types/git";
-import type { ConfigScope, Identity, IdentityValues, Settings } from "../../types/settings";
+import type {
+  ConfigScope,
+  DiffLayout,
+  Identity,
+  IdentityValues,
+  Settings,
+} from "../../types/settings";
 import { AiSection } from "./AiSection";
 import { Field, NumberSelect, type Setter, TextSetting, Toggle } from "./SettingControls";
 import { useSettings } from "./SettingsProvider";
@@ -288,7 +294,14 @@ const TERMINAL_HINT =
       : "For example gnome-terminal or kitty. Empty tries the usual terminals.";
 
 function EditorSection({ s, set }: { s: Settings; set: Setter }) {
-  const ids = { editor: useId(), terminal: useId(), context: useId(), tab: useId(), font: useId() };
+  const ids = {
+    editor: useId(),
+    terminal: useId(),
+    context: useId(),
+    tab: useId(),
+    font: useId(),
+    layout: useId(),
+  };
   const e = s.editor;
   const setE = (patch: Partial<Settings["editor"]>) =>
     set((x) => ({ ...x, editor: { ...x.editor, ...patch } }));
@@ -310,6 +323,27 @@ function EditorSection({ s, set }: { s: Settings; set: Setter }) {
           onCommit={(v) => setE({ terminal: v })}
         />
       </Field>
+      <Field
+        label="Diff layout"
+        help="Also switchable with the buttons above each diff."
+        htmlFor={ids.layout}
+      >
+        <select
+          id={ids.layout}
+          className="bl-input bl-setting__select"
+          value={e.diffLayout}
+          onChange={(ev) => setE({ diffLayout: ev.target.value as DiffLayout })}
+        >
+          <option value="unified">One column</option>
+          <option value="split">Side by side</option>
+        </select>
+      </Field>
+      <Toggle
+        label="Syntax highlighting"
+        help="Colors code in diffs by language. Very large diffs are shown without colors."
+        checked={e.syntaxHighlighting}
+        onChange={(v) => setE({ syntaxHighlighting: v })}
+      />
       <Field
         label="Context lines in diffs"
         help="Unchanged lines shown around each change."

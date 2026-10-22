@@ -195,6 +195,20 @@ export interface LogCommit {
   summary: string;
 }
 
+/** Narrows the history; empty fields do not filter and all set fields must match. */
+export interface LogFilter {
+  /** Message, author name or email, or the start of a commit id (not a pattern). */
+  text: string;
+  author: string;
+  /** A file or folder, relative to the repository. */
+  path: string;
+  /** `YYYY-MM-DD`, inclusive. */
+  since: string;
+  until: string;
+  /** Only commits reachable from HEAD. */
+  currentBranch: boolean;
+}
+
 export interface LogPage {
   commits: LogCommit[];
   hasMore: boolean;

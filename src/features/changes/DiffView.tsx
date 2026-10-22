@@ -4,6 +4,7 @@ import {
   CircleAlert,
   FileWarning,
   GitMerge,
+  History,
   Minus,
   Plus,
   SquarePen,
@@ -14,6 +15,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "../../components/Badge";
 import { Button, IconButton } from "../../components/Button";
 import { useOpenIn } from "../repository/useOpenIn";
+import { useShowFileHistory } from "../history/fileHistory";
 import { EmptyState } from "../../components/EmptyState";
 import { Spinner } from "../../components/Spinner";
 import { StatusLetter } from "../../components/StatusLetter";
@@ -27,6 +29,7 @@ import {
   diffAreaFor,
   diffRows,
   isChangeLine,
+  splitRows,
   longestLine,
   selectRange,
   selectionCount,
@@ -36,6 +39,8 @@ import {
   type LineSelection,
 } from "./diffModel";
 import type { FileAction } from "./FileList";
+import { DiffLayoutToggle } from "./DiffLayoutToggle";
+import { useDiffSyntax, type DiffSyntax, type SyntaxToken } from "./syntax";
 import "./DiffView.css";
 
 export const DIFF_ROW_HEIGHT = 22;
@@ -86,6 +91,7 @@ export function DiffView({
 }: DiffViewProps) {
   const area = diffAreaFor(entry);
   const openIn = useOpenIn();
+  const showHistory = useShowFileHistory();
   const [diff, setDiff] = useState<FileDiff | null>(null);
   const [error, setError] = useState<GitError | null>(null);
   const [force, setForce] = useState(false);
@@ -232,12 +238,21 @@ export function DiffView({
           {loading && diff && <Spinner size={14} label="Updating diff" />}
         </div>
         <div className="bl-diff__actions">
+          {entry.area !== "conflicted" && <DiffLayoutToggle />}
           {entry.status !== "deleted" && (
             <IconButton
               size="sm"
               label="Open in editor"
               icon={<SquarePen size={14} aria-hidden />}
               onClick={() => openIn.editor(repoPath, entry.path)}
+            />
+          )}
+          {showHistory && entry.status !== "untracked" && entry.status !== "added" && (
+            <IconButton
+              size="sm"
+              label="Show file history"
+              icon={<History size={14} aria-hidden />}
+              onClick={() => showHistory(entry.originalPath ?? entry.path)}
             />
           )}
           {count > 0 ? (
@@ -302,6 +317,7 @@ export function DiffView({
 
       <DiffBody
         diff={diff}
+        path={entry.path}
         rows={rows}
         error={error}
         loading={loading}
@@ -319,9 +335,31 @@ export function DiffView({
   );
 }
 
+/** Line text, colored when syntax tokens are available (and match the text exactly). */
+function LineText({ content, tokens }: { content: string; tokens: SyntaxToken[] | null }) {
+  if (!tokens || tokens.reduce((n, t) => n + t.text.length, 0) !== content.length)
+    return <>{content}</>;
+  return (
+    <>
+      {tokens.map((t, i) =>
+        t.className ? (
+          <span key={i} className={t.className}>
+            {t.text}
+          </span>
+        ) : (
+          t.text
+        ),
+      )}
+    </>
+  );
+}
+
+const SPOKEN_KIND = { add: "added: ", delete: "removed: ", context: "" } as const;
+
 /** Scrollable, virtualized diff content. Also used read-only for commit diffs. */
 export function DiffBody({
   diff,
+  path,
   rows,
   error,
   loading,
@@ -336,10 +374,12 @@ export function DiffBody({
   onClearSelection = () => {},
 }: {
   diff: FileDiff | null;
+  /** File path, used to pick the syntax colors. */
+  path: string;
   rows: DiffRow[];
   error: GitError | null;
   loading: boolean;
-  /** Highlight conflict markers. */
+  /** Highlight conflict markers (always one column). */
   conflict?: boolean;
   binaryNote?: string;
   selection?: LineSelection;
@@ -350,11 +390,10 @@ export function DiffBody({
   onShowLarge: () => void;
   onClearSelection?: () => void;
 }) {
-  const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
-  const rowHeight = diffRowHeight(useSettings().settings.editor.codeFontSize);
-  const virtual = useVirtualRows(scrollEl, rows.length, rowHeight, 20);
-  const width = useMemo(() => (diff ? longestLine(diff) : 0), [diff]);
-  const viewport = useElementSize(scrollEl).width;
+  const { settings } = useSettings();
+  const rowHeight = diffRowHeight(settings.editor.codeFontSize);
+  const split = settings.editor.diffLayout === "split" && !conflict;
+  const syntax = useDiffSyntax(diff, path, settings.editor.syntaxHighlighting && !conflict);
 
   if (error)
     return (
@@ -398,6 +437,77 @@ export function DiffBody({
       />
     );
 
+  const shared = {
+    diff,
+    rowHeight,
+    syntax,
+    selection,
+    partial,
+    lineActions,
+    onLineClick,
+    onHunkAction,
+    onClearSelection,
+  };
+  return split ? (
+    <SplitDiff {...shared} />
+  ) : (
+    <UnifiedDiff {...shared} rows={rows} conflict={conflict} />
+  );
+}
+
+interface LayoutProps {
+  diff: FileDiff;
+  rowHeight: number;
+  syntax: DiffSyntax | null;
+  selection: LineSelection;
+  partial: boolean;
+  lineActions: LineAction[];
+  onLineClick: (e: React.MouseEvent, hunk: number, line: number) => void;
+  onHunkAction: (action: LineAction, hunk: number) => void;
+  onClearSelection: () => void;
+}
+
+function HunkActions({
+  partial,
+  lineActions,
+  onHunkAction,
+  hunk,
+}: Pick<LayoutProps, "partial" | "lineActions" | "onHunkAction"> & { hunk: number }) {
+  if (!partial) return null;
+  return (
+    <span className="bl-diff-hunk__actions">
+      {lineActions.map((action) => (
+        <button
+          key={action}
+          type="button"
+          className={`bl-hunk-action${action === "discard" ? " bl-hunk-action--danger" : ""}`}
+          onClick={() => onHunkAction(action, hunk)}
+        >
+          {LINE_ACTION_LABEL[action]} hunk
+        </button>
+      ))}
+    </span>
+  );
+}
+
+function UnifiedDiff({
+  diff,
+  rows,
+  rowHeight,
+  syntax,
+  conflict,
+  selection,
+  partial,
+  lineActions,
+  onLineClick,
+  onHunkAction,
+  onClearSelection,
+}: LayoutProps & { rows: DiffRow[]; conflict: boolean }) {
+  const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
+  const virtual = useVirtualRows(scrollEl, rows.length, rowHeight, 20);
+  const width = useMemo(() => longestLine(diff), [diff]);
+  const viewport = useElementSize(scrollEl).width;
+
   return (
     <div
       ref={setScrollEl}
@@ -430,20 +540,12 @@ export function DiffBody({
                     @@ -{hunk.oldStart},{hunk.oldLines} +{hunk.newStart},{hunk.newLines} @@
                   </span>
                   <span className="bl-diff-hunk__section truncate">{hunk.section}</span>
-                  {partial && (
-                    <span className="bl-diff-hunk__actions">
-                      {lineActions.map((action) => (
-                        <button
-                          key={action}
-                          type="button"
-                          className={`bl-hunk-action${action === "discard" ? " bl-hunk-action--danger" : ""}`}
-                          onClick={() => onHunkAction(action, row.hunk)}
-                        >
-                          {LINE_ACTION_LABEL[action]} hunk
-                        </button>
-                      ))}
-                    </span>
-                  )}
+                  <HunkActions
+                    partial={partial}
+                    lineActions={lineActions}
+                    onHunkAction={onHunkAction}
+                    hunk={row.hunk}
+                  />
                 </div>
               </div>
             );
@@ -488,14 +590,166 @@ export function DiffBody({
                 </span>
               </span>
               <span className="bl-diff-content">
-                <span className="visually-hidden">
-                  {line.kind === "add" ? "added: " : line.kind === "delete" ? "removed: " : ""}
-                </span>
-                {line.content}
+                <span className="visually-hidden">{SPOKEN_KIND[line.kind]}</span>
+                <LineText
+                  content={line.content}
+                  tokens={isMarker ? null : (syntax?.[row.hunk]?.[row.line] ?? null)}
+                />
               </span>
             </div>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Side by side: two columns that scroll together vertically and on their own horizontally.
+ * The right column drives the virtual window; the left one follows its scroll position.
+ */
+function SplitDiff({
+  diff,
+  rowHeight,
+  syntax,
+  selection,
+  partial,
+  lineActions,
+  onLineClick,
+  onHunkAction,
+  onClearSelection,
+}: LayoutProps) {
+  const rows = useMemo(() => splitRows(diff), [diff]);
+  const [leftEl, setLeftEl] = useState<HTMLDivElement | null>(null);
+  const [rightEl, setRightEl] = useState<HTMLDivElement | null>(null);
+  const virtual = useVirtualRows(rightEl, rows.length, rowHeight, 20);
+  const widths = useMemo(
+    () => ({
+      old: longestLine(diff, 4000, (kind) => kind !== "add"),
+      new: longestLine(diff, 4000, (kind) => kind !== "delete"),
+    }),
+    [diff],
+  );
+  const leftWidth = useElementSize(leftEl).width;
+  const rightWidth = useElementSize(rightEl).width;
+  const visible = rows.slice(virtual.start, virtual.end);
+
+  const column = (side: "old" | "new") => {
+    const viewport = side === "old" ? leftWidth : rightWidth;
+    return (
+      <div
+        className="bl-diff__canvas mono"
+        style={
+          {
+            height: virtual.totalHeight,
+            width: `max(100%, calc(var(--diff-half-gutter) + ${widths[side]}ch + 48px))`,
+            "--diff-viewport": viewport ? `${viewport}px` : "100%",
+          } as React.CSSProperties
+        }
+      >
+        {visible.map((row, i) => {
+          const top = (virtual.start + i) * rowHeight;
+          const style = { transform: `translateY(${top}px)` };
+          const hunk = diff.hunks[row.hunk]!;
+          if (row.type === "hunk")
+            return (
+              <div key={`h${row.hunk}`} className="bl-diff-row bl-diff-row--hunk" style={style}>
+                <div className="bl-diff-hunk">
+                  <span className="bl-diff-hunk__range">
+                    {side === "old"
+                      ? `@@ -${hunk.oldStart},${hunk.oldLines}`
+                      : `+${hunk.newStart},${hunk.newLines} @@`}
+                  </span>
+                  <span className="bl-diff-hunk__section truncate">
+                    {side === "old" ? hunk.section : ""}
+                  </span>
+                  {side === "new" && (
+                    <HunkActions
+                      partial={partial}
+                      lineActions={lineActions}
+                      onHunkAction={onHunkAction}
+                      hunk={row.hunk}
+                    />
+                  )}
+                </div>
+              </div>
+            );
+          const index = side === "old" ? row.left : row.right;
+          const key = `${side}${row.hunk}-${virtual.start + i}`;
+          if (index === null)
+            return <div key={key} className="bl-diff-row bl-diff-row--empty" style={style} />;
+          const line = hunk.lines[index]!;
+          const selectable = partial && line.kind !== "context";
+          const selected = selection.get(row.hunk)?.has(index) ?? false;
+          return (
+            <div
+              key={key}
+              className={[
+                "bl-diff-row",
+                `bl-diff-row--${line.kind}`,
+                selectable && "bl-diff-row--selectable",
+                selected && "bl-diff-row--selected",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              style={style}
+              aria-selected={selectable ? selected : undefined}
+              onClick={selectable ? (e) => onLineClick(e, row.hunk, index) : undefined}
+            >
+              <span className="bl-diff-gutter" aria-hidden>
+                <span className="bl-diff-no">
+                  {(side === "old" ? line.oldLine : line.newLine) ?? ""}
+                </span>
+                <span className="bl-diff-sign">
+                  {line.kind === "add" ? "+" : line.kind === "delete" ? "−" : ""}
+                </span>
+              </span>
+              <span className="bl-diff-content">
+                <span className="visually-hidden">{SPOKEN_KIND[line.kind]}</span>
+                <LineText content={line.content} tokens={syntax?.[row.hunk]?.[index] ?? null} />
+                {line.noNewline && (
+                  <span className="bl-diff-nonewline" title="No newline at end of file">
+                    <span className="visually-hidden">No newline at end of file</span>
+                  </span>
+                )}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  return (
+    <div
+      className="bl-diff-split"
+      style={{ "--diff-row-height": `${rowHeight}px` } as React.CSSProperties}
+      onKeyDown={(e) => e.key === "Escape" && onClearSelection()}
+    >
+      <div
+        ref={setLeftEl}
+        className="bl-diff__scroll bl-diff-split__old"
+        tabIndex={0}
+        aria-label="Old version"
+        onScroll={(e) => {
+          if (rightEl && rightEl.scrollTop !== e.currentTarget.scrollTop)
+            rightEl.scrollTo?.({ top: e.currentTarget.scrollTop, behavior: "instant" });
+        }}
+      >
+        {column("old")}
+      </div>
+      <div
+        ref={setRightEl}
+        className="bl-diff__scroll bl-diff-split__new"
+        tabIndex={0}
+        aria-label="New version"
+        onScroll={(e) => {
+          virtual.onScroll(e);
+          if (leftEl && leftEl.scrollTop !== e.currentTarget.scrollTop)
+            leftEl.scrollTo?.({ top: e.currentTarget.scrollTop, behavior: "instant" });
+        }}
+      >
+        {column("new")}
       </div>
     </div>
   );

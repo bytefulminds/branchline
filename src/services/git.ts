@@ -14,6 +14,7 @@ import type {
   GitError,
   GitVersion,
   LineRequest,
+  LogFilter,
   LogPage,
   PullMode,
   PushRequest,
@@ -92,8 +93,8 @@ export const gitService = {
     call<RepositoryInfo>("discard_files", { repo, paths }),
   applyLines: (repo: string, request: LineRequest) =>
     call<RepositoryInfo>("apply_lines", { repo, request }),
-  logPage: (repo: string, skip: number, limit: number) =>
-    call<LogPage>("log_page", { repo, skip, limit }),
+  logPage: (repo: string, skip: number, limit: number, filter: LogFilter | null = null) =>
+    call<LogPage>("log_page", { repo, skip, limit, filter }),
   listRefs: (repo: string) => call<RefInfo[]>("list_refs", { repo }),
   commitDetails: (repo: string, oid: string) =>
     call<CommitDetails>("commit_details", { repo, oid }),

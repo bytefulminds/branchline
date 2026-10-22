@@ -66,9 +66,9 @@ fn pages_through_history_newest_first() {
     for i in 0..25 {
         commit_file(d, "f.txt", &format!("{i}\n"), &format!("commit {i}"));
     }
-    let p1 = log_page(d, 0, 10).unwrap();
-    let p2 = log_page(d, 10, 10).unwrap();
-    let p3 = log_page(d, 20, 10).unwrap();
+    let p1 = log_page(d, 0, 10, None).unwrap();
+    let p2 = log_page(d, 10, 10, None).unwrap();
+    let p3 = log_page(d, 20, 10, None).unwrap();
     assert_eq!((p1.commits.len(), p1.has_more), (10, true));
     assert_eq!((p2.commits.len(), p2.has_more), (10, true));
     assert_eq!((p3.commits.len(), p3.has_more), (5, false));
@@ -104,7 +104,7 @@ fn includes_branches_merges_tags_and_remotes() {
     git(d, &["fetch", "-q", "origin"]);
     git(d, &["remote", "set-head", "origin", "main"]);
 
-    let page = log_page(d, 0, 100).unwrap();
+    let page = log_page(d, 0, 100, None).unwrap();
     assert_eq!(page.commits.len(), 5);
     let merge = page
         .commits
@@ -138,14 +138,14 @@ fn includes_branches_merges_tags_and_remotes() {
 fn empty_and_orphan_repositories() {
     let r = repo();
     let d = r.path();
-    let page = log_page(d, 0, 50).unwrap();
+    let page = log_page(d, 0, 50, None).unwrap();
     assert!(page.commits.is_empty());
     assert!(!page.has_more);
 
     commit_file(d, "a.txt", "a\n", "on main");
     git(d, &["checkout", "-q", "--orphan", "fresh"]);
     // HEAD is unborn, but main still has history.
-    let page = log_page(d, 0, 50).unwrap();
+    let page = log_page(d, 0, 50, None).unwrap();
     assert_eq!(page.commits.len(), 1);
 }
 

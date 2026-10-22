@@ -1,5 +1,8 @@
 import type { PullMode } from "./git";
 
+/** Unified: one column. Split: old version left, new version right. */
+export type DiffLayout = "unified" | "split";
+
 /** Mirrors `src-tauri/src/settings.rs`. */
 export interface Settings {
   general: {
@@ -20,6 +23,8 @@ export interface Settings {
     ignoreWhitespace: boolean;
     tabWidth: number;
     codeFontSize: number;
+    diffLayout: DiffLayout;
+    syntaxHighlighting: boolean;
   };
   safety: {
     confirmDiscard: boolean;
@@ -47,6 +52,8 @@ export const DEFAULT_SETTINGS: Settings = {
     ignoreWhitespace: false,
     tabWidth: 4,
     codeFontSize: 12,
+    diffLayout: "unified",
+    syntaxHighlighting: true,
   },
   safety: {
     confirmDiscard: true,

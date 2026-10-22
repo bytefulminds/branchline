@@ -6,7 +6,7 @@ fn main() {
     let root = branchline_lib::git::repository::resolve_root(&repo).unwrap();
     for skip in [0usize, 300, 10_000, 50_000] {
         let t = Instant::now();
-        let page = branchline_lib::git::log::log_page(&root, skip, 300).unwrap();
+        let page = branchline_lib::git::log::log_page(&root, skip, 300, None).unwrap();
         println!(
             "skip {skip:>6}: {} commits in {:.1} ms (has_more {})",
             page.commits.len(),

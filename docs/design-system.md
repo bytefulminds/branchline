@@ -90,3 +90,9 @@ Fontsource, so the app works offline.
    gentle top-to-bottom gradient, a light sheen at the top and a shining inner edge that is
    brightest along the top. The source is `icons/macos/icon.svg`; rebuild the `.icns` with
    `python3 src-tauri/icons/macos/build.py`. Windows and Linux icons stay full-bleed.
+10. **Syntax colors.** The design reference has no code colors. Diffs use ten `--syntax-*`
+    tokens (keyword purple, string green, number orange, comment grey, function blue, type
+    yellow, tag red, attribute yellow, meta cyan, variable white). Each reaches at least 4.5:1
+    on the plain, added and removed diff rows and on selected rows, which is why comments are
+    `#9AA8BC` rather than a darker grey. Color is never the only signal: the `+`/`−` gutter
+    and row tints mark changes.

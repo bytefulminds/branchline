@@ -13,6 +13,29 @@ use serde::{Deserialize, Serialize};
 use crate::error::GitError;
 use crate::git::remote::PullMode;
 
+/// Deserialize a value, falling back to its default when the stored value is not one Branchline
+/// knows (an option from a newer version, or a typo in a hand-edited file), instead of
+/// rejecting the whole settings file.
+fn or_default<'de, D, T>(d: D) -> Result<T, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: serde::de::DeserializeOwned + Default,
+{
+    let value = serde_json::Value::deserialize(d)?;
+    Ok(serde_json::from_value(value).unwrap_or_default())
+}
+
+/// How diffs are laid out.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum DiffLayout {
+    /// Old and new lines in one column.
+    #[default]
+    Unified,
+    /// Old version on the left, new version on the right.
+    Split,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct GeneralSettings {
@@ -69,6 +92,10 @@ pub struct EditorSettings {
     pub tab_width: u32,
     /// Font size of code in diffs and the merge editor, in pixels.
     pub code_font_size: u32,
+    #[serde(deserialize_with = "or_default")]
+    pub diff_layout: DiffLayout,
+    /// Color code in diffs by language.
+    pub syntax_highlighting: bool,
 }
 
 impl Default for EditorSettings {
@@ -80,6 +107,8 @@ impl Default for EditorSettings {
             ignore_whitespace: false,
             tab_width: 4,
             code_font_size: 12,
+            diff_layout: DiffLayout::Unified,
+            syntax_highlighting: true,
         }
     }
 }
@@ -122,6 +151,7 @@ pub struct AiSettings {
     /// Ollama server, for example `http://localhost:11434`.
     pub url: String,
     pub model: String,
+    #[serde(deserialize_with = "or_default")]
     pub style: CommitStyle,
     /// Language of generated messages, for example "English".
     pub language: String,
@@ -276,6 +306,21 @@ mod tests {
         let back = load_file(&path);
         assert_eq!(back, s);
         assert_eq!(back.ai.url, "http://192.168.1.5:11434");
+    }
+
+    #[test]
+    fn unknown_choices_fall_back_without_losing_other_settings() {
+        let s: Settings = serde_json::from_str(
+            r#"{"editor":{"diffLayout":"triple","tabWidth":2},"ai":{"style":"haiku","model":"m"}}"#,
+        )
+        .unwrap();
+        assert_eq!(s.editor.diff_layout, DiffLayout::Unified);
+        assert_eq!(s.editor.tab_width, 2);
+        assert_eq!(s.ai.style, CommitStyle::Conventional);
+        assert_eq!(s.ai.model, "m");
+        assert!(s.editor.syntax_highlighting);
+        let split: Settings = serde_json::from_str(r#"{"editor":{"diffLayout":"split"}}"#).unwrap();
+        assert_eq!(split.editor.diff_layout, DiffLayout::Split);
     }
 
     #[test]

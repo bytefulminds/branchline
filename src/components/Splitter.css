@@ -18,3 +18,11 @@
   box-shadow: none;
   border-radius: 0;
 }
+.bl-splitter--horizontal {
+  width: auto;
+  height: 1px;
+  cursor: row-resize;
+}
+.bl-splitter--horizontal::before {
+  inset: -3px 0;
+}

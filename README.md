@@ -30,8 +30,15 @@ reimplementing Git.
 - Last commit summary, author and date.
 - Diff viewer for unstaged, staged and untracked files, with line numbers, hunk headers, CRLF and
   "no newline at end of file" handling, binary detection and a guard for very large diffs.
+- One column or side by side (toggle above every diff, remembered). Side by side pairs removed
+  and added lines; both columns scroll together and each scrolls sideways on its own. Staging
+  hunks and lines works the same in both layouts.
+- Syntax highlighting for about 40 languages, chosen by file name. The grammars load on first
+  use; diffs over 400 KB or with very long (minified) lines stay plain.
 - Stage, unstage and discard whole files, single hunks or selected lines (click, shift-click for
   a range). Discarding always asks for confirmation; staged content is never discarded.
+- Drag the line above the commit summary to make the message box taller or shorter (the
+  description fills the space, the size is remembered; double-click resets it).
 - Conflicted files show their conflict markers and can be marked as resolved, or resolved in
   the merge editor (below).
 - File filter, keyboard navigation in the file list (`Space`/`Enter` stages or unstages, `Delete`
@@ -44,6 +51,10 @@ reimplementing Git.
   messages prefilled, `Ctrl+Enter` / `⌘↵`, and clear errors for missing identity or failing hooks.
 - History of all branches, remote branches and tags with a commit graph, ref badges, authors and
   dates. Fast on large repositories: the list is virtualized and loads page by page.
+- Search History (`Ctrl+F` / `⌘F`) by message, author or commit id, and filter by author, file
+  or folder, date range and the current branch only. Results load page by page like the full
+  history, and matches are marked. "Show file history" on a diff opens the commits that
+  changed that file.
 - Commit details: full message, author and committer, parents, changed files with line counts,
   and a read-only diff per file.
 - Branches: list local and remote branches with upstream and ahead/behind, then create, switch,
@@ -109,7 +120,8 @@ reimplementing Git.
     repositories (`~/.gitconfig`) or only the open one.
   - Editor and diff: the editor and terminal that "Open in editor", "Open in terminal" and
     "Show in Finder/Explorer" use (repository menu, and a button on each changed file),
-    context lines, ignoring whitespace, tab width and code font size.
+    diff layout, syntax highlighting, context lines, ignoring whitespace, tab width and code
+    font size.
   - Confirmations: turn off the questions before discarding, force pushing, rebasing a
     published branch or deleting a branch. Deleting unmerged work always asks.
   - AI commit messages: connect your own [Ollama](https://ollama.com) server (local or on
@@ -289,8 +301,10 @@ is still to do.
   cancelling stops Git itself; its SSH or HTTPS helper exits shortly after.
 - The graph shows up to 12 lanes; further lanes are clipped. Merge commits list the files changed
   relative to their first parent.
-- History cannot be searched or filtered yet.
-- The diff view is unified only (no side-by-side view yet) and has no syntax highlighting yet.
+- Search results are shown without graph lines, because the commits in between are hidden.
+  File history follows the path given and does not follow renames.
+- Syntax highlighting colors each hunk on its own, so a comment or string that starts above a
+  hunk is not recognized inside it.
 - Hunk and line operations are not available for untracked files, renames, copies and binary
   files; those are staged as a whole.
 - The watcher only applies the root `.gitignore` and `.git/info/exclude` when filtering events;

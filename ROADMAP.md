@@ -31,8 +31,8 @@ Milestones are only marked complete when the behavior works against real Git and
 - [x] File-system watcher (focus refresh kept as a fallback)
 - [x] Virtualized file list
 - [x] Randomized test that checks partial staging, unstaging and discarding byte-for-byte
-- [ ] Side-by-side diff view
-- [ ] Syntax highlighting in diffs
+- [x] Side-by-side diff view
+- [x] Syntax highlighting in diffs
 - [ ] Line staging for untracked files (via intent-to-add)
 
 ## Milestone 3: Commits and history (done)
@@ -42,7 +42,7 @@ Milestones are only marked complete when the behavior works against real Git and
 - [x] Commit details and changed files per commit, read-only file diffs
 - [x] Initial commit graph with lane tokens (randomized continuity test)
 - [x] macOS app icon on Apple's icon grid
-- [ ] History search and filters
+- [x] History search and filters, file history
 - [ ] Graph: click a lane to follow a branch, collapse merged branches
 
 ## Milestone 4: Branches and remotes

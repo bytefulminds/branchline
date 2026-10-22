@@ -234,3 +234,111 @@
   background: var(--color-error-subtle);
   color: var(--color-error-text);
 }
+
+/* Layout toggle (one column / side by side) */
+.bl-segmented {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+.bl-segmented [aria-pressed="true"] {
+  background: var(--color-accent-subtle-strong);
+  color: var(--color-accent);
+}
+
+/* Side by side */
+.bl-diff-split {
+  --diff-half-gutter: 64px;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+.bl-diff-split .bl-diff__scroll {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.bl-diff-split .bl-diff-gutter {
+  width: var(--diff-half-gutter);
+}
+.bl-diff-split__old {
+  border-right: 1px solid var(--color-border-strong);
+}
+/* The right column's scrollbar serves both columns. */
+.bl-diff-split__old::-webkit-scrollbar:vertical {
+  width: 0;
+}
+.bl-diff-row--empty {
+  background: repeating-linear-gradient(-45deg, transparent 0 6px, rgb(148 163 184 / 5%) 6px 7px);
+}
+.bl-diff-nonewline::after {
+  content: "⏎̸";
+  margin-left: var(--space-2);
+  color: var(--color-text-muted);
+}
+
+/* Syntax colors (highlight.js class names) */
+.bl-diff-content .hljs-keyword,
+.bl-diff-content .hljs-built_in,
+.bl-diff-content .hljs-literal,
+.bl-diff-content .hljs-selector-tag,
+.bl-diff-content .hljs-doctag {
+  color: var(--syntax-keyword);
+}
+.bl-diff-content .hljs-string,
+.bl-diff-content .hljs-regexp,
+.bl-diff-content .hljs-template-tag,
+.bl-diff-content .hljs-addition,
+.bl-diff-content .hljs-symbol {
+  color: var(--syntax-string);
+}
+.bl-diff-content .hljs-number,
+.bl-diff-content .hljs-bullet,
+.bl-diff-content .hljs-link {
+  color: var(--syntax-number);
+}
+.bl-diff-content .hljs-comment,
+.bl-diff-content .hljs-quote {
+  color: var(--syntax-comment);
+  font-style: italic;
+}
+.bl-diff-content .hljs-title,
+.bl-diff-content .hljs-title.function_,
+.bl-diff-content .hljs-section {
+  color: var(--syntax-function);
+}
+.bl-diff-content .hljs-type,
+.bl-diff-content .hljs-title.class_,
+.bl-diff-content .hljs-class .hljs-title,
+.bl-diff-content .hljs-selector-class,
+.bl-diff-content .hljs-selector-id {
+  color: var(--syntax-type);
+}
+.bl-diff-content .hljs-name,
+.bl-diff-content .hljs-tag,
+.bl-diff-content .hljs-deletion {
+  color: var(--syntax-tag);
+}
+.bl-diff-content .hljs-attr,
+.bl-diff-content .hljs-attribute,
+.bl-diff-content .hljs-property {
+  color: var(--syntax-attribute);
+}
+.bl-diff-content .hljs-meta,
+.bl-diff-content .hljs-subst,
+.bl-diff-content .hljs-operator,
+.bl-diff-content .hljs-punctuation {
+  color: var(--syntax-meta);
+}
+.bl-diff-content .hljs-variable,
+.bl-diff-content .hljs-params,
+.bl-diff-content .hljs-template-variable {
+  color: var(--syntax-variable);
+}
+.bl-diff-content .hljs-emphasis {
+  font-style: italic;
+}
+.bl-diff-content .hljs-strong {
+  font-weight: var(--weight-semibold, 600);
+}
