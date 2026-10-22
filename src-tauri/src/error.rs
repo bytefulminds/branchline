@@ -125,6 +125,10 @@ pub enum GitError {
     #[error("{0}")]
     InvalidRemote(String),
 
+    /// The AI model server (Ollama) failed or is not set up; the message says why.
+    #[error("{0}")]
+    Ai(String),
+
     #[error("Unexpected Git output: {0}")]
     Parse(String),
 
@@ -173,6 +177,7 @@ impl GitError {
             GitError::BranchInWorktree { .. } => "branchInWorktree",
             GitError::WorktreeDirty { .. } => "worktreeDirty",
             GitError::InvalidRemote(_) => "invalidRemote",
+            GitError::Ai(_) => "ai",
             GitError::Parse(_) => "parse",
             GitError::Internal(_) => "internal",
         }

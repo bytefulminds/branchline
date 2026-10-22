@@ -1,11 +1,13 @@
-import { CircleAlert, GitCommitHorizontal } from "lucide-react";
+import { CircleAlert, GitCommitHorizontal, Sparkles, Square } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "../../components/Button";
 import { useToast } from "../../components/Toast";
+import { aiService } from "../../services/ai";
 import { gitService } from "../../services/git";
 import { modKeyLabel, isPrimaryModifier } from "../../services/platform";
 import type { CommitDraft, GitError, RepositoryInfo } from "../../types/git";
 import type { RepositoryController } from "../repository/useRepository";
+import { useSettings } from "../settings/SettingsProvider";
 import "./CommitBox.css";
 
 /** Summary length Git tools conventionally recommend. */
@@ -52,6 +54,8 @@ export function commitBlocker(
   return null;
 }
 
+let nextSuggestion = 1;
+
 export function CommitBox({
   repo,
   controller,
@@ -60,6 +64,7 @@ export function CommitBox({
   controller: Pick<RepositoryController, "run" | "operation">;
 }) {
   const toast = useToast();
+  const { settings } = useSettings();
   const summaryId = useId();
   const saved = drafts.get(repo.path);
   const [message, setMessage] = useState<Message>(saved ?? { summary: "", description: "" });
@@ -70,6 +75,19 @@ export function CommitBox({
   const [error, setError] = useState<GitError | null>(null);
   const summaryRef = useRef<HTMLInputElement>(null);
   const headOid = repo.head.kind === "unborn" ? null : repo.head.oid;
+  // The running suggestion, so it can be stopped (also when the repository changes).
+  const [suggesting, setSuggesting] = useState<string | null>(null);
+  const suggestion = useRef<string | null>(null);
+  // The message from before the suggestion started, restored when it is stopped.
+  const beforeSuggestion = useRef<Message | null>(null);
+
+  useEffect(
+    () => () => {
+      if (suggestion.current) void aiService.cancel(suggestion.current).catch(() => {});
+      suggestion.current = null;
+    },
+    [repo.path],
+  );
 
   useEffect(() => {
     drafts.set(repo.path, { ...message, amend, prefilled: prefilled.current });
@@ -112,6 +130,51 @@ export function CommitBox({
   const busy = controller.operation !== null;
   const long = message.summary.length > SUMMARY_SOFT_LIMIT;
 
+  const stopSuggesting = () => {
+    const id = suggestion.current;
+    suggestion.current = null;
+    setSuggesting(null);
+    if (beforeSuggestion.current) setMessage(beforeSuggestion.current);
+    if (id) void aiService.cancel(id).catch(() => {});
+  };
+
+  const suggest = async () => {
+    if (suggestion.current) return;
+    const opId = `suggest-${nextSuggestion++}`;
+    const before = message;
+    beforeSuggestion.current = before;
+    suggestion.current = opId;
+    setSuggesting(opId);
+    setError(null);
+    const show = (text: string) => {
+      if (suggestion.current === opId) setMessage(splitMessage(text));
+    };
+    try {
+      const text = await aiService.suggestCommitMessage(repo.path, opId, show);
+      if (suggestion.current !== opId) return;
+      setMessage(splitMessage(text));
+      prefilled.current = null;
+      if (before.summary || before.description)
+        toast({
+          title: "Message suggested",
+          description: "It replaced the message you had typed.",
+          actions: [{ label: "Undo", onClick: () => setMessage(before) }],
+          durationMs: 8000,
+        });
+      summaryRef.current?.focus();
+    } catch (e) {
+      if (suggestion.current !== opId) return;
+      const err = e as GitError;
+      setMessage(before);
+      if (err.kind !== "cancelled") setError(err);
+    } finally {
+      if (suggestion.current === opId) {
+        suggestion.current = null;
+        setSuggesting(null);
+      }
+    }
+  };
+
   const toggleAmend = (on: boolean) => {
     setAmend(on);
     if (on && draft?.headMessage && !message.summary && !message.description) {
@@ -143,7 +206,13 @@ export function CommitBox({
   };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && isPrimaryModifier(e)) {
+    if (e.key === "Escape" && suggesting) {
+      e.preventDefault();
+      e.stopPropagation();
+      stopSuggesting();
+      return;
+    }
+    if (e.key === "Enter" && isPrimaryModifier(e) && !suggesting) {
       e.preventDefault();
       void submit();
     }
@@ -177,6 +246,8 @@ export function CommitBox({
           className="bl-input"
           placeholder="Summary"
           value={message.summary}
+          readOnly={!!suggesting}
+          aria-busy={!!suggesting}
           onChange={(e) => setMessage((m) => ({ ...m, summary: e.target.value }))}
           spellCheck
           autoComplete="off"
@@ -199,6 +270,7 @@ export function CommitBox({
         aria-label="Commit description"
         rows={3}
         value={message.description}
+        readOnly={!!suggesting}
         onChange={(e) => setMessage((m) => ({ ...m, description: e.target.value }))}
         spellCheck
       />
@@ -212,6 +284,33 @@ export function CommitBox({
           />
           <span>Amend last commit</span>
         </label>
+        {settings.ai.enabled &&
+          (suggesting ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              icon={<Square size={12} aria-hidden />}
+              onClick={stopSuggesting}
+              title="Stop (Esc)"
+            >
+              Stop
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              variant="ghost"
+              icon={<Sparkles size={14} aria-hidden />}
+              disabled={staged === 0 || busy}
+              title={
+                staged === 0
+                  ? "Stage changes first"
+                  : `Write a message for the staged changes with ${settings.ai.model || "your Ollama model"}`
+              }
+              onClick={() => void suggest()}
+            >
+              Suggest message
+            </Button>
+          ))}
       </div>
 
       {error && (
@@ -233,7 +332,7 @@ export function CommitBox({
         type="submit"
         variant="primary"
         icon={<GitCommitHorizontal size={16} aria-hidden />}
-        disabled={!!blocker || busy}
+        disabled={!!blocker || busy || !!suggesting}
         loading={
           busy && (controller.operation === "Committing" || controller.operation === "Amending")
         }
@@ -243,12 +342,14 @@ export function CommitBox({
         {label}
       </Button>
       <p className="bl-commit-box__hint text-small" aria-live="polite">
-        {blocker ??
-          (draft?.author
-            ? `As ${draft.author.name} <${draft.author.email}>`
-            : draft
-              ? "Git has no author name and email configured."
-              : "")}
+        {suggesting
+          ? `Writing with ${settings.ai.model || "Ollama"}…`
+          : (blocker ??
+            (draft?.author
+              ? `As ${draft.author.name} <${draft.author.email}>`
+              : draft
+                ? "Git has no author name and email configured."
+                : ""))}
       </p>
     </form>
   );

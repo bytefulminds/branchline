@@ -1,5 +1,9 @@
 import {
   ChevronDown,
+  Code2,
+  FolderSearch,
+  SquareTerminal,
+  Settings,
   CloudDownload,
   FolderPlus,
   FolderGit2,
@@ -23,6 +27,7 @@ import {
   type RepositoryController,
 } from "../features/repository/useRepository";
 import { headLabel } from "../features/repository/headLabel";
+import { FILE_MANAGER, useOpenIn } from "../features/repository/useOpenIn";
 import { displayPath } from "../lib/format";
 import { modKeyLabel, platform } from "../services/platform";
 import { WindowControls } from "./WindowControls";
@@ -36,15 +41,18 @@ export function TitleBar({
   onOpen,
   onClone,
   onCreate,
+  onSettings,
   onShowBranches,
 }: {
   controller: RepositoryController;
   onOpen: () => void;
   onClone: () => void;
   onCreate: () => void;
+  onSettings: () => void;
   onShowBranches: () => void;
 }) {
   const branchActions = useBranchActions();
+  const openIn = useOpenIn();
   const { state, recent } = controller;
   const repo = state.status === "ready" ? state.repo : null;
   const busy = state.status === "loading" || (state.status === "ready" && state.refreshing);
@@ -83,6 +91,29 @@ export function TitleBar({
       icon: <FolderPlus size={16} aria-hidden />,
       onSelect: onCreate,
     },
+    ...(repo
+      ? ([
+          { type: "separator", id: "sep-open" },
+          {
+            id: "open-editor",
+            label: "Open in editor",
+            icon: <Code2 size={16} aria-hidden />,
+            onSelect: () => openIn.editor(repo.path, null),
+          },
+          {
+            id: "open-terminal",
+            label: "Open in terminal",
+            icon: <SquareTerminal size={16} aria-hidden />,
+            onSelect: () => openIn.terminal(repo.path),
+          },
+          {
+            id: "reveal",
+            label: `Show in ${FILE_MANAGER}`,
+            icon: <FolderSearch size={16} aria-hidden />,
+            onSelect: () => openIn.reveal(repo.path, null),
+          },
+        ] as MenuEntry[])
+      : []),
     ...(state.status !== "idle"
       ? [
           {
@@ -207,6 +238,11 @@ export function TitleBar({
         label={`Open repository (${modKeyLabel}O)`}
         icon={<FolderOpen size={16} aria-hidden />}
         onClick={onOpen}
+      />
+      <IconButton
+        label={`Settings (${modKeyLabel},)`}
+        icon={<Settings size={16} aria-hidden />}
+        onClick={onSettings}
         data-tooltip-align="end"
       />
 

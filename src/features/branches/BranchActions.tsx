@@ -13,6 +13,7 @@ import { useToast } from "../../components/Toast";
 import { gitService } from "../../services/git";
 import type { BranchList, GitError, RepositoryInfo, StartPoint } from "../../types/git";
 import type { RepositoryController } from "../repository/useRepository";
+import { useSettings } from "../settings/SettingsProvider";
 import { BranchNameDialog } from "./BranchNameDialog";
 import { useBranches } from "./useBranches";
 
@@ -65,6 +66,7 @@ export function BranchActionsProvider({
   const openRepo = controller.open;
   const confirm = useConfirm();
   const toast = useToast();
+  const askDelete = useSettings().settings.safety.confirmDeleteBranch;
   const [dialog, setDialog] = useState<DialogState>(null);
   const { run } = controller;
 
@@ -148,13 +150,15 @@ export function BranchActionsProvider({
 
   const remove = useCallback(
     async (name: string) => {
-      const ok = await confirm({
-        title: `Delete branch ${name}?`,
-        description:
-          "The branch is removed. Its commits stay reachable from any other branch that contains them.",
-        confirmLabel: "Delete branch",
-        destructive: true,
-      });
+      const ok =
+        !askDelete ||
+        (await confirm({
+          title: `Delete branch ${name}?`,
+          description:
+            "The branch is removed. Its commits stay reachable from any other branch that contains them.",
+          confirmLabel: "Delete branch",
+          destructive: true,
+        }));
       if (!ok) return;
       let error = await run("Deleting branch", (path) =>
         gitService.deleteBranch(path, name, false),
@@ -173,7 +177,7 @@ export function BranchActionsProvider({
       if (error) report(`Could not delete ${name}`, error);
       else toast({ tone: "success", title: `Deleted branch ${name}` });
     },
-    [confirm, run, report, toast],
+    [confirm, run, report, toast, askDelete],
   );
 
   const checkoutCommit = useCallback(

@@ -4,7 +4,7 @@ use std::path::Path;
 
 use serde::Serialize;
 
-use super::diff::{fingerprint, DIFF_FLAGS};
+use super::diff::fingerprint;
 use super::paths::validate_relative;
 use super::runner::{run_git, run_git_with, RunOptions, DEFAULT_TIMEOUT};
 use crate::error::GitError;
@@ -414,6 +414,7 @@ pub fn commit_file_diff_raw(
     path: &str,
     original_path: Option<&str>,
     max_output: usize,
+    opts: &super::diff::DiffOptions,
 ) -> Result<Vec<u8>, GitError> {
     validate_oid(oid)?;
     validate_relative(path)?;
@@ -438,7 +439,8 @@ pub fn commit_file_diff_raw(
         // Root commit: `show` diffs against the empty tree.
         None => vec!["show", "--format=", full.as_str()],
     };
-    args.extend_from_slice(DIFF_FLAGS);
+    let flags = opts.flags();
+    args.extend(flags.iter().map(String::as_str));
     args.push("-M");
     args.push("--");
     if let Some(o) = original_path {

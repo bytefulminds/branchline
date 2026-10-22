@@ -100,6 +100,24 @@ reimplementing Git.
   (the branch stays; uncommitted changes are only deleted after a second confirmation).
   Worktrees whose folder was deleted can be cleaned up. Branches checked out in another
   worktree are marked in Branches and offer "Open worktree" instead of Switch.
+- Settings (`Ctrl+,` / `⌘,`, or the gear in the title bar), saved right away:
+  - General: reopen the last repository on start, refresh when the window gets focus, fetch
+    in the background every 5 to 60 minutes (quietly; an error is shown once).
+  - Git: what the Pull button does (fast-forward, merge or rebase), prune deleted remote
+    branches on fetch, push annotated tags with commits.
+  - Identity and signing: name, email and commit signing (GPG, SSH or X.509), for all
+    repositories (`~/.gitconfig`) or only the open one.
+  - Editor and diff: the editor and terminal that "Open in editor", "Open in terminal" and
+    "Show in Finder/Explorer" use (repository menu, and a button on each changed file),
+    context lines, ignoring whitespace, tab width and code font size.
+  - Confirmations: turn off the questions before discarding, force pushing, rebasing a
+    published branch or deleting a branch. Deleting unmerged work always asks.
+  - AI commit messages: connect your own [Ollama](https://ollama.com) server (local or on
+    your network), test the connection, pick a model, the style (Conventional Commits or
+    plain), the language and extra team instructions.
+- Commit message suggestions: with AI commit messages on, "Suggest message" in the commit box
+  writes a summary and description for the staged changes with your Ollama model. The text
+  streams in, Esc or Stop cancels it, and a message you had typed can be restored with Undo.
 - `Ctrl+1` / `⌘1` Changes, `Ctrl+2` / `⌘2` History, `Ctrl+3` / `⌘3` Branches, `Ctrl+4` / `⌘4`
   Stashes, `Ctrl+5` / `⌘5` Tags, `Ctrl+6` / `⌘6` Worktrees, `Ctrl+7` / `⌘7` Remotes.
 
@@ -162,6 +180,7 @@ src/                     React + TypeScript frontend
   features/integrate/    Merge, rebase, cherry-pick, revert and the operation banner
   features/conflicts/    Merge editor (three panes) and its model
   features/worktrees/    Worktrees view, new worktree dialog and actions
+  features/settings/     Settings screen and provider
   layouts/               Window shell: title bar, sidebar, status bar, window controls
   services/              IPC wrappers, dialog, platform, local preferences
   styles/                Design tokens and base styles
@@ -178,6 +197,10 @@ src-tauri/               Rust backend
   src/git/conflict.rs    Three-way view of a conflicted file; saving its resolution
   src/git/worktrees.rs   Worktree list, add, remove, lock and prune
   src/git/create.rs      Clone and init
+  src/git/identity.rs    user.name, user.email and commit signing (global or per repository)
+  src/settings.rs        Settings file (JSON in the app's configuration folder)
+  src/open.rs            Open in editor or terminal, show in the file manager
+  src/ai.rs              Commit message suggestions from an Ollama server
   src/commands.rs        Tauri IPC commands (async, off the UI thread)
   src/error.rs           Error model shared with the frontend
   tests/                 Integration tests against real temporary repositories
@@ -205,6 +228,11 @@ See [docs/architecture.md](docs/architecture.md) for how the layers fit together
   anything reaches the UI, including error messages.
 - Force push always uses `--force-with-lease`, so it cannot overwrite commits you have not
   fetched.
+- AI suggestions only contact the Ollama server you configured, only when you ask for a
+  suggestion (or test the connection), and only send the staged diff (shortened), the list of
+  changed files, the branch name and recent commit subjects. Unstaged files are never sent.
+  The address may not contain credentials, redirects are not followed, and system proxies
+  are skipped for `localhost`. Settings warn when the server is not on this computer.
 - The webview has a strict CSP and only the Tauri permissions it needs (window controls and the
   folder picker).
 

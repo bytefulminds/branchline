@@ -5,7 +5,7 @@ use std::path::Path;
 use std::process::Command;
 
 use branchline_lib::git::commit::{commit, commit_draft, CommitRequest};
-use branchline_lib::git::diff::{commit_diff, LineKind};
+use branchline_lib::git::diff::{commit_diff, DiffOptions, LineKind};
 use branchline_lib::git::log::{commit_details, list_refs, log_page, refs_fingerprint, RefKind};
 use branchline_lib::git::repository::inspect;
 use tempfile::TempDir;
@@ -197,16 +197,25 @@ fn commit_details_lists_files_against_first_parent() {
     assert_eq!(root_det.files.len(), 1);
     assert_eq!(root_det.files[0].status, "A");
 
-    let diff = commit_diff(d, &oid, "keep.txt", None, false).unwrap();
+    let diff = commit_diff(d, &oid, "keep.txt", None, false, &DiffOptions::default()).unwrap();
     assert_eq!((diff.additions, diff.deletions), (2, 1));
     assert!(!diff.supports_partial);
-    let root_diff = commit_diff(d, &root, "keep.txt", None, false).unwrap();
+    let root_diff =
+        commit_diff(d, &root, "keep.txt", None, false, &DiffOptions::default()).unwrap();
     assert_eq!(root_diff.change.as_deref(), Some("new"));
     assert!(root_diff.hunks[0]
         .lines
         .iter()
         .all(|l| l.kind == LineKind::Add));
-    let renamed = commit_diff(d, &oid, "new name.txt", Some("old name.txt"), false).unwrap();
+    let renamed = commit_diff(
+        d,
+        &oid,
+        "new name.txt",
+        Some("old name.txt"),
+        false,
+        &DiffOptions::default(),
+    )
+    .unwrap();
     assert_eq!(renamed.change.as_deref(), Some("renamed"));
 }
 
@@ -218,7 +227,9 @@ fn rejects_option_like_commit_ids() {
     for bad in ["--output=/tmp/pwn", "HEAD", "main", "HEAD~1"] {
         assert_eq!(commit_details(d, bad).unwrap_err().kind(), "invalidPath");
         assert_eq!(
-            commit_diff(d, bad, "a", None, false).unwrap_err().kind(),
+            commit_diff(d, bad, "a", None, false, &DiffOptions::default())
+                .unwrap_err()
+                .kind(),
             "invalidPath"
         );
     }

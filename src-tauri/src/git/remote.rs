@@ -49,7 +49,7 @@ pub struct Progress {
     pub detail: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum PullMode {
     /// Only fast-forward; refuse when the branches have diverged.
@@ -72,6 +72,9 @@ pub struct PushRequest {
     /// our remote-tracking branch says it is.
     #[serde(default)]
     pub force: bool,
+    /// Also push annotated tags that point at the pushed commits.
+    #[serde(default)]
+    pub follow_tags: bool,
 }
 
 /// What a network operation changed, for a short confirmation in the UI.
@@ -509,7 +512,7 @@ pub fn cancel(op_id: &str) {
     }
 }
 
-struct Registration(String);
+pub(crate) struct Registration(String);
 impl Drop for Registration {
     fn drop(&mut self) {
         registry()
@@ -519,7 +522,7 @@ impl Drop for Registration {
     }
 }
 
-fn register(op_id: &str) -> (CancelToken, Registration) {
+pub(crate) fn register(op_id: &str) -> (CancelToken, Registration) {
     let token = CancelToken::default();
     registry()
         .lock()
@@ -603,9 +606,21 @@ pub fn fetch(
     op_id: &str,
     on_progress: &mut dyn FnMut(Progress),
 ) -> Result<RemoteOutcome, GitError> {
+    fetch_with(repo, remote, true, op_id, on_progress)
+}
+
+/// [`fetch`], choosing whether branches deleted on the remote are pruned.
+pub fn fetch_with(
+    repo: &str,
+    remote: Option<&str>,
+    prune: bool,
+    op_id: &str,
+    on_progress: &mut dyn FnMut(Progress),
+) -> Result<RemoteOutcome, GitError> {
     let root = resolve_root(repo)?;
     let _net = network_lock(&root)?;
-    let mut args = vec!["fetch", "--progress", "--prune"];
+    let mut args = vec!["fetch", "--progress"];
+    args.push(if prune { "--prune" } else { "--no-prune" });
     match remote {
         Some(name) => {
             require_remote(&root, name)?;
@@ -953,6 +968,9 @@ pub fn push(
     }
     if request.force {
         args.push(&lease);
+    }
+    if request.follow_tags {
+        args.push("--follow-tags");
     }
     args.push("--");
     args.push(&remote);

@@ -66,8 +66,8 @@ Milestones are only marked complete when the behavior works against real Git and
 - [x] Worktrees: create (new or existing branch, or a commit), open, lock, remove, clean up
 - [x] Remotes: list, add, rename, change addresses, remove, fetch one
 - [x] Clone a repository (with progress and Stop) and create a new one
-- [ ] Settings screen
-- [ ] Commit message suggestions from a local AI model (Ollama)
+- [x] Settings: general, Git, identity and signing, editor and diff, confirmations
+- [x] Commit message suggestions from a local AI model (Ollama)
 
 ## Milestone 6: Quality and release readiness
 

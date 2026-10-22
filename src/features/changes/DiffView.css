@@ -93,14 +93,14 @@
 }
 .bl-diff__canvas {
   position: relative;
-  tab-size: 4;
+  tab-size: var(--code-tab-size, 4);
 }
 .bl-diff-row {
   position: absolute;
   inset: 0 0 auto;
   display: flex;
-  height: 22px;
-  line-height: 22px;
+  height: var(--diff-row-height, 22px);
+  line-height: var(--diff-row-height, 22px);
   white-space: pre;
 }
 .bl-diff-gutter {

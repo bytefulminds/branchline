@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ConfirmProvider } from "./components/ConfirmDialog";
 import { ToastProvider, useToast } from "./components/Toast";
 import { ChangesView } from "./features/changes/ChangesView";
@@ -9,6 +9,8 @@ import {
 import { useRepository } from "./features/repository/useRepository";
 import { WelcomeView } from "./features/repository/WelcomeView";
 import { CloneDialog, parentOf } from "./features/repository/CloneDialog";
+import { SettingsProvider, useSettings } from "./features/settings/SettingsProvider";
+import { SettingsView } from "./features/settings/SettingsView";
 import { InitDialog } from "./features/repository/InitDialog";
 import { separatorOf } from "./features/worktrees/WorktreeDialog";
 import { BranchActionsProvider } from "./features/branches/BranchActions";
@@ -48,21 +50,32 @@ function Workspace() {
       toast({ tone: "error", title: "Refresh failed", description: e.detail ?? e.message }),
     [toast],
   );
-  const controller = useRepository(onRefreshError);
+  const { settings, loaded: settingsLoaded } = useSettings();
+  const controller = useRepository(onRefreshError, {
+    refreshOnFocus: settings.general.refreshOnFocus,
+  });
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [gitVersion, setGitVersion] = useState<GitVersion | GitError | null>(null);
   const [view, setView] = useState<WorkspaceView>("changes");
   const [creating, setCreating] = useState<"clone" | "init" | null>(null);
   const { state, open, refresh } = controller;
 
-  // `branchline <path>` opens that repository on startup.
+  // `branchline <path>` opens that repository on startup; otherwise, when the
+  // setting is on, the most recent one.
+  const started = useRef(false);
+  const lastRecent = controller.recent[0]?.path ?? null;
+  const openLast = settings.general.openLastRepository;
   useEffect(() => {
+    if (!settingsLoaded || started.current) return;
+    started.current = true;
     gitService
       .launchRepositoryPath()
       .then((path) => {
         if (path) void open(path);
+        else if (openLast && lastRecent) void open(lastRecent);
       })
       .catch(() => {});
-  }, [open]);
+  }, [open, settingsLoaded, openLast, lastRecent]);
 
   useEffect(() => {
     gitService
@@ -89,6 +102,9 @@ function Workspace() {
       } else if (isPrimaryModifier(e) && !e.shiftKey && !e.altKey && key in VIEW_KEYS) {
         e.preventDefault();
         setView(VIEW_KEYS[key]!);
+      } else if (isPrimaryModifier(e) && !e.shiftKey && !e.altKey && e.key === ",") {
+        e.preventDefault();
+        setSettingsOpen(true);
       } else if ((isPrimaryModifier(e) && key === "r") || e.key === "F5") {
         // Also suppresses the webview's own page reload.
         e.preventDefault();
@@ -195,11 +211,19 @@ function Workspace() {
                   onOpen={openPicker}
                   onClone={() => setCreating("clone")}
                   onCreate={() => setCreating("init")}
+                  onSettings={() => setSettingsOpen(true)}
                   view={view}
                   onView={setView}
                 >
                   {content}
                 </AppShell>
+                {settingsOpen && (
+                  <SettingsView
+                    repoPath={state.status === "ready" ? state.repo.path : null}
+                    repoName={state.status === "ready" ? state.repo.name : ""}
+                    onClose={() => setSettingsOpen(false)}
+                  />
+                )}
                 {creating === "clone" && (
                   <CloneDialog
                     defaultParent={defaultParent}
@@ -238,7 +262,9 @@ export default function App() {
     <ToastProvider>
       <ConfirmProvider>
         <ContextMenuProvider>
-          <Workspace />
+          <SettingsProvider>
+            <Workspace />
+          </SettingsProvider>
         </ContextMenuProvider>
       </ConfirmProvider>
     </ToastProvider>

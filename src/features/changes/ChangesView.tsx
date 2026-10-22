@@ -17,6 +17,7 @@ import type {
   RepositoryInfo,
 } from "../../types/git";
 import { MergeEditor } from "../conflicts/MergeEditor";
+import { useSettings } from "../settings/SettingsProvider";
 import { OperationBanner } from "../integrate/OperationBanner";
 import { RepositoryOverview } from "../repository/RepositoryOverview";
 import type { RepositoryController } from "../repository/useRepository";
@@ -73,6 +74,7 @@ export function ChangesView({
 }) {
   const confirm = useConfirm();
   const toast = useToast();
+  const askDiscard = useSettings().settings.safety.confirmDiscard;
   const stash = useStashActions();
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -111,7 +113,7 @@ export function ChangesView({
     async (action: FileAction, entries: ChangeEntry[]) => {
       if (entries.length === 0) return;
       const paths = pathsOf(entries);
-      if (action === "discard") {
+      if (action === "discard" && askDiscard) {
         const untracked = entries.every((e) => e.status === "untracked");
         const one = entries.length === 1 ? splitPath(entries[0]!.path).name : null;
         const ok = await confirm({
@@ -135,12 +137,12 @@ export function ChangesView({
       const error = await controller.run(label, (repoPath) => fn(repoPath, paths));
       if (error) reportError(`${label} failed`, error);
     },
-    [confirm, controller, reportError],
+    [confirm, controller, reportError, askDiscard],
   );
 
   const onLineAction = useCallback(
     async (action: LineAction, diff: FileDiff, selections: HunkSelection[]) => {
-      if (action === "discard") {
+      if (action === "discard" && askDiscard) {
         const ok = await confirm({
           title: "Discard the selected changes?",
           description: `They are removed from ${splitPath(diff.path).name} in your working tree. This cannot be undone.`,
@@ -162,7 +164,7 @@ export function ChangesView({
       if (error) reportError(`${label} failed`, error);
       return !error;
     },
-    [confirm, controller, reportError],
+    [confirm, controller, reportError, askDiscard],
   );
 
   const summary = [

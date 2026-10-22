@@ -1,7 +1,19 @@
-import { Check, CircleAlert, FileWarning, GitMerge, Minus, Plus, Undo2, X } from "lucide-react";
+import { useSettings } from "../settings/SettingsProvider";
+import {
+  Check,
+  CircleAlert,
+  FileWarning,
+  GitMerge,
+  Minus,
+  Plus,
+  SquarePen,
+  Undo2,
+  X,
+} from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "../../components/Badge";
-import { Button } from "../../components/Button";
+import { Button, IconButton } from "../../components/Button";
+import { useOpenIn } from "../repository/useOpenIn";
 import { EmptyState } from "../../components/EmptyState";
 import { Spinner } from "../../components/Spinner";
 import { StatusLetter } from "../../components/StatusLetter";
@@ -27,6 +39,11 @@ import type { FileAction } from "./FileList";
 import "./DiffView.css";
 
 export const DIFF_ROW_HEIGHT = 22;
+
+/** Row height for a code font size: room for the text plus a little air. */
+export function diffRowHeight(fontSize: number): number {
+  return Math.max(DIFF_ROW_HEIGHT, Math.round(fontSize * 1.5) + 4);
+}
 export { formatBytes };
 const EMPTY: LineSelection = new Map();
 
@@ -68,6 +85,7 @@ export function DiffView({
   onOpenMerge,
 }: DiffViewProps) {
   const area = diffAreaFor(entry);
+  const openIn = useOpenIn();
   const [diff, setDiff] = useState<FileDiff | null>(null);
   const [error, setError] = useState<GitError | null>(null);
   const [force, setForce] = useState(false);
@@ -214,6 +232,14 @@ export function DiffView({
           {loading && diff && <Spinner size={14} label="Updating diff" />}
         </div>
         <div className="bl-diff__actions">
+          {entry.status !== "deleted" && (
+            <IconButton
+              size="sm"
+              label="Open in editor"
+              icon={<SquarePen size={14} aria-hidden />}
+              onClick={() => openIn.editor(repoPath, entry.path)}
+            />
+          )}
           {count > 0 ? (
             <>
               <span className="text-small text-secondary bl-diff__count" role="status">
@@ -325,7 +351,8 @@ export function DiffBody({
   onClearSelection?: () => void;
 }) {
   const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
-  const virtual = useVirtualRows(scrollEl, rows.length, DIFF_ROW_HEIGHT, 20);
+  const rowHeight = diffRowHeight(useSettings().settings.editor.codeFontSize);
+  const virtual = useVirtualRows(scrollEl, rows.length, rowHeight, 20);
   const width = useMemo(() => (diff ? longestLine(diff) : 0), [diff]);
   const viewport = useElementSize(scrollEl).width;
 
@@ -375,6 +402,7 @@ export function DiffBody({
     <div
       ref={setScrollEl}
       className="bl-diff__scroll"
+      style={{ "--diff-row-height": `${rowHeight}px` } as React.CSSProperties}
       onScroll={virtual.onScroll}
       tabIndex={0}
       aria-label="Diff"
@@ -391,7 +419,7 @@ export function DiffBody({
         }
       >
         {rows.slice(virtual.start, virtual.end).map((row, i) => {
-          const top = (virtual.start + i) * DIFF_ROW_HEIGHT;
+          const top = (virtual.start + i) * rowHeight;
           const style = { transform: `translateY(${top}px)` };
           const hunk = diff.hunks[row.hunk]!;
           if (row.type === "hunk") {

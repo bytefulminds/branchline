@@ -1,3 +1,4 @@
+import { useSettings } from "../settings/SettingsProvider";
 import { ArrowDownToLine, ArrowUpFromLine, ChevronDown, RefreshCcw, Upload } from "lucide-react";
 import type { ReactNode } from "react";
 import { Menu, type MenuEntry } from "../../components/Menu";
@@ -81,6 +82,7 @@ function MoreButton({
 export function RemoteToolbar({ repo, busy }: { repo: RepositoryInfo; busy: boolean }) {
   const actions = useRemoteActions();
   const { remotes, activity } = actions;
+  const pullMode = useSettings().settings.git.defaultPullMode;
   const running = (kind: NetworkActivity["kind"]) => activity?.kind === kind;
   const locked = busy || activity !== null;
 
@@ -173,7 +175,7 @@ export function RemoteToolbar({ repo, busy }: { repo: RepositoryInfo; busy: bool
           title={pullTitle}
           running={running("pull")}
           disabled={locked || !canPull}
-          onClick={() => actions.pull("fastForward")}
+          onClick={() => actions.pull(pullMode)}
         />
         <MoreButton label="Pull options" entries={pullEntries} disabled={locked || !canPull} />
       </div>

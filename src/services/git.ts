@@ -59,7 +59,7 @@ function ensureDesktop() {
   }
 }
 
-async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
+export async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
   ensureDesktop();
   try {
     return await invoke<T>(cmd, args);

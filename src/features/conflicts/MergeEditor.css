@@ -1,7 +1,8 @@
 /* Merge editor: ours | gutter | result | gutter | theirs */
 .bl-merge {
+  tab-size: var(--code-tab-size, 4);
   --merge-grid: minmax(0, 1fr) 44px minmax(0, 1fr) 44px minmax(0, 1fr);
-  --merge-line: 18px;
+  --merge-line: var(--text-code-line, 18px);
   position: fixed;
   inset: var(--titlebar-height) 0 0 0;
   z-index: 50;

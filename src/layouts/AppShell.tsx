@@ -16,6 +16,7 @@ export function AppShell({
   onOpen,
   onClone,
   onCreate,
+  onSettings,
   view,
   onView,
   children,
@@ -25,6 +26,7 @@ export function AppShell({
   onOpen: () => void;
   onClone: () => void;
   onCreate: () => void;
+  onSettings: () => void;
   view: WorkspaceView;
   onView: (view: WorkspaceView) => void;
   children: ReactNode;
@@ -41,6 +43,7 @@ export function AppShell({
         onOpen={onOpen}
         onClone={onClone}
         onCreate={onCreate}
+        onSettings={onSettings}
         onShowBranches={() => onView("branches")}
       />
       <div className="bl-app__body">

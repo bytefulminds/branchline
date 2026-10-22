@@ -52,7 +52,11 @@ const BUSY: GitError = {
   detail: null,
 };
 
-export function useRepository(onRefreshError?: (e: GitError) => void): RepositoryController {
+export function useRepository(
+  onRefreshError?: (e: GitError) => void,
+  options: { refreshOnFocus?: boolean } = {},
+): RepositoryController {
+  const refreshOnFocus = options.refreshOnFocus ?? true;
   const [state, setStateRaw] = useState<RepositoryState>({ status: "idle" });
   const [recent, setRecent] = useState<RecentRepository[]>(loadRecent);
   // Monotonic token: responses for superseded requests are dropped.
@@ -187,6 +191,7 @@ export function useRepository(onRefreshError?: (e: GitError) => void): Repositor
   // Refresh when the user returns to the window (files may have changed elsewhere).
   // Event driven instead of polling; throttled so rapid focus changes do not spawn Git repeatedly.
   useEffect(() => {
+    if (!refreshOnFocus) return;
     const onFocus = () => {
       const s = stateRef.current;
       if (s.status !== "ready" || s.refreshing) return;
@@ -195,7 +200,7 @@ export function useRepository(onRefreshError?: (e: GitError) => void): Repositor
     };
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
-  }, [refresh]);
+  }, [refresh, refreshOnFocus]);
 
   // Watch the open repository so external edits refresh the view without polling.
   const watchedPath = state.status === "ready" ? state.repo.path : null;

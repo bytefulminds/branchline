@@ -287,6 +287,43 @@ pub const DIFF_FLAGS: &[&str] = &[
     "--unified=3",
 ];
 
+/// How diffs are shown: context lines and whitespace. Only the defaults allow
+/// staging single lines, because the hunks must match what `git apply` sees.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DiffOptions {
+    pub context: u32,
+    pub ignore_whitespace: bool,
+}
+
+impl Default for DiffOptions {
+    fn default() -> Self {
+        Self {
+            context: 3,
+            ignore_whitespace: false,
+        }
+    }
+}
+
+impl DiffOptions {
+    /// `DIFF_FLAGS` with these options applied.
+    pub fn flags(&self) -> Vec<String> {
+        let mut flags: Vec<String> = DIFF_FLAGS
+            .iter()
+            .filter(|f| !f.starts_with("--unified="))
+            .map(|f| f.to_string())
+            .collect();
+        flags.push(format!("--unified={}", self.context.min(50)));
+        if self.ignore_whitespace {
+            flags.push("--ignore-all-space".into());
+        }
+        flags
+    }
+
+    pub fn is_default(&self) -> bool {
+        *self == Self::default()
+    }
+}
+
 fn conflict_view(root: &Path, path: &str, area: DiffArea) -> Result<FileDiff, GitError> {
     let full = root.join(path);
     let meta = std::fs::symlink_metadata(&full).ok();
@@ -369,6 +406,25 @@ pub fn file_diff(
     area: DiffArea,
     force: bool,
 ) -> Result<FileDiff, GitError> {
+    file_diff_with(
+        root,
+        path,
+        original_path,
+        area,
+        force,
+        &DiffOptions::default(),
+    )
+}
+
+/// [`file_diff`] with display options. Line staging is only offered with the defaults.
+pub fn file_diff_with(
+    root: &Path,
+    path: &str,
+    original_path: Option<&str>,
+    area: DiffArea,
+    force: bool,
+    opts: &DiffOptions,
+) -> Result<FileDiff, GitError> {
     validate_relative(path)?;
     if let Some(o) = original_path {
         validate_relative(o)?;
@@ -377,18 +433,19 @@ pub fn file_diff(
         return conflict_view(root, path, area);
     }
 
+    let flags = opts.flags();
     let mut args: Vec<&str> = vec!["diff"];
     match area {
         DiffArea::Untracked => {
             args.push("--no-index");
-            args.extend_from_slice(DIFF_FLAGS);
+            args.extend(flags.iter().map(String::as_str));
             args.extend_from_slice(&["--", "/dev/null", path]);
         }
         DiffArea::Staged | DiffArea::Unstaged => {
             if area == DiffArea::Staged {
                 args.push("--cached");
             }
-            args.extend_from_slice(DIFF_FLAGS);
+            args.extend(flags.iter().map(String::as_str));
             args.push("-M");
             args.push("--");
             if let Some(o) = original_path {
@@ -432,7 +489,11 @@ pub fn file_diff(
         Err(e) => return Err(e),
     };
 
-    diff_from_raw(out.stdout, path, original_path, area, force)
+    let mut diff = diff_from_raw(out.stdout, path, original_path, area, force)?;
+    if !opts.is_default() {
+        diff.supports_partial = false;
+    }
+    Ok(diff)
 }
 
 /// Load the diff of `path` in commit `oid` (relative to its first parent).
@@ -442,13 +503,14 @@ pub fn commit_diff(
     path: &str,
     original_path: Option<&str>,
     force: bool,
+    opts: &DiffOptions,
 ) -> Result<FileDiff, GitError> {
     let limit = if force {
         HARD_LIMIT_BYTES
     } else {
         SOFT_LIMIT_BYTES
     };
-    match super::log::commit_file_diff_raw(root, oid, path, original_path, limit) {
+    match super::log::commit_file_diff_raw(root, oid, path, original_path, limit, opts) {
         Ok(raw) => diff_from_raw(raw, path, original_path, DiffArea::Commit, force),
         Err(GitError::OutputTooLarge { .. }) if !force => Ok(empty_diff(
             path,

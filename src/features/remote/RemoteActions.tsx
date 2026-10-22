@@ -24,6 +24,7 @@ import type {
 import type { RepositoryController } from "../repository/useRepository";
 import { PublishDialog } from "./PublishDialog";
 import { RemoteDialog } from "./RemoteDialog";
+import { useSettings } from "../settings/SettingsProvider";
 
 /** A fetch, pull or push that is running. */
 export interface NetworkActivity {
@@ -223,6 +224,39 @@ export function RemoteActionsProvider({
     });
   }, [runRemote, report, toast, remotes.length]);
 
+  // Background fetch: no toasts on success; an error is shown once, not every time.
+  const { settings } = useSettings();
+  const autoFetchMinutes = settings.general.autoFetchMinutes;
+  const lastBackgroundError = useRef<string | null>(null);
+  const activityRef = useRef(activity);
+  useEffect(() => {
+    activityRef.current = activity;
+  }, [activity]);
+  const backgroundFetch = useCallback(async () => {
+    if (activityRef.current || repo?.operation) return;
+    const { error } = await runRemote("fetch", "Fetching in the background", (path, opId, p) =>
+      gitService.fetchRemote(path, null, opId, p),
+    );
+    if (!error || error.kind === "locked" || error.kind === "cancelled") {
+      if (!error) lastBackgroundError.current = null;
+      return;
+    }
+    if (lastBackgroundError.current === error.kind) return;
+    lastBackgroundError.current = error.kind;
+    report("Background fetch failed", error);
+  }, [runRemote, report, repo?.operation]);
+  const backgroundRef = useRef(backgroundFetch);
+  useEffect(() => {
+    backgroundRef.current = backgroundFetch;
+  }, [backgroundFetch]);
+  const repoPath = repo?.path ?? null;
+  const hasRemotes = remotes.length > 0;
+  useEffect(() => {
+    if (!autoFetchMinutes || !repoPath || !hasRemotes) return;
+    const timer = setInterval(() => void backgroundRef.current(), autoFetchMinutes * 60_000);
+    return () => clearInterval(timer);
+  }, [autoFetchMinutes, repoPath, hasRemotes]);
+
   const fetchRemote = useCallback(
     async (name: string) => {
       const { result, error } = await runRemote(
@@ -407,18 +441,20 @@ export function RemoteActionsProvider({
 
   const forcePush = useCallback(async () => {
     if (!branch || !upstream) return;
-    const ok = await confirm({
-      title: `Force push ${branch}?`,
-      description: `${upstream.name} is replaced by your branch. Commits on the remote that your branch does not contain are removed from it. If someone pushed since your last fetch, the push is refused (force with lease).`,
-      confirmLabel: "Force push",
-      destructive: true,
-    });
+    const ok =
+      !settings.safety.confirmForcePush ||
+      (await confirm({
+        title: `Force push ${branch}?`,
+        description: `${upstream.name} is replaced by your branch. Commits on the remote that your branch does not contain are removed from it. If someone pushed since your last fetch, the push is refused (force with lease).`,
+        confirmLabel: "Force push",
+        destructive: true,
+      }));
     if (!ok) return;
     void doPush(
       { branch, remote: null, setUpstream: false, force: true },
       `Force pushing ${branch}`,
     );
-  }, [branch, upstream, confirm, doPush]);
+  }, [branch, upstream, confirm, doPush, settings.safety.confirmForcePush]);
 
   const runTag = useCallback(
     async (name: string, remote: string, remove: boolean) => {

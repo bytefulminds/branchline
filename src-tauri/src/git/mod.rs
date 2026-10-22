@@ -6,6 +6,7 @@ pub mod commit;
 pub mod conflict;
 pub mod create;
 pub mod diff;
+pub mod identity;
 pub mod integrate;
 pub mod log;
 pub mod ops;

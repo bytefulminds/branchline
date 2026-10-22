@@ -6,7 +6,7 @@ use std::process::Command;
 use std::time::{Duration, Instant};
 
 use branchline_lib::git::remote::{
-    cancel, fetch, list_remotes, pull, push, Progress, PullMode, PushRequest,
+    cancel, fetch, fetch_with, list_remotes, pull, push, Progress, PullMode, PushRequest,
 };
 use branchline_lib::git::repository::inspect;
 use tempfile::TempDir;
@@ -271,6 +271,7 @@ fn push_req(branch: &str) -> PushRequest {
         remote: None,
         set_upstream: false,
         force: false,
+        follow_tags: false,
     }
 }
 
@@ -552,4 +553,34 @@ fn autostash_during_a_conflicted_merge_is_held_until_the_merge_is_committed() {
         "work in progress\n",
         "committing the merge in Branchline brings the changes back"
     );
+}
+
+#[test]
+fn fetch_can_keep_deleted_branches_and_push_can_follow_tags() {
+    let t = setup();
+    git(&t.b, &["push", "-q", "origin", "main:gone"]);
+    fetch(&s(&t.a), None, "k1", &mut no_progress()).unwrap();
+    git(&t.b, &["push", "-q", "origin", ":gone"]);
+    fetch_with(&s(&t.a), None, false, "k2", &mut no_progress()).unwrap();
+    assert_eq!(
+        git(&t.a, &["branch", "-r", "--list", "origin/gone"]),
+        "origin/gone",
+        "kept without pruning"
+    );
+    fetch_with(&s(&t.a), None, true, "k3", &mut no_progress()).unwrap();
+    assert_eq!(git(&t.a, &["branch", "-r", "--list", "origin/gone"]), "");
+
+    commit(&t.a, "t.txt", "t\n", "tagged");
+    git(&t.a, &["tag", "-a", "-m", "release", "v9"]);
+    push(
+        &s(&t.a),
+        &PushRequest {
+            follow_tags: true,
+            ..push_req("main")
+        },
+        "k4",
+        &mut no_progress(),
+    )
+    .unwrap();
+    assert_eq!(git(&t.remote, &["tag", "--list", "v9"]), "v9");
 }

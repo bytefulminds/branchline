@@ -23,6 +23,7 @@ import type {
   StartPoint,
 } from "../../types/git";
 import type { RepositoryController } from "../repository/useRepository";
+import { useSettings } from "../settings/SettingsProvider";
 import { InteractiveRebaseDialog } from "./InteractiveRebaseDialog";
 
 export interface IntegrateActions {
@@ -81,6 +82,7 @@ export function IntegrateActionsProvider({
 }) {
   const toast = useToast();
   const confirm = useConfirm();
+  const { settings } = useSettings();
   const { run } = controller;
   const [mergeDialog, setMergeDialog] = useState<{ source: StartPoint; label: string } | null>(
     null,
@@ -248,18 +250,22 @@ export function IntegrateActionsProvider({
     async (onto: StartPoint, label: string) => {
       const branch = currentName(repo);
       const published = repo?.upstream && !repo.upstream.gone;
-      const ok = await confirm({
-        title: `Rebase ${branch} onto ${label}?`,
-        description:
-          `The commits of ${branch} are replayed on top of ${label} as new commits, so its history is rewritten.` +
-          (published
-            ? ` ${branch} is published to ${repo!.upstream!.name}: after rebasing you will need to force push, which affects anyone else using it.`
-            : ""),
-        confirmLabel: "Rebase",
-      });
+      // A local-only rebase can be undone with Abort; a published one means a force push.
+      const ask = published ? settings.safety.confirmRebasePublished : true;
+      const ok =
+        !ask ||
+        (await confirm({
+          title: `Rebase ${branch} onto ${label}?`,
+          description:
+            `The commits of ${branch} are replayed on top of ${label} as new commits, so its history is rewritten.` +
+            (published
+              ? ` ${branch} is published to ${repo!.upstream!.name}: after rebasing you will need to force push, which affects anyone else using it.`
+              : ""),
+          confirmLabel: "Rebase",
+        }));
       if (ok) doRebase(onto, label, false);
     },
-    [confirm, repo, doRebase],
+    [confirm, repo, doRebase, settings.safety.confirmRebasePublished],
   );
 
   const cherryPick = useCallback(

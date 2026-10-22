@@ -86,6 +86,11 @@ are in the way (`checkoutConflict`); nothing is changed.
 | `add_remote(repo, name, url)` / `edit_remote(repo, name, newName, url, pushUrl)` / `remove_remote(repo, name)` | `()` | Names and addresses are validated; an unchanged (redacted) address is never written back |
 | `clone_repository(url, dest, opId, onProgress)` | `string` | Streams progress like fetch; `cancel_remote_operation(opId)` stops it and removes what it created |
 | `init_repository(path, branch)` | `string` | New or existing folder; `branch` empty means Git's default |
+| `get_settings()` / `save_settings(value)` | `Settings` | Saved values come back clamped |
+| `get_identity(repo?)` / `set_identity(scope, repo?, values)` | `Identity` / `()` | `scope`: `global` or `repository` |
+| `open_in_editor(repo, path?)` / `open_terminal(repo)` / `reveal_in_file_manager(repo, path?)` | `()` | Uses the editor and terminal from the settings |
+| `ai_server_info(url)` | `AiServerInfo` | Ollama version and chat models (embedding models left out) |
+| `suggest_commit_message(repo, opId, onText)` | `string` | Uses the AI settings; streams the cleaned text so far; `cancel_remote_operation(opId)` stops it |
 | `list_worktrees(repo)` | `WorktreeInfo[]` | Branch or detached HEAD, locked, missing, main/open flags, number of changed files |
 | `add_worktree(repo, path, target)` | `string` | `target`: `newBranch` (name + start), `branch` or `detached`; returns the folder |
 | `remove_worktree(repo, path, force)` / `lock_worktree(repo, path, locked, reason)` / `prune_worktrees(repo)` | `()` / `()` / `number` | Never the main worktree or the open one |
@@ -185,6 +190,42 @@ progress (read from `rebase-merge/msgnum` and `end`).
 - The frontend model (`mergeModel.ts`) keeps, per change, the result lines and whether each
   side was taken, left out or is pending. Taking a second side appends it, like JetBrains.
   Changes that do not conflict are taken on open; Undo goes back to before that.
+
+## Settings
+
+- `settings.json` lives in the platform's configuration folder (`app_config_dir`, for example
+  `~/Library/Application Support/dev.branchline.app/` on macOS). It is read once at startup;
+  every field has a default, unknown fields are ignored and values are clamped, so an old or
+  hand-edited file always loads. Saving writes a temporary file and renames it.
+- The backend reads the settings it needs itself (prune on fetch, follow tags on push, diff
+  options, editor and terminal commands), so the UI cannot pass different values per call.
+- Diff options (context lines, ignore whitespace) apply to what is shown. Staging single lines
+  needs the hunks `git apply` expects, so with non-default options line staging is off and
+  `apply_lines` always recomputes the diff with the defaults.
+- Identity and signing are not stored by Branchline: they are written to Git's own
+  configuration (`--global` or `--local`) with `git config`, so the command line agrees.
+  Empty values are unset; values with line breaks are refused (they could inject config).
+- Opening an editor, terminal or file manager starts the program directly with the path as a
+  separate argument; the configured command is split on spaces and quotes, never run by a
+  shell. On macOS an editor that is not on the GUI app's `PATH` is retried as an app name.
+
+## AI commit messages
+
+- `src/ai.rs` talks to Ollama's HTTP API (`/api/tags`, `/api/version`, `/api/chat`) with
+  `ureq`, from the backend, so the webview's CSP stays closed to the network.
+- The prompt holds the staged diff (`git diff --cached`, no external diff or textconv), the
+  `--stat` file list, the branch name and the last ten commit subjects. The diff is shortened
+  per file (4,000 characters) and in total (14,000), cut at line ends, so one large generated
+  file cannot push the rest out. A diff over 4 MB is left out and only the file list is sent.
+- The answer streams as NDJSON. Each chunk is cleaned (reasoning in `<think>` blocks, code
+  fences, a "Commit message:" label and wrapping quotes are removed) and the cleaned text so
+  far is sent to the UI, which fills the summary and description. Generation stops after
+  6,000 characters.
+- Errors use the `ai` kind with a message that says what to do: start Ollama, pull the
+  model, check the address. Timeouts allow for a model that takes minutes to load.
+- Addresses: `http` or `https`, host and port only (no credentials, path or query).
+  Redirects are not followed; proxies from the environment are skipped for loopback hosts.
+- Nothing is contacted while the feature is off, except when the user clicks Test.
 
 ## Remotes, clone and init
 

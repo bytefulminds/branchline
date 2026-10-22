@@ -9,6 +9,7 @@ use crate::git::commit::{self, CommitDraft, CommitRequest};
 use crate::git::conflict::{self, ConflictFile, ResolveSide};
 use crate::git::create;
 use crate::git::diff::{self, DiffArea, FileDiff};
+use crate::git::identity::{self, ConfigScope, Identity, IdentityValues};
 use crate::git::integrate::{self, IntegrateOutcome, MergeRequest, Step};
 use crate::git::log::{self, CommitDetails, LogPage, RefInfo};
 use crate::git::ops::{self, LineRequest};
@@ -19,6 +20,7 @@ use crate::git::runner::{self, GitVersion};
 use crate::git::stash::{self, StashInfo, StashOutcome};
 use crate::git::tags::{self, TagInfo};
 use crate::git::worktrees::{self, WorktreeInfo, WorktreeTarget};
+use crate::settings::{self, Settings};
 
 async fn blocking<T, F>(f: F) -> Result<T, GitError>
 where
@@ -42,6 +44,15 @@ pub async fn inspect_repository(path: String) -> Result<RepositoryInfo, GitError
     blocking(move || repository::inspect(&path)).await
 }
 
+/// Diff display options from the settings.
+fn diff_options() -> diff::DiffOptions {
+    let editor = settings::current().editor;
+    diff::DiffOptions {
+        context: editor.diff_context,
+        ignore_whitespace: editor.ignore_whitespace,
+    }
+}
+
 /// Diff of one file. `force` loads diffs above the soft size limit.
 #[tauri::command]
 pub async fn file_diff(
@@ -53,12 +64,13 @@ pub async fn file_diff(
 ) -> Result<FileDiff, GitError> {
     blocking(move || {
         let root = repository::resolve_root(&repo)?;
-        diff::file_diff(
+        diff::file_diff_with(
             &root,
             &path,
             original_path.as_deref(),
             area,
             force.unwrap_or(false),
+            &diff_options(),
         )
     })
     .await
@@ -129,6 +141,7 @@ pub async fn commit_file_diff(
             &path,
             original_path.as_deref(),
             force.unwrap_or(false),
+            &diff_options(),
         )
     })
     .await
@@ -244,7 +257,8 @@ pub async fn fetch_remote(
     on_progress: Channel<Progress>,
 ) -> Result<RemoteResult, GitError> {
     blocking(move || {
-        let outcome = remote::fetch(&repo, remote.as_deref(), &op_id, &mut |p| {
+        let prune = settings::current().git.prune_on_fetch;
+        let outcome = remote::fetch_with(&repo, remote.as_deref(), prune, &op_id, &mut |p| {
             let _ = on_progress.send(p);
         })?;
         Ok(RemoteResult {
@@ -279,10 +293,11 @@ pub async fn pull_branch(
 #[tauri::command]
 pub async fn push_branch(
     repo: String,
-    request: PushRequest,
+    mut request: PushRequest,
     op_id: String,
     on_progress: Channel<Progress>,
 ) -> Result<RemoteResult, GitError> {
+    request.follow_tags = settings::current().git.push_follow_tags;
     blocking(move || {
         let outcome = remote::push(&repo, &request, &op_id, &mut |p| {
             let _ = on_progress.send(p);
@@ -584,13 +599,82 @@ pub async fn init_repository(path: String, branch: String) -> Result<String, Git
     blocking(move || create::init(&path, &branch)).await
 }
 
+#[tauri::command]
+pub fn get_settings() -> Settings {
+    settings::current()
+}
+
+/// Save all settings; returns them as stored (values are clamped to valid ranges).
+#[tauri::command]
+pub async fn save_settings(value: Settings) -> Result<Settings, GitError> {
+    blocking(move || settings::update(value)).await
+}
+
+/// Name, email and signing, globally and (when `repo` is given) in that repository.
+#[tauri::command]
+pub async fn get_identity(repo: Option<String>) -> Result<Identity, GitError> {
+    blocking(move || identity::get_identity(repo.as_deref())).await
+}
+
+#[tauri::command]
+pub async fn set_identity(
+    scope: ConfigScope,
+    repo: Option<String>,
+    values: IdentityValues,
+) -> Result<(), GitError> {
+    blocking(move || identity::set_identity(scope, repo.as_deref(), &values)).await
+}
+
+/// Open a file (or the repository when `path` is null) in the configured editor.
+#[tauri::command]
+pub async fn open_in_editor(repo: String, path: Option<String>) -> Result<(), GitError> {
+    let editor = settings::current().editor.external_editor;
+    blocking(move || crate::open::open_in_editor(&repo, path.as_deref(), &editor)).await
+}
+
+#[tauri::command]
+pub async fn open_terminal(repo: String) -> Result<(), GitError> {
+    let terminal = settings::current().editor.terminal;
+    blocking(move || crate::open::open_terminal(&repo, &terminal)).await
+}
+
+/// Show a file (or the repository when `path` is null) in Finder, Explorer or the file manager.
+#[tauri::command]
+pub async fn reveal_in_file_manager(repo: String, path: Option<String>) -> Result<(), GitError> {
+    blocking(move || crate::open::reveal(&repo, path.as_deref())).await
+}
+
 /// Continue, skip or abort the merge, rebase, cherry-pick or revert in progress.
 #[tauri::command]
 pub async fn operation_step(repo: String, step: Step) -> Result<IntegrateResult, GitError> {
     integrate_then_inspect(repo, move |r| integrate::step(r, step)).await
 }
 
-/// Cancel a running fetch, pull or push. Unknown ids are ignored.
+/// Connect to an Ollama server and list its models (the Test connection button).
+#[tauri::command]
+pub async fn ai_server_info(url: String) -> Result<crate::ai::ServerInfo, GitError> {
+    blocking(move || crate::ai::server_info(&url)).await
+}
+
+/// Suggest a commit message for the staged changes with the model chosen in
+/// Settings. The message so far streams to `on_text`; cancel with
+/// `cancel_remote_operation(op_id)`.
+#[tauri::command]
+pub async fn suggest_commit_message(
+    repo: String,
+    op_id: String,
+    on_text: Channel<String>,
+) -> Result<String, GitError> {
+    blocking(move || {
+        let cfg = settings::current().ai;
+        crate::ai::suggest_commit_message(&repo, &cfg, &op_id, &mut |text| {
+            let _ = on_text.send(text.to_string());
+        })
+    })
+    .await
+}
+
+/// Cancel a running fetch, pull, push, clone or suggestion. Unknown ids are ignored.
 #[tauri::command]
 pub fn cancel_remote_operation(op_id: String) {
     remote::cancel(&op_id);

@@ -5,9 +5,12 @@
 //! * `commands` - thin async Tauri IPC layer on top of `git`.
 //! * `error`    - error model serialized to the frontend.
 
+pub mod ai;
 pub mod commands;
 pub mod error;
 pub mod git;
+pub mod open;
+pub mod settings;
 pub mod watcher;
 pub mod window;
 
@@ -16,7 +19,13 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(watcher::WatcherState::default())
-        .setup(|app| Ok(window::create_main(app)?))
+        .setup(|app| {
+            use tauri::Manager;
+            if let Ok(dir) = app.path().app_config_dir() {
+                settings::init(dir.join("settings.json"));
+            }
+            Ok(window::create_main(app)?)
+        })
         .invoke_handler(tauri::generate_handler![
             commands::git_version,
             commands::inspect_repository,
@@ -45,6 +54,8 @@ pub fn run() {
             commands::pull_branch,
             commands::push_branch,
             commands::cancel_remote_operation,
+            commands::ai_server_info,
+            commands::suggest_commit_message,
             commands::list_stashes,
             commands::save_stash,
             commands::apply_stash,
@@ -62,6 +73,13 @@ pub fn run() {
             commands::operation_step,
             commands::conflict_file,
             commands::list_worktrees,
+            commands::get_settings,
+            commands::save_settings,
+            commands::get_identity,
+            commands::set_identity,
+            commands::open_in_editor,
+            commands::open_terminal,
+            commands::reveal_in_file_manager,
             commands::add_remote,
             commands::edit_remote,
             commands::remove_remote,
