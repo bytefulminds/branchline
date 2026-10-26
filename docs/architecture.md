@@ -90,6 +90,7 @@ are in the way (`checkoutConflict`); nothing is changed.
 | `get_identity(repo?)` / `set_identity(scope, repo?, values)` | `Identity` / `()` | `scope`: `global` or `repository` |
 | `open_in_editor(repo, path?)` / `open_terminal(repo)` / `reveal_in_file_manager(repo, path?)` | `()` | Uses the editor and terminal from the settings |
 | `measure_mode()` / `measure_elapsed()` / `finish_measurement(report)` | `boolean` / `number` / `()` | Startup timing with `--measure-startup=<file>` (docs/performance.md); finishing writes the report and quits |
+| `git_command_log(since)` / `clear_git_command_log()` | `GitLogEntry[]` / `()` | Commands that started or finished after `since` (a sequence number); the console polls this once a second while open |
 | `ai_server_info(url)` | `AiServerInfo` | Ollama version and chat models (embedding models left out) |
 | `suggest_commit_message(repo, opId, onText)` | `string` | Uses the AI settings; streams the cleaned text so far; `cancel_remote_operation(opId)` stops it |
 | `list_worktrees(repo)` | `WorktreeInfo[]` | Branch or detached HEAD, locked, missing, main/open flags, number of changed files |
@@ -209,6 +210,34 @@ progress (read from `rebase-merge/msgnum` and `end`).
 - Opening an editor, terminal or file manager starts the program directly with the path as a
   separate argument; the configured command is split on spaces and quotes, never run by a
   shell. On macOS an editor that is not on the GUI app's `PATH` is retried as an app name.
+
+## Git console
+
+- `git::command_log` records every call made through `run_git_with` and `run_git_streaming`
+  (the only two places that start Git): arguments after `git` (without the safety options
+  added to every call), folder, start time, duration, exit code, whether the caller accepts
+  that code, and the output. An entry is added when the command starts and updated when it
+  ends, each time with a new sequence number, so the UI only asks for what changed.
+- Limits: the last 500 commands; 8 KB of stdout and 32 KB of stderr per command (sizes are
+  reported, so the UI says when output was cut). Arguments and output go through
+  `remote::redact`. Stdin is counted, not stored. Nothing is written to disk.
+- `is_read_only` marks commands that only read (status, log, diff, `config --get`...).
+  Unknown commands count as changes, so they stay visible. The UI hides reads by default but
+  always shows failures.
+- No events are pushed: the panel polls `git_command_log(since)` once a second while it is
+  open, so a closed console costs nothing beyond recording.
+
+## Login shell PATH
+
+- `shell_env` runs `$SHELL -i -l -c` once at startup, in a background thread, with stdin
+  closed and a 5 second limit (the whole process group is killed after that). It prints
+  `env` between two marker lines, so output from profiles is ignored, and keeps only PATH.
+- `merged_path()` puts the shell's folders in front of Branchline's own (no duplicates, no
+  relative folders). The runner sets it on every Git command, so hooks (Husky's `npx`,
+  Homebrew or nvm tools) behave as in a terminal; `open.rs` uses it for editors and
+  terminals. When the shell cannot be asked, the inherited PATH stays.
+- The first Git command waits for the answer if it is not ready yet, so a commit made in the
+  first seconds still gets the right PATH. Not used on Windows.
 
 ## AI commit messages
 

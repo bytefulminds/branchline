@@ -14,6 +14,7 @@ use std::sync::{Arc, OnceLock};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use super::command_log;
 use crate::error::GitError;
 
 /// Default timeout for local, read-only Git commands.
@@ -155,6 +156,10 @@ fn git_command(cwd: &Path, args: &[&str]) -> Result<Command, GitError> {
         .env("GIT_LITERAL_PATHSPECS", "1")
         .env("LC_ALL", "C")
         .env("LANGUAGE", "C");
+    // Hooks (Husky, lint-staged...) need the tools the user's shell finds.
+    if let Some(path) = crate::shell_env::merged_path() {
+        cmd.env("PATH", path);
+    }
     for key in SCRUBBED_ENV {
         cmd.env_remove(key);
     }
@@ -175,11 +180,26 @@ fn spawn(cmd: &mut Command) -> Result<std::process::Child, GitError> {
 }
 
 /// Run Git with explicit options. See [`RunOptions`].
+///
+/// Every call is recorded in the Git console log ([`super::command_log`]).
 pub fn run_git_with(
     cwd: &Path,
     args: &[&str],
     opts: &RunOptions<'_>,
 ) -> Result<GitOutput, GitError> {
+    let running = command_log::start(cwd, args, opts.stdin.map(<[u8]>::len));
+    let result = run_git_raw(cwd, args, opts);
+    command_log::finish(running, &result, |code| opts.ok_codes.contains(&code));
+    let out = result?;
+    if opts.ok_codes.contains(&out.code) {
+        Ok(out)
+    } else {
+        Err(classify_failure(out.code, out.stderr))
+    }
+}
+
+/// [`run_git_with`] without the log and without checking the exit code.
+fn run_git_raw(cwd: &Path, args: &[&str], opts: &RunOptions<'_>) -> Result<GitOutput, GitError> {
     let mut cmd = git_command(cwd, args)?;
     if opts.pathspec_magic {
         cmd.env_remove("GIT_LITERAL_PATHSPECS");
@@ -272,16 +292,11 @@ pub fn run_git_with(
         .trim()
         .to_string();
 
-    let code = status.code().unwrap_or(-1);
-    if opts.ok_codes.contains(&code) {
-        Ok(GitOutput {
-            stdout,
-            stderr,
-            code,
-        })
-    } else {
-        Err(classify_failure(code, stderr))
-    }
+    Ok(GitOutput {
+        stdout,
+        stderr,
+        code: status.code().unwrap_or(-1),
+    })
 }
 
 /// Cancels a running [`run_git_streaming`] call from another thread.
@@ -323,6 +338,18 @@ const PIPE_GRACE: Duration = Duration::from_millis(500);
 /// after Git itself exits; reading stops after a short grace period so a
 /// cancelled command always returns promptly.
 pub fn run_git_streaming(
+    cwd: &Path,
+    args: &[&str],
+    opts: &StreamOptions,
+    on_line: &mut dyn FnMut(&str),
+) -> Result<GitOutput, GitError> {
+    let running = command_log::start(cwd, args, None);
+    let result = run_git_streaming_raw(cwd, args, opts, on_line);
+    command_log::finish(running, &result, |code| code == 0);
+    result
+}
+
+fn run_git_streaming_raw(
     cwd: &Path,
     args: &[&str],
     opts: &StreamOptions,

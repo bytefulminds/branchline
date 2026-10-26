@@ -38,9 +38,14 @@
   align-self: stretch;
   min-width: var(--space-6);
 }
+/* Same size as the Refresh button it replaces. */
 .bl-titlebar__busy {
   display: inline-flex;
-  padding: 0 var(--space-1);
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--control-height);
+  height: var(--control-height);
 }
 
 .bl-repo-selector {

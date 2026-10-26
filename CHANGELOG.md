@@ -7,6 +7,18 @@ description on GitLab.
 
 ## [Unreleased]
 
+### Added
+
+- Git console (`Ctrl+J` / `⌘J`): every Git command Branchline runs, with its output, so you
+  can see why a hook or command failed. Failed commits and pushes link straight to it.
+- Sort branches by name or by last commit.
+
+### Fixed
+
+- Git hooks that use tools from your shell (Husky with `npx`, lint-staged, Homebrew or nvm
+  tools) failed with "command not found" when Branchline was started from the Dock or Finder.
+  Branchline now uses your login shell's PATH for Git and its hooks.
+
 ## [0.1.0] - 2026-10-22
 
 The first public release: a fast, local-first Git client for macOS, Windows and Linux that

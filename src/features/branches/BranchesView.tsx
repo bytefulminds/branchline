@@ -1,4 +1,5 @@
 import {
+  ArrowDownUp,
   ArrowDown,
   ArrowUp,
   ArrowUpFromLine,
@@ -24,6 +25,7 @@ import { EmptyState } from "../../components/EmptyState";
 import type { MenuEntry } from "../../components/Menu";
 import { Spinner } from "../../components/Spinner";
 import { displayPath, relativeTime } from "../../lib/format";
+import { readJson, writeJson } from "../../services/storage";
 import type { BranchInfo, RepositoryInfo } from "../../types/git";
 import { useIntegrateActions } from "../integrate/IntegrateActions";
 import { refDragProps, useRefDrop } from "../integrate/refDrag";
@@ -62,6 +64,23 @@ function Tracking({ branch }: { branch: BranchInfo }) {
   );
 }
 
+export type BranchSort = "name" | "date";
+
+const SORT_KEY = "branchline.branches.sort";
+
+/** Branches by name (natural order, so `release-9` comes before `release-10`) or by their
+ * last commit, newest first; ties keep name order. The current branch always comes first. */
+export function sortBranches(list: BranchInfo[], sort: BranchSort): BranchInfo[] {
+  const byName = (a: BranchInfo, b: BranchInfo) =>
+    a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" });
+  return [...list].sort(
+    (a, b) =>
+      Number(b.isCurrent) - Number(a.isCurrent) ||
+      (sort === "date" ? b.tipTime - a.tipTime : 0) ||
+      byName(a, b),
+  );
+}
+
 export function BranchesView({ repo }: { repo: RepositoryInfo }) {
   const actions = useBranchActions();
   const worktrees = useWorktreeActions();
@@ -70,12 +89,23 @@ export function BranchesView({ repo }: { repo: RepositoryInfo }) {
   const drop = useRefDrop(repo);
   const showMenu = useContextMenu();
   const [query, setQuery] = useState("");
+  const [sort, setSortState] = useState<BranchSort>(() =>
+    readJson<unknown>(SORT_KEY, "name") === "date" ? "date" : "name",
+  );
+  const setSort = (next: BranchSort) => {
+    setSortState(next);
+    writeJson(SORT_KEY, next);
+  };
   const { branches } = actions;
 
   const q = query.trim().toLowerCase();
   const local = useMemo(
-    () => (branches?.local ?? []).filter((b) => !q || b.name.toLowerCase().includes(q)),
-    [branches, q],
+    () =>
+      sortBranches(
+        (branches?.local ?? []).filter((b) => !q || b.name.toLowerCase().includes(q)),
+        sort,
+      ),
+    [branches, q, sort],
   );
   const remotes = useMemo(() => {
     const groups = new Map<string, BranchInfo[]>();
@@ -84,8 +114,10 @@ export function BranchesView({ repo }: { repo: RepositoryInfo }) {
       const key = b.remote ?? "remote";
       groups.set(key, [...(groups.get(key) ?? []), b]);
     }
-    return [...groups.entries()];
-  }, [branches, q]);
+    return [...groups.entries()].map(
+      ([remote, list]) => [remote, sortBranches(list, sort)] as const,
+    );
+  }, [branches, q, sort]);
 
   const current = repo.head.kind === "branch" ? repo.head.name : null;
   const integrateEntries = (b: BranchInfo): MenuEntry[] => [
@@ -296,6 +328,18 @@ export function BranchesView({ repo }: { repo: RepositoryInfo }) {
               <X size={12} aria-hidden />
             </button>
           )}
+        </label>
+        <label className="bl-branches__sort text-small">
+          <ArrowDownUp size={14} aria-hidden />
+          <span className="visually-hidden">Sort branches</span>
+          <select
+            className="bl-input"
+            value={sort}
+            onChange={(e) => setSort(e.target.value === "date" ? "date" : "name")}
+          >
+            <option value="name">Name</option>
+            <option value="date">Last commit</option>
+          </select>
         </label>
         <Button
           variant="primary"

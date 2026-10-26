@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { useConfirm } from "../../components/ConfirmDialog";
+import { useGitConsole } from "../console/GitConsoleProvider";
 import { useToast, type ToastAction } from "../../components/Toast";
 import { plural } from "../../lib/format";
 import { gitService } from "../../services/git";
@@ -143,6 +144,7 @@ export function RemoteActionsProvider({
   const { remotes, reload: reloadRemotes } = useRemotes(repo);
   const [remoteDialog, setRemoteDialog] = useState<{ edit: RemoteInfo | null } | null>(null);
   const toast = useToast();
+  const gitConsole = useGitConsole();
   const confirm = useConfirm();
   const { run } = controller;
   const [activity, setActivity] = useState<(NetworkActivity & { opId: string }) | null>(null);
@@ -195,10 +197,13 @@ export function RemoteActionsProvider({
         tone: "error",
         title: ERROR_TITLE[error.kind] ?? fallbackTitle,
         description: error.detail ? `${error.message}\n\n${error.detail}` : error.message,
-        actions,
+        actions: [
+          ...(actions ?? []),
+          { label: "Show Git output", onClick: gitConsole.showLatestFailure },
+        ],
       });
     },
-    [toast],
+    [toast, gitConsole.showLatestFailure],
   );
 
   const pullActions = useCallback(

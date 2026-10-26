@@ -9,6 +9,7 @@ import { gitService } from "../../services/git";
 import { modKeyLabel, isPrimaryModifier } from "../../services/platform";
 import type { CommitDraft, GitError, RepositoryInfo } from "../../types/git";
 import type { RepositoryController } from "../repository/useRepository";
+import { useGitConsole } from "../console/GitConsoleProvider";
 import { useSettings } from "../settings/SettingsProvider";
 import "./CommitBox.css";
 
@@ -71,6 +72,7 @@ export function CommitBox({
 }) {
   const toast = useToast();
   const { settings } = useSettings();
+  const gitConsole = useGitConsole();
   const summaryId = useId();
   const saved = drafts.get(repo.path);
   const [message, setMessage] = useState<Message>(saved ?? { summary: "", description: "" });
@@ -368,6 +370,15 @@ export function CommitBox({
               )}
               {error.detail && error.kind !== "identityMissing" && (
                 <pre className="mono selectable">{error.detail}</pre>
+              )}
+              {error.kind !== "ai" && (
+                <button
+                  type="button"
+                  className="bl-commit-box__output-link"
+                  onClick={gitConsole.showLatestFailure}
+                >
+                  Show Git output
+                </button>
               )}
             </div>
           </div>

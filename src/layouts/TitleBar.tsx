@@ -32,6 +32,7 @@ import { FILE_MANAGER, useOpenIn } from "../features/repository/useOpenIn";
 import { displayPath } from "../lib/format";
 import { modKeyLabel, platform } from "../services/platform";
 import { WindowControls } from "./WindowControls";
+import { useEffect, useRef } from "react";
 import "./TitleBar.css";
 
 /** Most recently active local branches shown in the quick switcher. */
@@ -59,6 +60,15 @@ export function TitleBar({
   const { state, recent } = controller;
   const repo = state.status === "ready" ? state.repo : null;
   const busy = state.status === "loading" || (state.status === "ready" && state.refreshing);
+  // The spinner replaces Refresh while busy; give focus back when it returns.
+  const refreshRef = useRef<HTMLButtonElement>(null);
+  const refocusRefresh = useRef(false);
+  useEffect(() => {
+    if (!busy && refocusRefresh.current) {
+      refocusRefresh.current = false;
+      refreshRef.current?.focus();
+    }
+  }, [busy]);
   const currentPath = currentRepositoryPath(state);
   const head = repo ? headLabel(repo.head) : null;
 
@@ -226,17 +236,23 @@ export function TitleBar({
       {repo && <RemoteToolbar repo={repo} busy={controller.operation !== null} />}
       {repo && <div className="bl-titlebar__divider" aria-hidden />}
 
-      {busy && (
+      {/* While busy the spinner takes the Refresh button's place, so the bar never shifts. */}
+      {busy ? (
         <span className="bl-titlebar__busy">
-          <Spinner size={14} label="Working" />
+          <Spinner size={14} label="Refreshing" />
         </span>
+      ) : (
+        <IconButton
+          ref={refreshRef}
+          label={`Refresh (${modKeyLabel}R)`}
+          icon={<RefreshCw size={16} aria-hidden />}
+          onClick={(e) => {
+            refocusRefresh.current = document.activeElement === e.currentTarget;
+            void controller.refresh();
+          }}
+          disabled={state.status === "idle"}
+        />
       )}
-      <IconButton
-        label={`Refresh (${modKeyLabel}R)`}
-        icon={<RefreshCw size={16} aria-hidden />}
-        onClick={() => void controller.refresh()}
-        disabled={state.status === "idle" || busy}
-      />
       <IconButton
         label={`Open repository (${modKeyLabel}O)`}
         icon={<FolderOpen size={16} aria-hidden />}

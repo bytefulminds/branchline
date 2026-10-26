@@ -663,6 +663,18 @@ pub async fn operation_step(repo: String, step: Step) -> Result<IntegrateResult,
     integrate_then_inspect(repo, move |r| integrate::step(r, step)).await
 }
 
+/// Git commands Branchline ran that started or finished after `since` (0 for all).
+#[tauri::command]
+pub fn git_command_log(since: u64) -> Vec<crate::git::command_log::CommandEntry> {
+    crate::git::command_log::since(since)
+}
+
+/// Empty the Git console.
+#[tauri::command]
+pub fn clear_git_command_log() {
+    crate::git::command_log::clear();
+}
+
 /// Connect to an Ollama server and list its models (the Test connection button).
 #[tauri::command]
 pub async fn ai_server_info(url: String) -> Result<crate::ai::ServerInfo, GitError> {

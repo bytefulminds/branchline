@@ -12,6 +12,7 @@ pub mod git;
 pub mod measure;
 pub mod open;
 pub mod settings;
+pub mod shell_env;
 pub mod watcher;
 pub mod window;
 
@@ -25,6 +26,7 @@ pub fn run() {
         .manage(watcher::WatcherState::default())
         .setup(|app| {
             use tauri::Manager;
+            shell_env::init_in_background();
             if let Ok(dir) = app.path().app_config_dir() {
                 settings::init(dir.join("settings.json"));
             }
@@ -64,6 +66,8 @@ pub fn run() {
             commands::push_branch,
             commands::cancel_remote_operation,
             commands::ai_server_info,
+            commands::git_command_log,
+            commands::clear_git_command_log,
             commands::suggest_commit_message,
             commands::list_stashes,
             commands::save_stash,

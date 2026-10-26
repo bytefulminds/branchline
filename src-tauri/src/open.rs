@@ -41,6 +41,9 @@ pub fn split_command(line: &str) -> Vec<String> {
 
 fn spawn(program: &str, args: &[&str], cwd: Option<&Path>) -> Result<(), GitError> {
     let mut cmd = Command::new(program);
+    if let Some(path) = crate::shell_env::merged_path() {
+        cmd.env("PATH", path);
+    }
     cmd.args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::null())

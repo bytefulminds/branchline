@@ -155,3 +155,15 @@
 .bl-branch[draggable="true"] {
   cursor: grab;
 }
+.bl-branches__sort {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--color-text-muted);
+}
+.bl-branches__sort select {
+  width: auto;
+  height: 28px;
+  padding: 0 var(--space-2);
+  font-size: var(--text-small-size);
+}

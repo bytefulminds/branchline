@@ -22,6 +22,7 @@ import {
   Search,
   Settings,
   SkipForward,
+  SquareTerminal,
   Tag,
   Terminal,
   Download,
@@ -61,6 +62,7 @@ export interface AppCommandHandlers {
   onShortcuts: () => void;
   onAbout: () => void;
   onCheckForUpdates: () => void;
+  onToggleConsole: () => void;
 }
 
 /** The command palette with every action that makes sense right now. */
@@ -393,6 +395,15 @@ export function AppCommandPalette({
       shortcut: SHORTCUTS.shortcuts,
       icon: <Keyboard size={16} />,
       run: handlers.onShortcuts,
+    });
+    add({
+      id: "console",
+      title: "Git console",
+      group: "Branchline",
+      keywords: "log output commands hooks debug terminal",
+      shortcut: SHORTCUTS.console,
+      icon: <SquareTerminal size={16} />,
+      run: handlers.onToggleConsole,
     });
     add({
       id: "updates",
