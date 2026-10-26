@@ -79,7 +79,7 @@ The key has no password; `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` is set to empty in
 
 ## Code signing (not set up yet)
 
-Version 0.1.0 is not signed with Apple or Microsoft certificates. macOS builds are signed ad
+Branchline is not signed with Apple or Microsoft certificates. macOS builds are signed ad
 hoc, so they run on Apple silicon, but Gatekeeper asks the user to confirm the first launch;
 Windows SmartScreen asks too. The README tells users what to do.
 

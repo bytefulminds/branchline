@@ -7,6 +7,11 @@ description on GitLab.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-26
+
+Easier troubleshooting: see every Git command Branchline runs, and Git hooks that work the
+same as in your terminal.
+
 ### Added
 
 - Git console (`Ctrl+J` / `⌘J`): every Git command Branchline runs, with its output, so you
@@ -18,6 +23,8 @@ description on GitLab.
 - Git hooks that use tools from your shell (Husky with `npx`, lint-staged, Homebrew or nvm
   tools) failed with "command not found" when Branchline was started from the Dock or Finder.
   Branchline now uses your login shell's PATH for Git and its hooks.
+- The title bar no longer shifts during a refresh: the spinner takes the Refresh button's
+  place.
 
 ## [0.1.0] - 2026-10-22
 
@@ -64,5 +71,6 @@ drives the Git you already have installed.
 - The macOS and Windows builds are not signed yet. See the installation notes in the README.
 - See "Known limitations" in the README for the rest.
 
-[Unreleased]: https://gitlab.com/bytefulminds/branchline/-/compare/v0.1.0...main
+[Unreleased]: https://gitlab.com/bytefulminds/branchline/-/compare/v0.2.0...main
+[0.2.0]: https://gitlab.com/bytefulminds/branchline/-/releases/v0.2.0
 [0.1.0]: https://gitlab.com/bytefulminds/branchline/-/releases/v0.1.0

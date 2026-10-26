@@ -9,7 +9,7 @@ Branchline is a fast, local-first, open-source Git desktop client for Windows, m
 It is built with Tauri 2, React, TypeScript and Rust, and drives the native Git CLI instead of
 reimplementing Git.
 
-> **Status:** first release, 0.1.0. Branchline covers the daily Git work: staging (down to
+> **Status:** 0.2.0. Branchline covers the daily Git work: staging (down to
 > single lines), commits, history with a graph and search, branches, remotes, stashes, tags,
 > worktrees, merge, rebase (also interactive), cherry-pick, revert and a merge editor. See
 > [CHANGELOG.md](CHANGELOG.md) and [ROADMAP.md](ROADMAP.md).
@@ -27,7 +27,7 @@ installs them when you agree (Settings > General to turn that off).
 | Windows 10 and 11 | `-setup.exe` (or `.msi`) | |
 | Linux | `.AppImage`, `.deb` or `.rpm` | AppImage: make it executable (`chmod +x`) and run it. Updates install for the AppImage only |
 
-The 0.1.0 installers are not signed with Apple or Microsoft certificates yet, so the system
+The installers are not signed with Apple or Microsoft certificates yet, so the system
 asks before the first launch:
 
 - **macOS:** open Branchline once, choose Done, then go to System Settings > Privacy &
