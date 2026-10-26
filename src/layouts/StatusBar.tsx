@@ -5,8 +5,10 @@ import {
   CircleCheck,
   GitBranch,
   GitMerge,
+  SquareTerminal,
   Unplug,
 } from "lucide-react";
+import { SHORTCUTS } from "../features/commands/shortcuts";
 import { Spinner } from "../components/Spinner";
 import { headLabel, OPERATION_LABEL } from "../features/repository/headLabel";
 import type { NetworkActivity } from "../features/remote/RemoteActions";
@@ -64,8 +66,12 @@ export function StatusBar({
   network,
   onCancelNetwork,
   gitVersion,
+  consoleOpen = false,
+  onToggleConsole,
 }: {
   state: RepositoryState;
+  consoleOpen?: boolean;
+  onToggleConsole?: () => void;
   operation?: string | null;
   /** A running fetch, pull or push, shown with progress instead of `operation`. */
   network?: NetworkActivity | null;
@@ -160,6 +166,17 @@ export function StatusBar({
               Updated {clockTime(state.repo.inspectedAt)}
             </span>
           ))}
+        {onToggleConsole && (
+          <button
+            type="button"
+            className="bl-statusbar__item bl-statusbar__button"
+            aria-pressed={consoleOpen}
+            title={`Git console (${SHORTCUTS.console})`}
+            onClick={onToggleConsole}
+          >
+            <SquareTerminal size={13} aria-hidden /> Git console
+          </button>
+        )}
         {gitVersion && "version" in gitVersion && (
           <span className="bl-statusbar__item text-muted" title={gitVersion.path}>
             Git {gitVersion.version}

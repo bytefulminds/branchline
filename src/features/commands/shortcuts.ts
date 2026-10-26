@@ -19,6 +19,7 @@ export const SHORTCUTS = {
   worktrees: mod("6"),
   remotes: mod("7"),
   searchHistory: mod("F"),
+  console: mod("J"),
   commit: mod("↵"),
 };
 
@@ -37,6 +38,7 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
       { keys: SHORTCUTS.open, action: "Open a repository" },
       { keys: SHORTCUTS.refresh, action: "Refresh" },
       { keys: SHORTCUTS.settings, action: "Settings" },
+      { keys: SHORTCUTS.console, action: "Show or hide the Git console" },
       {
         keys: `${SHORTCUTS.changes} to ${mod("7")}`,
         action: "Changes, History, Branches, Stashes, Tags, Worktrees, Remotes",

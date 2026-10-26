@@ -2,6 +2,7 @@
 //! The UI never runs Git directly; it calls the IPC commands in `commands.rs`.
 
 pub mod branches;
+pub mod command_log;
 pub mod commit;
 pub mod conflict;
 pub mod create;

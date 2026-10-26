@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 import { Splitter } from "../components/Splitter";
+import { GitConsole } from "../features/console/GitConsole";
+import { useGitConsole } from "../features/console/GitConsoleProvider";
 import { useRemoteActions } from "../features/remote/RemoteActions";
 import type { RepositoryController } from "../features/repository/useRepository";
 import { usePersistentNumber } from "../lib/usePersistentNumber";
@@ -34,6 +36,7 @@ export function AppShell({
   children: ReactNode;
 }) {
   const remote = useRemoteActions();
+  const gitConsole = useGitConsole();
   const [sidebarWidth, setSidebarWidth] = usePersistentNumber(
     "branchline.layout.sidebarWidth",
     240,
@@ -69,7 +72,10 @@ export function AppShell({
         />
         <main className="bl-app__workspace">{children}</main>
       </div>
+      {gitConsole.open && <GitConsole />}
       <StatusBar
+        consoleOpen={gitConsole.open}
+        onToggleConsole={gitConsole.toggle}
         state={controller.state}
         operation={controller.operation}
         network={remote.activity}

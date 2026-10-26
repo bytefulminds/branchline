@@ -289,4 +289,35 @@ describe("commit context menu", () => {
     await waitFor(() => expect(screen.queryByRole("menu")).not.toBeInTheDocument());
     expect(list).toHaveFocus();
   });
+
+  it("sorts by name or by last commit and remembers the choice", async () => {
+    const extra: Extra = (cmd) => {
+      if (cmd === "list_branches")
+        return {
+          local: [
+            branch({ name: "main", isCurrent: true, tipTime: 1 }),
+            branch({ name: "release-10", tipTime: 300 }),
+            branch({ name: "release-9", tipTime: 100 }),
+            branch({ name: "Docs", tipTime: 200 }),
+          ],
+          remote: [
+            branch({ name: "origin/b", remote: "origin", tipTime: 5 }),
+            branch({ name: "origin/a", remote: "origin", tipTime: 1 }),
+          ],
+        };
+    };
+    const { user, view } = await openBranchesView(extra);
+    const names = (label: string) =>
+      within(within(view).getByRole("list", { name: label }))
+        .getAllByRole("listitem")
+        .map((li) => li.querySelector(".bl-branch__name .truncate")!.textContent);
+    // Natural, case-insensitive order; the current branch stays on top.
+    expect(names("Local branches")).toEqual(["main", "Docs", "release-9", "release-10"]);
+    expect(names("Branches on origin")).toEqual(["a", "b"]);
+
+    await user.selectOptions(within(view).getByLabelText("Sort branches"), "date");
+    expect(names("Local branches")).toEqual(["main", "release-10", "Docs", "release-9"]);
+    expect(names("Branches on origin")).toEqual(["b", "a"]);
+    expect(window.localStorage.getItem("branchline.branches.sort")).toBe('"date"');
+  });
 });

@@ -29,6 +29,7 @@ import { WorktreesView } from "./features/worktrees/WorktreesView";
 import { ContextMenuProvider } from "./components/ContextMenu";
 import { AppShell } from "./layouts/AppShell";
 import { AppCommandPalette, type AppCommandHandlers } from "./features/commands/AppCommands";
+import { GitConsoleProvider, useGitConsole } from "./features/console/GitConsoleProvider";
 import { ShortcutsDialog } from "./features/commands/ShortcutsDialog";
 import { AboutDialog } from "./features/updates/AboutDialog";
 import { useUpdates } from "./features/updates/useUpdates";
@@ -60,6 +61,7 @@ function Workspace() {
   const controller = useRepository(onRefreshError, {
     refreshOnFocus: settings.general.refreshOnFocus,
   });
+  const gitConsole = useGitConsole();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [overlay, setOverlay] = useState<"palette" | "shortcuts" | "about" | null>(null);
   const [gitVersion, setGitVersion] = useState<GitVersion | GitError | null>(null);
@@ -126,6 +128,9 @@ function Workspace() {
       } else if (isPrimaryModifier(e) && !e.shiftKey && !e.altKey && key in VIEW_KEYS) {
         e.preventDefault();
         setView(VIEW_KEYS[key]!);
+      } else if (isPrimaryModifier(e) && !e.shiftKey && !e.altKey && key === "j") {
+        e.preventDefault();
+        gitConsole.toggle();
       } else if (isPrimaryModifier(e) && !e.shiftKey && !e.altKey && e.key === ",") {
         e.preventDefault();
         setSettingsOpen(true);
@@ -137,7 +142,7 @@ function Workspace() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [openPicker, refresh]);
+  }, [openPicker, refresh, gitConsole]);
 
   const updates = useUpdates();
 
@@ -170,8 +175,9 @@ function Workspace() {
       onShortcuts: () => setOverlay("shortcuts"),
       onAbout: () => setOverlay("about"),
       onCheckForUpdates: () => void updates.check({ quiet: false }),
+      onToggleConsole: gitConsole.toggle,
     }),
-    [openPicker, updates],
+    [openPicker, updates, gitConsole.toggle],
   );
 
   // New clones and repositories go next to the most recent one by default.
@@ -348,7 +354,9 @@ export default function App() {
       <ConfirmProvider>
         <ContextMenuProvider>
           <SettingsProvider>
-            <Workspace />
+            <GitConsoleProvider>
+              <Workspace />
+            </GitConsoleProvider>
           </SettingsProvider>
         </ContextMenuProvider>
       </ConfirmProvider>

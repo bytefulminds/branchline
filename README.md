@@ -81,7 +81,8 @@ Updates are signed with Branchline's own update key, so only genuine releases ar
   and a read-only diff per file.
 - Branches: list local and remote branches with upstream and ahead/behind, then create, switch,
   rename and delete them. Remote branches check out as tracking branches; unmerged branches need a
-  second confirmation before deletion; switching never overwrites uncommitted work.
+  second confirmation before deletion; switching never overwrites uncommitted work. Sort by
+  name or by last commit (remembered); the current branch stays on top.
 - Quick branch switcher in the title bar, and right-click (or `Shift+F10`) on a commit to create
   a branch there or check it out.
 - Fetch, Pull and Push in the title bar, with ahead/behind counts. Pull fast-forwards by default,
@@ -158,6 +159,16 @@ Updates are signed with Branchline's own update key, so only genuine releases ar
 - Works with the keyboard and screen readers: lists, diffs (arrow keys and `Space` select
   lines), dialogs and panels. See [docs/accessibility.md](docs/accessibility.md).
 - About Branchline (version, links) and update checks, from the command palette.
+- Git console (`Ctrl+J` / `⌘J`, or "Git console" in the status bar): every Git command
+  Branchline runs, with its folder, exit code, duration and output, so you can see why a hook
+  or command failed. Routine reads such as `status` are hidden unless you ask for them;
+  failures always show. A failed commit or push offers "Show Git output", which opens the
+  console on that command. Copy a command to run it yourself in a terminal.
+- Git hooks such as Husky and lint-staged find the same tools as your terminal. Apps started
+  from the Dock or Finder get a minimal PATH, so at startup Branchline asks your login shell
+  for its PATH once (in the background, at most 5 seconds) and uses it for Git, hooks, your
+  editor and terminal. Profiles can check `BRANCHLINE_RESOLVING_SHELL_ENV` to skip slow
+  parts. Windows sets PATH for the whole system, so nothing changes there.
 - `Ctrl+1` / `⌘1` Changes, `Ctrl+2` / `⌘2` History, `Ctrl+3` / `⌘3` Branches, `Ctrl+4` / `⌘4`
   Stashes, `Ctrl+5` / `⌘5` Tags, `Ctrl+6` / `⌘6` Worktrees, `Ctrl+7` / `⌘7` Remotes.
 
@@ -287,6 +298,10 @@ See [docs/architecture.md](docs/architecture.md) for how the layers fit together
   browser only for Branchline's own GitLab pages and ollama.com.
 - Updates are only installed when their signature matches the update key built into
   Branchline, and only after you agree.
+- The Git console log stays in memory (the last 500 commands, at most 8 KB of output and
+  32 KB of messages each) and is gone when Branchline quits. Credentials in URLs are removed
+  before anything is stored; what Branchline sends on standard input (patches, commit
+  messages) is not kept.
 
 ## Performance
 

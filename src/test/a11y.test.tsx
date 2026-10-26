@@ -94,6 +94,28 @@ async function start() {
       return [{ name: "origin", url: "https://example.com/repo.git", pushUrl: null }];
     if (cmd === "get_identity") return { global: identity, repository: null };
     if (cmd === "plugin:app|version") return "0.1.0";
+    if (cmd === "git_command_log")
+      return (args.since as number) > 0
+        ? []
+        : [
+            {
+              id: 1,
+              seq: 1,
+              startedAt: 1_700_000_000_000,
+              durationMs: 40,
+              cwd: REPO.path,
+              args: ["commit", "-F", "-"],
+              readOnly: false,
+              exitCode: 1,
+              ok: false,
+              error: null,
+              stdout: "",
+              stdoutBytes: 0,
+              stderr: "pre-commit hook failed",
+              stderrBytes: 22,
+              stdinBytes: 10,
+            },
+          ];
     return undefined;
   });
   render(<App />);
@@ -137,7 +159,13 @@ describe("accessibility (axe)", () => {
     await user.click(await screen.findByRole("button", { name: /^Filters/ }));
     await screen.findByRole("group", { name: "Filters" });
     await audit("history filters");
-  });
+
+    await user.keyboard("{Control>}j{/Control}");
+    const consolePanel = await screen.findByRole("region", { name: "Git console" });
+    await user.click(await within(consolePanel).findByRole("button", { name: /git commit/ }));
+    await within(consolePanel).findByText("pre-commit hook failed");
+    await audit("Git console");
+  }, 20_000);
 
   it("dialogs: palette, shortcuts, about, settings", async () => {
     const user = await start();

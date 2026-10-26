@@ -119,6 +119,7 @@ export type GitErrorKind =
   | "worktreeDirty"
   /** A remote name or address that cannot be used; `message` says why. */
   | "invalidRemote"
+  | "ai"
   | "parse"
   | "internal"
   /** Frontend-only: the app is not running inside the Tauri shell. */
