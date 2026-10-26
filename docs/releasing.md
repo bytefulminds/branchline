@@ -32,7 +32,7 @@ differ.
 | `build:macos` | tags, group runner tagged `macos` | One universal app (Apple silicon and Intel): `.dmg` and the update archive |
 | `build:windows` | tags, group runner tagged `windows` | NSIS `.exe` and `.msi` installers |
 | `release` | tags | `latest.json`, upload to the package registry, GitLab release |
-| `measure:*` | tags, after each build | Startup and interaction times per platform (`perf-*.json`), allowed to fail |
+| `measure:*` | tags, after each build | Startup and interaction times per platform (`perf-*.json`), allowed to fail; skipped on a Windows runner without a desktop session (see docs/performance.md) |
 
 Files are stored in the project's generic package registry under
 `packages/generic/branchline/<version>/`. The release links each file, and links
