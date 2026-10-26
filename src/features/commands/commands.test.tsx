@@ -122,7 +122,7 @@ describe("shortcuts and about", () => {
     expect(screen.getByRole("textbox", { name: "Commit summary" })).toHaveValue("?");
   });
 
-  it("shows the version and checks for updates from About", async () => {
+  it("opens About in Settings with the version, maker and licenses", async () => {
     let update: unknown = null;
     const { user } = await start({
       extra: (cmd) => (cmd === "plugin:updater|check" ? update : undefined),
@@ -130,8 +130,31 @@ describe("shortcuts and about", () => {
     await user.keyboard("{Control>}k{/Control}");
     await user.type(within(palette()).getByRole("combobox"), "about");
     await user.keyboard("{Enter}");
-    const dialog = await screen.findByRole("dialog", { name: "About Branchline" });
-    expect(await within(dialog).findByText("Branchline 0.1.0")).toBeInTheDocument();
+    const settings = await screen.findByRole("dialog", { name: "Settings" });
+    const dialog = within(settings).getByRole("region", { name: "About Branchline" });
+    expect(await within(dialog).findByText("0.1.0")).toBeInTheDocument();
+    expect(dialog).toHaveTextContent("by Bytefulminds");
+
+    // Every shipped package with its license, searchable, with the license text.
+    const list = await within(dialog).findByRole("list", { name: "Open-source packages" });
+    const rows = () => within(list).getAllByRole("listitem").length;
+    expect(rows()).toBe(10);
+    await user.click(within(dialog).getByRole("button", { name: "Show 10 more" }));
+    expect(rows()).toBe(20);
+    await user.click(within(dialog).getByRole("button", { name: "Show all" }));
+    expect(rows()).toBeGreaterThan(400);
+    expect(dialog).toHaveTextContent(`Showing ${rows()} of ${rows()}`);
+    await user.click(within(dialog).getByRole("button", { name: "Show fewer" }));
+    expect(rows()).toBe(10);
+    await user.type(within(dialog).getByLabelText("Search packages"), "lowlight");
+    const row = within(list).getByRole("button", { name: /lowlight/ });
+    expect(row).toHaveTextContent("MIT");
+    expect(row).toHaveTextContent("JavaScript");
+    await user.click(row);
+    expect(within(list).getByText(/Permission is hereby granted/)).toBeInTheDocument();
+    await user.clear(within(dialog).getByLabelText("Search packages"));
+    await user.type(within(dialog).getByLabelText("Search packages"), "serde_json");
+    expect(within(list).getByRole("button", { name: /serde_json/ })).toHaveTextContent("Rust");
 
     await user.click(within(dialog).getByRole("button", { name: "Check for updates" }));
     expect(await screen.findByText("Branchline is up to date")).toBeInTheDocument();

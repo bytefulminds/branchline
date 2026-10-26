@@ -3,6 +3,7 @@ import {
   GitBranch,
   type LucideIcon,
   RefreshCw,
+  Info,
   ShieldCheck,
   Sparkles,
   UserRound,
@@ -20,12 +21,13 @@ import type {
   IdentityValues,
   Settings,
 } from "../../types/settings";
+import { AboutSection } from "../about/AboutSection";
 import { AiSection } from "./AiSection";
 import { Field, NumberSelect, type Setter, TextSetting, Toggle } from "./SettingControls";
 import { useSettings } from "./SettingsProvider";
 import "./SettingsView.css";
 
-export type SettingsSection = "general" | "git" | "identity" | "editor" | "safety" | "ai";
+export type SettingsSection = "general" | "git" | "identity" | "editor" | "safety" | "ai" | "about";
 
 const SECTIONS: { id: SettingsSection; label: string; icon: LucideIcon }[] = [
   { id: "general", label: "General", icon: RefreshCw },
@@ -34,6 +36,7 @@ const SECTIONS: { id: SettingsSection; label: string; icon: LucideIcon }[] = [
   { id: "editor", label: "Editor & diff", icon: Code2 },
   { id: "safety", label: "Confirmations", icon: ShieldCheck },
   { id: "ai", label: "AI commit messages", icon: Sparkles },
+  { id: "about", label: "About Branchline", icon: Info },
 ];
 
 const FETCH_OPTIONS = [0, 5, 10, 15, 30, 60].map((m) => ({
@@ -431,11 +434,13 @@ export function SettingsView({
   repoName,
   initialSection = "general",
   onClose,
+  onCheckForUpdates = () => {},
 }: {
   repoPath: string | null;
   repoName: string;
   initialSection?: SettingsSection;
   onClose: () => void;
+  onCheckForUpdates?: () => void;
 }) {
   const { settings, update } = useSettings();
   const [section, setSection] = useState<SettingsSection>(initialSection);
@@ -512,6 +517,7 @@ export function SettingsView({
           {section === "editor" && <EditorSection s={settings} set={set} />}
           {section === "safety" && <SafetySection s={settings} set={set} />}
           {section === "ai" && <AiSection s={settings} set={set} />}
+          {section === "about" && <AboutSection onCheckForUpdates={onCheckForUpdates} />}
         </div>
       </section>
     </div>

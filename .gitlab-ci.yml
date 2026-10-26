@@ -60,6 +60,7 @@ check:
   stage: check
   script:
     - npm run check
+    - npm run licenses:check
     - cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 
 build:linux:
