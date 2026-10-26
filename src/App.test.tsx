@@ -120,6 +120,31 @@ describe("App", () => {
     expect(screen.getByRole("heading", { name: "Changes" })).toBeInTheDocument();
   });
 
+  it("shows the spinner in the Refresh button's place while refreshing", async () => {
+    const user = userEvent.setup();
+    let finish: (v: RepositoryInfo) => void = () => {};
+    let slow = false;
+    setup((cmd) => {
+      if (cmd === "plugin:dialog|open") return REPO.path;
+      if (cmd === "inspect_repository")
+        return slow ? new Promise<RepositoryInfo>((resolve) => (finish = resolve)) : REPO;
+    });
+    render(<App />);
+    await user.click(openButton());
+    await screen.findByRole("heading", { name: "Changes" });
+
+    slow = true;
+    const refresh = screen.getByRole("button", { name: /^Refresh/ });
+    await user.click(refresh);
+    expect(await screen.findByRole("status", { name: "Refreshing" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Refresh/ })).not.toBeInTheDocument();
+
+    finish(REPO);
+    const back = await screen.findByRole("button", { name: /^Refresh/ });
+    expect(back).toHaveFocus();
+    expect(screen.queryByRole("status", { name: "Refreshing" })).not.toBeInTheDocument();
+  });
+
   it("drops a slow response when another repository was opened meanwhile", async () => {
     const user = userEvent.setup();
     let resolveSlow: (v: RepositoryInfo) => void = () => {};
