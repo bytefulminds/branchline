@@ -81,7 +81,7 @@ The key has no password; `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` is set to empty in
 
 Branchline is not signed with Apple or Microsoft certificates. macOS builds are signed ad
 hoc, so they run on Apple silicon, but Gatekeeper asks the user to confirm the first launch;
-Windows SmartScreen asks too. The README tells users what to do.
+Windows SmartScreen asks too. The Install section of MANUAL.md tells users what to do.
 
 To sign later, add these variables; no pipeline changes are needed, Tauri reads them:
 

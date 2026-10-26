@@ -10,7 +10,14 @@ description on GitLab.
 ### Added
 
 - About Branchline in Settings: version, update check and links, and every open-source
-  package Branchline is built with, with its license and license text.
+  package Branchline is built with, with its license and license text. The list shows ten
+  packages at a time, with Show more and Show all.
+
+### Changed
+
+- The README is now a tour of Branchline with screenshots. Everything else (features in
+  detail, keyboard shortcuts, settings, security, limitations and building from source) moved
+  to the new [MANUAL.md](MANUAL.md).
 
 ## [0.2.0] - 2026-10-26
 
