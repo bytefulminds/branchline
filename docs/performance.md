@@ -52,8 +52,16 @@ put commits in graph order; later pages take about 30 ms each (below).
 
 ### macOS and Windows
 
-Measured by the `measure:macos` and `measure:windows` jobs of the first release pipeline;
-add the numbers here from their `perf-*.json` artifacts.
+Measured by the `measure:macos` and `measure:windows` jobs of the release pipeline; add the
+numbers here from their `perf-*.json` artifacts.
+
+On Windows the app can only start in a desktop session. A GitLab runner installed as a
+Windows service runs in session 0, where WebView2 cannot open a window (HRESULT
+0x80080005, "server execution failed"). The script then reports the measurement as skipped
+instead of failing. To measure on Windows, run the runner in a logged-in session instead of as
+a service, for example with automatic sign-in and a scheduled task at logon that runs
+`gitlab-runner run` from `C:\GitLab-Runner`. Building does not need a desktop, so the service
+is fine when you only want installers.
 
 ## Git operations (backend only)
 

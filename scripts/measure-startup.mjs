@@ -8,6 +8,11 @@
  * History, a diff and the command palette, then quits. Prints the median of every step
  * and writes all runs plus the medians to `out.json` (default: perf-report.json).
  * On Linux without a display, run it under `xvfb-run -a`.
+ *
+ * On Windows the app needs a desktop session: a GitLab runner installed as a service runs in
+ * session 0, where WebView2 cannot start (HRESULT 0x80080005). There the script reports the
+ * measurement as skipped, writes that to `out.json` and exits successfully. See
+ * docs/performance.md for running the runner in a logged-in session instead.
  */
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -20,6 +25,27 @@ if (!binary || !repository) {
   process.exit(2);
 }
 const runs = Math.max(1, Number(runsArg) || 5);
+
+/** Session id of this process on Windows (0 for services), or null when unknown. */
+function windowsSession() {
+  const ps = spawnSync(
+    "powershell.exe",
+    ["-NoProfile", "-NonInteractive", "-Command", "(Get-Process -Id $PID).SessionId"],
+    { encoding: "utf8", timeout: 30_000 },
+  );
+  const id = Number.parseInt(ps.stdout?.trim() ?? "", 10);
+  return ps.status === 0 && Number.isInteger(id) ? id : null;
+}
+
+if (process.platform === "win32" && windowsSession() === 0) {
+  const reason =
+    "No desktop session: this runs in Windows session 0 (a service), where WebView2 cannot " +
+    "open a window. Run the GitLab runner in a logged-in session to measure on Windows.";
+  console.log(`Measurement skipped. ${reason}`);
+  writeFileSync(outArg, JSON.stringify({ os: "windows", skipped: true, reason }, null, 2));
+  process.exit(0);
+}
+
 const dir = mkdtempSync(join(tmpdir(), "branchline-measure-"));
 const results = [];
 
