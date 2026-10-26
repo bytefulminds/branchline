@@ -25,6 +25,8 @@ variables:
   TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
   npm_config_cache: $CI_PROJECT_DIR/.npm
   CARGO_TERM_COLOR: always
+  # Incremental build data only helps repeated local builds; in CI it just takes disk.
+  CARGO_INCREMENTAL: "0"
 
 .release-tag: &release-tag
   if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+/
@@ -35,9 +37,11 @@ variables:
   variables:
     CARGO_HOME: $CI_PROJECT_DIR/.cargo
     RUSTUP_HOME: $CI_PROJECT_DIR/.rustup
+  # Downloads only. Build output is not cached: it grew with every version until the runner
+  # ran out of disk (the linker then crashes with a bus error). "v2" drops the old archive.
   cache:
-    key: linux-$CI_JOB_NAME_SLUG
-    paths: [.npm/, .cargo/registry/, .rustup/, src-tauri/target/]
+    key: linux-v2-$CI_JOB_NAME_SLUG
+    paths: [.npm/, .cargo/registry/, .rustup/]
   before_script:
     - apt-get update -qq
     - >-
