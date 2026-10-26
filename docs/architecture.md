@@ -265,7 +265,15 @@ progress (read from `rebase-merge/msgnum` and `end`).
   agrees, then restarts through the process plugin. The automatic check runs once, 8 seconds
   after start, in release builds only, and can be turned off.
 - Web links go through the opener plugin, whose permission only allows Branchline's GitLab
-  pages and ollama.com.
+  pages, ollama.com, and package pages on npmjs.com and crates.io (from the license list).
+- About is a section of Settings. Its license list comes from
+  `src/features/about/licenses.json`, written by `npm run licenses`
+  (`scripts/licenses.mjs`): the production npm packages (`npm query .prod`) and every crate
+  linked on the four release targets (`cargo metadata --filter-platform`, normal
+  dependencies only), each with its LICENSE, COPYING or NOTICE texts, identical texts stored
+  once. The file is loaded with a dynamic import, so it is a separate chunk read only when
+  About opens. CI runs `npm run licenses:check`, which fails when a dependency changed and
+  the file was not regenerated.
 - The command palette (`features/commands`) builds its list from the same action providers
   the views use (branches, remotes, stashes, tags, worktrees, integrate), so a command and
   its button always behave the same. Matching is a small fuzzy subsequence match that

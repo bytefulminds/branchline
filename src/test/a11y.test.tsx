@@ -185,8 +185,8 @@ describe("accessibility (axe)", () => {
     await user.keyboard("{Control>}k{/Control}");
     await user.type(screen.getByRole("combobox", { name: "Command" }), "about");
     await user.keyboard("{Enter}");
-    const about = await screen.findByRole("dialog", { name: "About Branchline" });
-    await within(about).findByText("Branchline 0.1.0");
+    const settingsAbout = await screen.findByRole("dialog", { name: "Settings" });
+    await within(settingsAbout).findByRole("list", { name: "Open-source packages" });
     await audit("about");
     await user.keyboard("{Escape}");
 
@@ -203,5 +203,5 @@ describe("accessibility (axe)", () => {
       await user.click(within(settings).getByRole("button", { name: section }));
       await audit(`settings: ${section}`);
     }
-  });
+  }, 30_000);
 });

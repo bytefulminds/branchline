@@ -10,7 +10,7 @@ import { useRepository } from "./features/repository/useRepository";
 import { WelcomeView } from "./features/repository/WelcomeView";
 import { CloneDialog, parentOf } from "./features/repository/CloneDialog";
 import { SettingsProvider, useSettings } from "./features/settings/SettingsProvider";
-import { SettingsView } from "./features/settings/SettingsView";
+import { SettingsView, type SettingsSection } from "./features/settings/SettingsView";
 import { InitDialog } from "./features/repository/InitDialog";
 import { separatorOf } from "./features/worktrees/WorktreeDialog";
 import { BranchActionsProvider } from "./features/branches/BranchActions";
@@ -31,7 +31,6 @@ import { AppShell } from "./layouts/AppShell";
 import { AppCommandPalette, type AppCommandHandlers } from "./features/commands/AppCommands";
 import { GitConsoleProvider, useGitConsole } from "./features/console/GitConsoleProvider";
 import { ShortcutsDialog } from "./features/commands/ShortcutsDialog";
-import { AboutDialog } from "./features/updates/AboutDialog";
 import { useUpdates } from "./features/updates/useUpdates";
 import { markFirstFrame, runMeasurement } from "./features/measure/measure";
 import type { WorkspaceView } from "./layouts/Sidebar";
@@ -62,8 +61,8 @@ function Workspace() {
     refreshOnFocus: settings.general.refreshOnFocus,
   });
   const gitConsole = useGitConsole();
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [overlay, setOverlay] = useState<"palette" | "shortcuts" | "about" | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState<SettingsSection | null>(null);
+  const [overlay, setOverlay] = useState<"palette" | "shortcuts" | null>(null);
   const [gitVersion, setGitVersion] = useState<GitVersion | GitError | null>(null);
   const [view, setView] = useState<WorkspaceView>("changes");
   const [creating, setCreating] = useState<"clone" | "init" | null>(null);
@@ -133,7 +132,7 @@ function Workspace() {
         gitConsole.toggle();
       } else if (isPrimaryModifier(e) && !e.shiftKey && !e.altKey && e.key === ",") {
         e.preventDefault();
-        setSettingsOpen(true);
+        setSettingsOpen("general");
       } else if ((isPrimaryModifier(e) && key === "r") || e.key === "F5") {
         // Also suppresses the webview's own page reload.
         e.preventDefault();
@@ -171,9 +170,9 @@ function Workspace() {
       onOpen: () => void openPicker(),
       onClone: () => setCreating("clone"),
       onCreate: () => setCreating("init"),
-      onSettings: () => setSettingsOpen(true),
+      onSettings: () => setSettingsOpen("general"),
       onShortcuts: () => setOverlay("shortcuts"),
-      onAbout: () => setOverlay("about"),
+      onAbout: () => setSettingsOpen("about"),
       onCheckForUpdates: () => void updates.check({ quiet: false }),
       onToggleConsole: gitConsole.toggle,
     }),
@@ -276,7 +275,7 @@ function Workspace() {
                   onOpen={openPicker}
                   onClone={() => setCreating("clone")}
                   onCreate={() => setCreating("init")}
-                  onSettings={() => setSettingsOpen(true)}
+                  onSettings={() => setSettingsOpen("general")}
                   onCommands={() => setOverlay("palette")}
                   view={view}
                   onView={setView}
@@ -302,17 +301,13 @@ function Workspace() {
                   />
                 )}
                 {overlay === "shortcuts" && <ShortcutsDialog onClose={() => setOverlay(null)} />}
-                {overlay === "about" && (
-                  <AboutDialog
-                    onClose={() => setOverlay(null)}
-                    onCheckForUpdates={() => void updates.check({ quiet: false })}
-                  />
-                )}
                 {settingsOpen && (
                   <SettingsView
                     repoPath={state.status === "ready" ? state.repo.path : null}
                     repoName={state.status === "ready" ? state.repo.name : ""}
-                    onClose={() => setSettingsOpen(false)}
+                    initialSection={settingsOpen}
+                    onClose={() => setSettingsOpen(null)}
+                    onCheckForUpdates={() => void updates.check({ quiet: false })}
                   />
                 )}
                 {creating === "clone" && (

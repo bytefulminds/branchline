@@ -7,6 +7,11 @@ description on GitLab.
 
 ## [Unreleased]
 
+### Added
+
+- About Branchline in Settings: version, update check and links, and every open-source
+  package Branchline is built with, with its license and license text.
+
 ## [0.2.0] - 2026-10-26
 
 Easier troubleshooting: see every Git command Branchline runs, and Git hooks that work the

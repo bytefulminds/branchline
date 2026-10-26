@@ -158,7 +158,9 @@ Updates are signed with Branchline's own update key, so only genuine releases ar
   keyboard shortcut.
 - Works with the keyboard and screen readers: lists, diffs (arrow keys and `Space` select
   lines), dialogs and panels. See [docs/accessibility.md](docs/accessibility.md).
-- About Branchline (version, links) and update checks, from the command palette.
+- About Branchline (Settings, or "About Branchline" in the command palette): version,
+  update check, links, and every open-source package Branchline is built with, with its
+  license and license text.
 - Git console (`Ctrl+J` / `⌘J`, or "Git console" in the status bar): every Git command
   Branchline runs, with its folder, exit code, duration and output, so you can see why a hook
   or command failed. Routine reads such as `status` are hidden unless you ask for them;
@@ -295,7 +297,8 @@ See [docs/architecture.md](docs/architecture.md) for how the layers fit together
   are skipped for `localhost`. Settings warn when the server is not on this computer.
 - The webview has a strict CSP and only the Tauri permissions it needs (window controls, the
   folder picker, the app version, installing updates and restarting). Web links open in the
-  browser only for Branchline's own GitLab pages and ollama.com.
+  browser only for Branchline's own GitLab pages, ollama.com and package pages on npmjs.com
+  and crates.io.
 - Updates are only installed when their signature matches the update key built into
   Branchline, and only after you agree.
 - The Git console log stays in memory (the last 500 commands, at most 8 KB of output and

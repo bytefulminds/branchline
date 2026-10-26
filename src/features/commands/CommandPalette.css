@@ -161,24 +161,3 @@
   white-space: normal;
   overflow-wrap: anywhere;
 }
-
-/* About */
-.bl-about {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  margin-top: var(--space-3);
-}
-.bl-about p {
-  margin: 0 0 var(--space-1);
-}
-.bl-about__name {
-  font-size: 16px;
-  font-weight: var(--weight-semibold);
-}
-.bl-about__links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1);
-  margin: var(--space-4) 0 0 calc(-1 * var(--space-2));
-}
