@@ -137,6 +137,15 @@ describe("shortcuts and about", () => {
 
     // Every shipped package with its license, searchable, with the license text.
     const list = await within(dialog).findByRole("list", { name: "Open-source packages" });
+    const rows = () => within(list).getAllByRole("listitem").length;
+    expect(rows()).toBe(10);
+    await user.click(within(dialog).getByRole("button", { name: "Show 10 more" }));
+    expect(rows()).toBe(20);
+    await user.click(within(dialog).getByRole("button", { name: "Show all" }));
+    expect(rows()).toBeGreaterThan(400);
+    expect(dialog).toHaveTextContent(`Showing ${rows()} of ${rows()}`);
+    await user.click(within(dialog).getByRole("button", { name: "Show fewer" }));
+    expect(rows()).toBe(10);
     await user.type(within(dialog).getByLabelText("Search packages"), "lowlight");
     const row = within(list).getByRole("button", { name: /lowlight/ });
     expect(row).toHaveTextContent("MIT");

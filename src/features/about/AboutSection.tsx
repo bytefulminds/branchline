@@ -12,6 +12,9 @@ import "./AboutSection.css";
 
 const SOURCE_LABEL = { npm: "JavaScript", crate: "Rust" } as const;
 
+/** Packages listed at first, and how many more each "Show more" adds. */
+export const LICENSE_PAGE = 10;
+
 function PackageRow({
   pkg,
   texts,
@@ -73,6 +76,7 @@ export function AboutSection({ onCheckForUpdates }: { onCheckForUpdates: () => v
   const [licenses, setLicenses] = useState<LicenseData | null>(null);
   const [query, setQuery] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [limit, setLimit] = useState(LICENSE_PAGE);
 
   useEffect(() => {
     let cancelled = false;
@@ -152,7 +156,10 @@ export function AboutSection({ onCheckForUpdates }: { onCheckForUpdates: () => v
               type="search"
               placeholder="Search packages or licenses"
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setLimit(LICENSE_PAGE);
+              }}
               spellCheck={false}
             />
             {query && (
@@ -160,7 +167,10 @@ export function AboutSection({ onCheckForUpdates }: { onCheckForUpdates: () => v
                 type="button"
                 className="bl-search__clear"
                 aria-label="Clear search"
-                onClick={() => setQuery("")}
+                onClick={() => {
+                  setQuery("");
+                  setLimit(LICENSE_PAGE);
+                }}
               >
                 <X size={12} aria-hidden />
               </button>
@@ -174,20 +184,43 @@ export function AboutSection({ onCheckForUpdates }: { onCheckForUpdates: () => v
         ) : shown.length === 0 ? (
           <p className="text-small text-muted">No package matches “{query}”.</p>
         ) : (
-          <ul className="bl-licenses__list" aria-label="Open-source packages">
-            {shown.map((p) => {
-              const key = `${p.source}:${p.name}@${p.version}`;
-              return (
-                <PackageRow
-                  key={key}
-                  pkg={p}
-                  texts={licenses.texts}
-                  expanded={expanded === key}
-                  onToggle={() => setExpanded((k) => (k === key ? null : key))}
-                />
-              );
-            })}
-          </ul>
+          <>
+            <ul className="bl-licenses__list" aria-label="Open-source packages">
+              {shown.slice(0, limit).map((p) => {
+                const key = `${p.source}:${p.name}@${p.version}`;
+                return (
+                  <PackageRow
+                    key={key}
+                    pkg={p}
+                    texts={licenses.texts}
+                    expanded={expanded === key}
+                    onToggle={() => setExpanded((k) => (k === key ? null : key))}
+                  />
+                );
+              })}
+            </ul>
+            {shown.length > LICENSE_PAGE && (
+              <div className="bl-licenses__more">
+                <span className="text-small text-muted">
+                  Showing {Math.min(limit, shown.length)} of {shown.length}
+                </span>
+                {limit < shown.length ? (
+                  <>
+                    <Button size="sm" onClick={() => setLimit((l) => l + LICENSE_PAGE)}>
+                      Show {Math.min(LICENSE_PAGE, shown.length - limit)} more
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => setLimit(shown.length)}>
+                      Show all
+                    </Button>
+                  </>
+                ) : (
+                  <Button size="sm" variant="ghost" onClick={() => setLimit(LICENSE_PAGE)}>
+                    Show fewer
+                  </Button>
+                )}
+              </div>
+            )}
+          </>
         )}
       </section>
     </>
