@@ -22,6 +22,11 @@ person decides what is right. Nothing is posted until the person says so.
   and any server with an OpenAI-compatible API (LM Studio, vLLM, OpenRouter and others).
 - **Memory across reviews:** what a team agreed on in earlier reviews is remembered per
   project and given to the AI next time.
+- **Self-review on your own branch,** started by hand only: a quest over your branch's changes
+  before you open a merge request. Never started for you, so it is easy to skip.
+- **Large merge requests:** every change gets a round up to about 40 changed files. Above that,
+  the quest covers the largest and riskiest changes first, and says which files it skipped.
+- **Points are visible,** during the quest and in the summary, to motivate a proper review.
 
 ## How it works for the user
 
@@ -63,6 +68,22 @@ schema (question, type, choices, answer, explanation, file and lines), and Branc
 away questions that do not refer to lines in the diff, so a confused model cannot send the
 reviewer to code that does not exist.
 
+### Self-review
+
+"Review my branch" in the Changes view, the branch menu or the command palette starts the same
+quest on the current branch's changes against its upstream or the branch it will merge into.
+It only starts when you choose it. Findings become notes for yourself instead of review
+comments, and the questions lean towards what a reviewer is likely to ask, so you can fix
+things before anyone else sees them. It needs no GitLab account, only an AI provider.
+
+### Large merge requests
+
+Up to about 40 changed files, every change gets a round. Above that, the quest picks the
+changes to cover first: the largest ones, source code before generated files and lock
+files, and files that earlier review notes say need care. The summary lists the files the
+quest skipped, so the reviewer can still read them. The limit is a setting, to tune with real
+reviews.
+
 ### Score
 
 - Points for each answered question, a bonus for a correct quiz answer at the first try, and
@@ -70,6 +91,9 @@ reviewer to code that does not exist.
 - A streak for reviews finished on the day they were requested.
 - Coverage: the share of changed lines that were part of a round. 100% coverage is the goal,
   not a high score.
+- Points are visible while you play (with a short animation when you earn them) and in the
+  summary, because they are there to motivate a proper review. Points come from coverage,
+  thought and findings, never from speed, so racing through a review does not pay.
 - All of this stays local. It is a personal game, not a leaderboard for managers.
 
 ## AI providers
@@ -161,18 +185,10 @@ Each phase can be released on its own and is tested before the next starts.
    (read-only). Useful without any AI.
 3. **AI providers.** Split `ai.rs`, add OpenAI-compatible, Anthropic and OpenAI. Commit message
    suggestions use the chosen provider too.
-4. **The review quest.** Rounds, question types, scoring, draft comments kept locally.
+4. **The review quest.** Rounds, question types, visible scoring, draft comments kept
+   locally, the limit for large merge requests, and self-review on your own branch.
 5. **Post the review.** Draft notes on GitLab, publish, approve or request changes.
 6. **Review notes.** Lessons per project, the optional team guide file.
 7. **GitHub.** Pull requests where your review is requested, `refs/pull/<n>/head`, review
    comments and reviews.
 8. **Bitbucket** (later). No merge request refs, so the source branch is fetched instead.
-
-## Open questions
-
-- Should the quest also work for your own branch before you open a merge request (a
-  "self-review" round)? It needs nothing from GitLab.
-- How long can a merge request be before the quest only covers a sample? A first guess: all
-  rounds up to about 40 files, then the largest and riskiest changes first.
-- Should points be visible at all, or only the coverage and the summary? To try with real
-  reviews.
