@@ -75,3 +75,17 @@ Milestones are only marked complete when the behavior works against real Git and
 - [x] Accessibility review, keyboard shortcut map, command palette
 - [x] Release workflow: GitLab CI builds for Linux, macOS and Windows, GitLab release, signed updates
 - [ ] Code signing with Apple and Microsoft certificates (prepared, see docs/releasing.md)
+
+## Milestone 7: Review merge requests (planned)
+
+Review merge requests in Branchline, with an AI that turns the review into a game of
+questions. Plan: [docs/plans/merge-request-reviews.md](docs/plans/merge-request-reviews.md).
+
+- [ ] GitLab account and a Reviews view with the merge requests waiting for you
+- [ ] Read a merge request in Branchline (commits, diff, existing comments)
+- [ ] AI providers: Ollama, OpenAI-compatible servers, Anthropic and OpenAI
+- [ ] Review quest: rounds of questions, scoring, draft comments
+- [ ] Post the review: comments on lines, approve or request changes
+- [ ] Review notes remembered per project
+- [ ] GitHub pull requests
+- [ ] Bitbucket pull requests
