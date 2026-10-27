@@ -1,355 +1,152 @@
+<div align="center">
+
+<img src="docs/branchline-logo.png" alt="Branchline logo" width="128">
+
+# Branchline
+
+**See the flow of your code: a fast, friendly Git desktop client that shows what Git is
+doing and lets you do it with a click.**
+
+**Version 0.2.0** · [download](https://gitlab.com/bytefulminds/branchline/-/releases) for Windows, macOS and Linux
+
+[![pipeline](https://gitlab.com/bytefulminds/branchline/badges/main/pipeline.svg)](https://gitlab.com/bytefulminds/branchline/-/pipelines)
+![license: MIT](https://img.shields.io/badge/license-MIT-00D1A0)
+![platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-60A5FA)
+
+</div>
+
 <p align="center">
-  <img src="public/branchline-mark.svg" width="72" alt="Branchline logo" />
+  <img src="docs/screenshots/history.png" alt="Branchline showing the history of a repository with a colored commit graph, branch labels and the details of the selected commit" width="900">
 </p>
 
-<h1 align="center">Branchline</h1>
-<p align="center"><em>See the flow of your code.</em></p>
+Branchline is a Git client for everyone who would rather look at their repository than
+remember commands. Your branches and commits appear as a graph, your changes as clear
+diffs, and every everyday Git task, from staging a single line to an interactive rebase, is
+a click or a keystroke away.
 
-Branchline is a fast, local-first, open-source Git desktop client for Windows, macOS and Linux.
-It is built with Tauri 2, React, TypeScript and Rust, and drives the native Git CLI instead of
-reimplementing Git.
+It is fast and local-first. Branchline runs the Git you already have, so it behaves exactly
+like Git in your terminal, stays quick on repositories with tens of thousands of commits, and
+your code only leaves your computer when you push it (or ask your own AI server for a commit
+message). It is free and open source, made by
+Bytefulminds.
 
-> **Status:** 0.2.0. Branchline covers the daily Git work: staging (down to
-> single lines), commits, history with a graph and search, branches, remotes, stashes, tags,
-> worktrees, merge, rebase (also interactive), cherry-pick, revert and a merge editor. See
-> [CHANGELOG.md](CHANGELOG.md) and [ROADMAP.md](ROADMAP.md).
+## What you can do with Branchline
 
-## Install
+### Commit exactly what you mean
 
-Download the installer for your system from the
-[releases page](https://gitlab.com/bytefulminds/branchline/-/releases). Branchline needs
-[Git](https://git-scm.com/downloads) 2.20 or newer. It checks for updates after starting and
-installs them when you agree (Settings > General to turn that off).
+Stage whole files, single hunks or just the lines you select, and leave the rest for later.
+Diffs show your code in the colors of your editor, in one column or side by side, and the
+commit box tells you who you commit as before you press Ctrl+Enter.
 
-| System | File | Notes |
-|---|---|---|
-| macOS 11 or newer (Apple silicon and Intel) | `.dmg` | Drag Branchline to Applications |
-| Windows 10 and 11 | `-setup.exe` (or `.msi`) | |
-| Linux | `.AppImage`, `.deb` or `.rpm` | AppImage: make it executable (`chmod +x`) and run it. Updates install for the AppImage only |
+<p align="center">
+  <img src="docs/screenshots/changes-lines.png" alt="The Changes view with two lines selected in a Python diff, ready to stage, and a commit message being written" width="49%">
+  <img src="docs/screenshots/diff-split.png" alt="A side-by-side diff of a Python file with syntax highlighting, removed lines on the left and added lines on the right" width="49%">
+</p>
 
-The installers are not signed with Apple or Microsoft certificates yet, so the system
-asks before the first launch:
+### Find anything, fast
 
-- **macOS:** open Branchline once, choose Done, then go to System Settings > Privacy &
-  Security and choose "Open Anyway" next to the Branchline message.
-- **Windows:** in the "Windows protected your PC" window choose "More info", then "Run anyway".
+Search the whole history by message, author or commit id, and narrow it down by author,
+file or folder and dates. Every match is marked. The command palette (Ctrl+K) finds every
+action, branch and recent repository in a few letters.
 
-Updates are signed with Branchline's own update key, so only genuine releases are installed.
+<p align="center">
+  <img src="docs/screenshots/history-search.png" alt="History search for the word city, filtered on one author, with every match highlighted" width="49%">
+  <img src="docs/screenshots/palette.png" alt="The command palette offering to switch to one of five feature branches" width="49%">
+</p>
 
-## What works today
+### Branches and history, your way
 
-- Open a repository with the native folder picker (`Ctrl+O` / `⌘O`), from the recent list, or
-  from the command line (`branchline /path/to/repo`). Selecting a subfolder opens the repository
-  root.
-- Clone a repository from an address (HTTPS, SSH or a local path) with progress and Stop, or
-  create a new one in a new or existing folder, from the welcome screen or the repository menu.
-  A failed or stopped clone leaves no files behind.
-- Current branch, detached HEAD and repositories without commits.
-- Upstream tracking with ahead/behind counts, including upstreams that no longer exist.
-- Changed files from `git status`: modified, added, deleted, renamed (with source path), copied,
-  type changes, untracked and conflicted files, split into conflicts, unstaged and staged.
-- In-progress merge, rebase, cherry-pick, revert and bisect detection.
-- Last commit summary, author and date.
-- Diff viewer for unstaged, staged and untracked files, with line numbers, hunk headers, CRLF and
-  "no newline at end of file" handling, binary detection and a guard for very large diffs.
-- One column or side by side (toggle above every diff, remembered). Side by side pairs removed
-  and added lines; both columns scroll together and each scrolls sideways on its own. Staging
-  hunks and lines works the same in both layouts.
-- Syntax highlighting for about 40 languages, chosen by file name. The grammars load on first
-  use; diffs over 400 KB or with very long (minified) lines stay plain.
-- Stage, unstage and discard whole files, single hunks or selected lines (click, shift-click for
-  a range). Discarding always asks for confirmation; staged content is never discarded.
-- Drag the line above the commit summary to make the message box taller or shorter (the
-  description fills the space, the size is remembered; double-click resets it).
-- Conflicted files show their conflict markers and can be marked as resolved, or resolved in
-  the merge editor (below).
-- File filter, keyboard navigation in the file list (`Space`/`Enter` stages or unstages, `Delete`
-  discards), resizable panels, a virtualized list that stays fast with thousands of files.
-- Automatic refresh through a file-system watcher (changes made in your editor or terminal show up
-  within a second), plus `Ctrl+R` / `⌘R` / `F5`. No polling.
-- Clear loading, empty, error and "Git not installed" states.
+Create, switch, merge and rebase branches from a right-click, or drag one branch onto
+another. Clean up before you push with an interactive rebase: drag commits into a new order,
+and reword, squash or drop them, with a plan Branchline checks before Git runs it.
 
-- Commit and amend from the Changes view: summary and description, a length hint, merge
-  messages prefilled, `Ctrl+Enter` / `⌘↵`, and clear errors for missing identity or failing hooks.
-- History of all branches, remote branches and tags with a commit graph, ref badges, authors and
-  dates. Fast on large repositories: the list is virtualized and loads page by page.
-- Search History (`Ctrl+F` / `⌘F`) by message, author or commit id, and filter by author, file
-  or folder, date range and the current branch only. Results load page by page like the full
-  history, and matches are marked. "Show file history" on a diff opens the commits that
-  changed that file.
-- Commit details: full message, author and committer, parents, changed files with line counts,
-  and a read-only diff per file.
-- Branches: list local and remote branches with upstream and ahead/behind, then create, switch,
-  rename and delete them. Remote branches check out as tracking branches; unmerged branches need a
-  second confirmation before deletion; switching never overwrites uncommitted work. Sort by
-  name or by last commit (remembered); the current branch stays on top.
-- Quick branch switcher in the title bar, and right-click (or `Shift+F10`) on a commit to create
-  a branch there or check it out.
-- Fetch, Pull and Push in the title bar, with ahead/behind counts. Pull fast-forwards by default,
-  or merges or rebases on request; a branch without upstream is published to the remote you
-  choose. Force push is only possible with lease, after a confirmation.
-- Live progress (phase and percentage) in the status bar, and Cancel for every fetch, pull and
-  push.
-- Clear messages for failed sign-in, unknown SSH hosts, unreachable or missing remotes, rejected
-  pushes and diverged branches, with the next step offered where there is one.
-- Stashes: stash changes with a message (untracked files included by choice), then apply, pop or
-  delete them. The Stashes view shows every stash with its files and diffs. Stash and Pop are
-  also in the title bar.
-- When local changes block a pull or a branch switch, Branchline offers "Stash, pull and
-  reapply" or "Stash and switch" instead of leaving you stuck.
-- Tags: create lightweight or annotated tags (from the Tags view or on any commit in History),
-  push them, delete them locally or on a remote, check them out or start a branch from them.
-  Pushing never overwrites a different tag with the same name on the remote.
-- Merge a branch or commit into the current branch (optionally always with a merge commit),
-  rebase onto a branch or commit, cherry-pick and revert commits, from the Branches view and the
-  History context menu. Rebasing a published branch warns that a force push will follow.
-- Interactive rebase ("Rebase interactively from here…" on a commit in History): drag commits
-  into a new order (or use `Alt+↑` / `Alt+↓`), and pick, reword, squash, fix up or drop each one.
-  Branchline checks the plan before Git runs it.
-- Select several commits in History (`Ctrl`/`⌘`+click to add one, `Shift`+click or
-  `Shift+↑`/`↓` for a range, `Esc` to go back to one) and cherry-pick them in one go. They are
-  applied oldest first; commits already on the branch are skipped, and a conflict stops the
-  sequence until you Continue.
-- Drag a branch (in Branches, or its label in History) onto another branch or a commit to merge
-  or rebase; a menu offers what is possible from there.
-- When an operation stops with conflicts, a banner shows what is left (with rebase progress, for
-  example "commit 2 of 5") and offers Continue, Skip commit and Abort. Local changes in the way
-  can be stashed and reapplied automatically.
-- Merge editor for conflicts, in the style of JetBrains' merge tool: your side on the left, the
-  result in the middle and the incoming side on the right, each named for the operation (for
-  example "main" and "feature/x" in a merge, or the commit being cherry-picked). Changes that do
-  not conflict are taken right away; for each conflict, take one side (`»` / `«`), both, or
-  neither, or type the result yourself. Undo and redo, `Alt+↑` / `Alt+↓` (or `F7`) between
-  changes, "Use all" for one side's whole file, and editing the whole result as text. Saving
-  writes the file and marks it as resolved; it refuses if the file changed since the editor
-  opened it. Binary files, symbolic links and files deleted on one side get whole-file choices
-  (keep one version or delete the file).
-- Remotes: list them with their addresses and branch counts, fetch one or all, add a remote
-  (optionally fetching it right away), rename it or change its fetch and push addresses, and
-  remove it. Addresses are shown without user names or tokens, and a hidden token is kept
-  when you save. Passwords in addresses are refused; use a credential helper instead.
-- Worktrees: extra working folders for the same repository, each with its own branch checked
-  out. Create one with a new branch (from the current branch, any branch or a commit in
-  History) or for an existing branch, open it in Branchline, lock or unlock it, and remove it
-  (the branch stays; uncommitted changes are only deleted after a second confirmation).
-  Worktrees whose folder was deleted can be cleaned up. Branches checked out in another
-  worktree are marked in Branches and offer "Open worktree" instead of Switch.
-- Settings (`Ctrl+,` / `⌘,`, or the gear in the title bar), saved right away:
-  - General: reopen the last repository on start, refresh when the window gets focus, fetch
-    in the background every 5 to 60 minutes (quietly; an error is shown once).
-  - Git: what the Pull button does (fast-forward, merge or rebase), prune deleted remote
-    branches on fetch, push annotated tags with commits.
-  - Identity and signing: name, email and commit signing (GPG, SSH or X.509), for all
-    repositories (`~/.gitconfig`) or only the open one.
-  - Editor and diff: the editor and terminal that "Open in editor", "Open in terminal" and
-    "Show in Finder/Explorer" use (repository menu, and a button on each changed file),
-    diff layout, syntax highlighting, context lines, ignoring whitespace, tab width and code
-    font size.
-  - Confirmations: turn off the questions before discarding, force pushing, rebasing a
-    published branch or deleting a branch. Deleting unmerged work always asks.
-  - AI commit messages: connect your own [Ollama](https://ollama.com) server (local or on
-    your network), test the connection, pick a model, the style (Conventional Commits or
-    plain), the language and extra team instructions.
-- Commit message suggestions: with AI commit messages on, "Suggest message" in the commit box
-  writes a summary and description for the staged changes with your Ollama model. The text
-  streams in, Esc or Stop cancels it, and a message you had typed can be restored with Undo.
-- Command palette (`Ctrl+K` / `⌘K`, or the button in the title bar): every action, view,
-  branch and recent repository by typing a few letters. `Ctrl+/` / `⌘/` or `?` shows every
-  keyboard shortcut.
-- Works with the keyboard and screen readers: lists, diffs (arrow keys and `Space` select
-  lines), dialogs and panels. See [docs/accessibility.md](docs/accessibility.md).
-- About Branchline (Settings, or "About Branchline" in the command palette): version,
-  update check, links, and every open-source package Branchline is built with, with its
-  license and license text.
-- Git console (`Ctrl+J` / `⌘J`, or "Git console" in the status bar): every Git command
-  Branchline runs, with its folder, exit code, duration and output, so you can see why a hook
-  or command failed. Routine reads such as `status` are hidden unless you ask for them;
-  failures always show. A failed commit or push offers "Show Git output", which opens the
-  console on that command. Copy a command to run it yourself in a terminal.
-- Git hooks such as Husky and lint-staged find the same tools as your terminal. Apps started
-  from the Dock or Finder get a minimal PATH, so at startup Branchline asks your login shell
-  for its PATH once (in the background, at most 5 seconds) and uses it for Git, hooks, your
-  editor and terminal. Profiles can check `BRANCHLINE_RESOLVING_SHELL_ENV` to skip slow
-  parts. Windows sets PATH for the whole system, so nothing changes there.
-- `Ctrl+1` / `⌘1` Changes, `Ctrl+2` / `⌘2` History, `Ctrl+3` / `⌘3` Branches, `Ctrl+4` / `⌘4`
-  Stashes, `Ctrl+5` / `⌘5` Tags, `Ctrl+6` / `⌘6` Worktrees, `Ctrl+7` / `⌘7` Remotes.
+<p align="center">
+  <img src="docs/screenshots/branches.png" alt="The Branches view with a branch menu open: switch, open in a new worktree, merge, rebase, push, rename and delete" width="49%">
+  <img src="docs/screenshots/rebase.png" alt="The interactive rebase window with one commit set to drop and one set to squash into the commit below" width="49%">
+</p>
 
-## Building from source
+### Conflicts without the fear
 
-### Prerequisites
+When a merge, rebase or cherry-pick stops on conflicts, a banner says what is left and what
+you can do next. The merge editor puts your side, the result and the incoming side next to
+each other. Changes that do not conflict are taken for you; for the rest you pick a side,
+both, or type the result yourself.
 
-| | |
-|---|---|
-| Git | 2.20 or newer on `PATH` (Branchline also checks common install locations) |
-| Node.js | 20 or newer (22 LTS recommended) |
-| Rust | stable, 1.77 or newer (`rustup` recommended) |
+<p align="center">
+  <img src="docs/screenshots/conflict.png" alt="A merge in progress with four conflicted files and the conflict markers of the selected file" width="49%">
+  <img src="docs/screenshots/merge-editor.png" alt="The three-pane merge editor with the current branch on the left, the result in the middle and the merged branch on the right" width="49%">
+</p>
 
-Platform requirements for Tauri 2 (full details: <https://v2.tauri.app/start/prerequisites/>):
+### See what Git is doing
 
-- **macOS:** Xcode Command Line Tools (`xcode-select --install`).
-- **Windows:** Microsoft C++ Build Tools and WebView2 (preinstalled on Windows 10/11).
-- **Linux (Debian/Ubuntu):**
-  ```sh
-  sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget file \
-    libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
-  ```
+The Git console (Ctrl+J) shows every Git command Branchline runs, with its exit code, timing
+and output. When a commit hook such as Husky or lint-staged says no, "Show Git output" takes
+you straight to the reason. Hooks find the same tools as in your terminal, also when you
+start Branchline from the Dock.
 
-### Getting started
+<p align="center">
+  <img src="docs/screenshots/git-console.png" alt="A commit stopped by a pre-commit hook, and the Git console showing the failed command with the linter's messages" width="900">
+</p>
 
-```sh
+### Commit messages from your own AI
+
+Connect Branchline to [Ollama](https://ollama.com) on your own computer or network, and
+"Suggest message" writes a summary and description for your staged changes, in the style and
+language your team uses. Nothing is sent anywhere else, and only when you ask.
+
+<p align="center">
+  <img src="docs/screenshots/ai-suggest.png" alt="A Conventional Commits message suggested for the staged changes, filled in the commit box" width="49%">
+  <img src="docs/screenshots/ai-settings.png" alt="The AI commit message settings, connected to an Ollama server with a coding model chosen" width="49%">
+</p>
+
+### Make it yours
+
+Settings cover how Branchline pulls and fetches, your Git identity and commit signing, your
+editor and terminal, the diff layout and which questions it asks before risky actions. About
+Branchline lists every open-source package it is built with, with its license.
+
+<p align="center">
+  <img src="docs/screenshots/settings.png" alt="The Editor and diff settings: external editor, terminal, diff layout, syntax highlighting, context lines, tab width and font size" width="49%">
+  <img src="docs/screenshots/about.png" alt="About Branchline with the version, the Bytefulminds logo and the first ten of 439 open-source packages and their licenses" width="49%">
+</p>
+
+And more: clone or create repositories, fetch, pull and push with live progress and Cancel,
+stashes (also "stash, pull and reapply" when local changes are in the way), tags, worktrees,
+cherry-pick and revert (several commits at once), file history, a file system watcher that
+picks up changes from your editor within a second, full keyboard control with screen reader
+support, and automatic updates when you agree.
+
+## Getting started
+
+Download Branchline from the
+[releases page](https://gitlab.com/bytefulminds/branchline/-/releases): the `-setup.exe` (or
+`.msi`) for Windows, the `.dmg` for your Mac (Apple silicon and Intel, macOS 11 or newer), or
+the `.AppImage`, `.deb` or `.rpm` for Linux. Branchline needs
+[Git](https://git-scm.com/downloads) 2.20 or newer. The apps are not signed yet;
+[Install](MANUAL.md#install) in the manual says how to open them the first time.
+
+Or build Branchline from source, with Node.js 20 or newer and Rust 1.77 or newer (plus the
+[Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for your system):
+
+```bash
+git clone https://gitlab.com/bytefulminds/branchline.git
+cd branchline
 npm install
-npm run app:dev            # run the desktop app with hot reload
-npx tauri dev -- -- /path/to/repo     # open a repository on launch
+npm run app:dev                        # or: npm run app:build for installers
 ```
 
-`npm run dev` starts only the web frontend in a browser. It renders, but Git features need the
-desktop shell and will say so.
+Open a repository from the window (**Ctrl+O**, or a recent one), or straight from the command
+line: `branchline ~/code/my-project`.
 
-### Scripts
+## Learn more
 
-| Command | What it does |
-|---|---|
-| `npm run app:dev` | Desktop app in development mode |
-| `npm run app:build` | Production build and installers for the current platform |
-| `npm run check` | Typecheck, lint, format check, frontend tests and Rust tests |
-| `npm test` | Frontend tests (Vitest + Testing Library) |
-| `npm run test:rust` | Rust unit and integration tests (uses temporary Git repositories) |
-| `npm run lint` / `npm run format` | ESLint / Prettier |
-| `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets` | Rust lints |
-| `cargo run --release --manifest-path src-tauri/Cargo.toml --example inspect -- <repo> [runs]` | Time repository inspection |
-| `node scripts/measure-startup.mjs <binary> <repo>` | Time startup and interactions of a built app ([docs/performance.md](docs/performance.md)) |
-| `node scripts/release/bump-version.mjs <version>` | Set the version everywhere before a release ([docs/releasing.md](docs/releasing.md)) |
-
-## Project structure
-
-```
-docs/                    Architecture, design system, accessibility, performance, releasing
-scripts/                 Startup measurement and release scripts
-public/                  Static assets (logo mark)
-src/                     React + TypeScript frontend
-  components/            Shared UI components (Button, Menu, Badge, Toast, Splitter, ...)
-  features/repository/   Repository state, welcome, loading and error views
-  features/changes/      Changed-file model, list, diff and commit box
-  features/history/      Commit list, graph and commit details
-  features/branches/     Branch list, switcher and branch dialogs
-  features/remote/       Remotes view and dialog; fetch, pull and push toolbar and actions
-  features/stash/        Stashes view, stash dialog and actions
-  features/tags/         Tags view, tag dialog and actions
-  features/integrate/    Merge, rebase, cherry-pick, revert and the operation banner
-  features/conflicts/    Merge editor (three panes) and its model
-  features/worktrees/    Worktrees view, new worktree dialog and actions
-  features/settings/     Settings screen and provider
-  features/commands/     Command palette, keyboard shortcut map
-  features/updates/      Update checks and the About dialog
-  features/measure/      Startup and interaction timing (--measure-startup)
-  layouts/               Window shell: title bar, sidebar, status bar, window controls
-  services/              IPC wrappers, dialog, platform, local preferences
-  styles/                Design tokens and base styles
-  types/                 IPC contract types (mirror the Rust models)
-src-tauri/               Rust backend
-  src/git/runner.rs      Safe Git process execution (timeouts, no shell, hardened config)
-  src/git/status.rs      `git status --porcelain=v2 -z` parser
-  src/git/repository.rs  Repository inspection and models
-  src/git/remote.rs      Remotes, fetch, pull and push
-  src/git/stash.rs       Stash save, apply, pop and drop
-  src/git/tags.rs        Tag list, create and delete
-  src/git/integrate.rs   Merge, rebase, cherry-pick, revert; continue, skip, abort
-  src/git/rebase_plan.rs Interactive rebase plans
-  src/git/conflict.rs    Three-way view of a conflicted file; saving its resolution
-  src/git/worktrees.rs   Worktree list, add, remove, lock and prune
-  src/git/create.rs      Clone and init
-  src/git/identity.rs    user.name, user.email and commit signing (global or per repository)
-  src/settings.rs        Settings file (JSON in the app's configuration folder)
-  src/open.rs            Open in editor or terminal, show in the file manager
-  src/ai.rs              Commit message suggestions from an Ollama server
-  src/measure.rs         Startup timing report
-  src/commands.rs        Tauri IPC commands (async, off the UI thread)
-  src/error.rs           Error model shared with the frontend
-  tests/                 Integration tests against real temporary repositories
-```
-
-See [docs/architecture.md](docs/architecture.md) for how the layers fit together and
-[docs/design-system.md](docs/design-system.md) for the design tokens and component rules.
-
-## Security
-
-- Git runs as a subprocess with an argument vector, never through a shell. Paths are passed as
-  literal pathspecs, so a file called `*.txt` never matches other files.
-- Interactive prompts are disabled (`GIT_TERMINAL_PROMPT=0`, empty askpass), so commands cannot hang.
-- `core.fsmonitor` is forced off for every command, because a cloned repository could otherwise
-  make `git status` execute an arbitrary program. A test proves the hook does not run.
-- Environment variables that redirect Git (`GIT_DIR`, `GIT_WORK_TREE`, ...) are removed.
-- Paths from the UI are validated and canonicalized before use; every command has a timeout.
-  Paths that escape the repository (`..`, absolute paths) or point into `.git` are rejected.
-- Diffs ignore external diff drivers and textconv filters configured in the repository.
-- Partial staging never trusts line content sent by the UI: the backend recomputes the diff,
-  checks a fingerprint of the version the user saw, and rebuilds the patch itself.
-- Discard re-reads the repository state first and only touches unstaged changes.
-- Network commands never prompt: SSH runs in batch mode unless you configured your own SSH
-  command, and HTTPS uses your credential helper. Credentials in remote URLs are removed before
-  anything reaches the UI, including error messages.
-- Force push always uses `--force-with-lease`, so it cannot overwrite commits you have not
-  fetched.
-- AI suggestions only contact the Ollama server you configured, only when you ask for a
-  suggestion (or test the connection), and only send the staged diff (shortened), the list of
-  changed files, the branch name and recent commit subjects. Unstaged files are never sent.
-  The address may not contain credentials, redirects are not followed, and system proxies
-  are skipped for `localhost`. Settings warn when the server is not on this computer.
-- The webview has a strict CSP and only the Tauri permissions it needs (window controls, the
-  folder picker, the app version, installing updates and restarting). Web links open in the
-  browser only for Branchline's own GitLab pages, ollama.com and package pages on npmjs.com
-  and crates.io.
-- Updates are only installed when their signature matches the update key built into
-  Branchline, and only after you agree.
-- The Git console log stays in memory (the last 500 commands, at most 8 KB of output and
-  32 KB of messages each) and is gone when Branchline quits. Credentials in URLs are removed
-  before anything is stored; what Branchline sends on standard input (patches, commit
-  messages) is not kept.
-
-## Performance
-
-On a modest Linux machine with software rendering, Branchline shows a repository about a
-second after starting, switches views in tens of milliseconds and opens History on git/git
-(82,000 commits) in about half a second. Long lists are virtualized and history loads page
-by page. Method and all numbers per platform: [docs/performance.md](docs/performance.md).
-
-## Known limitations
-
-- New worktrees go in a folder outside the repository. Branchline shows one repository (or
-  worktree) per window; opening a worktree switches the window to it.
-- The Tags view shows local tags; it does not show which of them already exist on a remote.
-- The merge editor works on text files up to 1 MB; larger files, binary files and symbolic
-  links are resolved by keeping one side's version. It has no syntax highlighting and no
-  word-level highlighting yet. A bisect can only be stopped from Branchline.
-- Interactive rebase cannot include merge commits, and cannot stop to edit a commit's content
-  (`edit`); it covers reorder, reword, squash, fixup and drop. Reworded commits skip the
-  `pre-commit` and `commit-msg` hooks, like Git's own reword skips `pre-commit`.
-- Merge commits cannot be part of a multi-commit cherry-pick; pick them one at a time. At most
-  100 commits are picked at once.
-- Applying a stash restores staged and unstaged changes separately when Git can; when it
-  cannot, everything comes back unstaged. A staged rename that Git puts aside during a pull
-  returns as a deleted and an added file.
-- Branchline does not ask for passwords. HTTPS remotes need a credential helper (macOS Keychain
-  and Git Credential Manager work), SSH keys need an agent or no passphrase, and a new SSH host
-  has to be verified once from a terminal.
-- One Git operation runs at a time: during a fetch, pull or push, staging waits. On Windows,
-  cancelling stops Git itself; its SSH or HTTPS helper exits shortly after.
-- The graph shows up to 12 lanes; further lanes are clipped. Merge commits list the files changed
-  relative to their first parent.
-- Search results are shown without graph lines, because the commits in between are hidden.
-  File history follows the path given and does not follow renames.
-- Syntax highlighting colors each hunk on its own, so a comment or string that starts above a
-  hunk is not recognized inside it.
-- Hunk and line operations are not available for untracked files, renames, copies and binary
-  files; those are staged as a whole.
-- The watcher only applies the root `.gitignore` and `.git/info/exclude` when filtering events;
-  changes in folders ignored by nested `.gitignore` files cause an extra (cheap) refresh.
-- The changed-file list is capped at 10,000 entries.
-- Bare repositories are not supported.
-- Paths that are not valid UTF-8 are shown with replacement characters.
-- Runs on macOS and Linux; Windows has not been run yet. Automated tests and measurements so far
-  ran on Linux.
+- **[MANUAL.md](MANUAL.md):** everything Branchline can do, keyboard shortcuts, settings,
+  privacy and security, performance and known limitations, and building from source.
+- **[CHANGELOG.md](CHANGELOG.md):** what changed in each version.
+- **[ROADMAP.md](ROADMAP.md):** what comes next.
+- **[docs/architecture.md](docs/architecture.md):** how the code works, for developers (see
+  also [For developers](MANUAL.md#for-developers)).
 
 ## License
 
-[MIT](LICENSE)
+MIT. See [LICENSE](LICENSE).
