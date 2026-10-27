@@ -7,6 +7,10 @@ description on GitLab.
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-10-27
+
+Know what Branchline is made of, and a new home page that shows what it can do.
+
 ### Added
 
 - About Branchline in Settings: version, update check and links, and every open-source
@@ -17,7 +21,7 @@ description on GitLab.
 
 - The README is now a tour of Branchline with screenshots. Everything else (features in
   detail, keyboard shortcuts, settings, security, limitations and building from source) moved
-  to the new [MANUAL.md](MANUAL.md).
+  to the new [MANUAL.md](https://gitlab.com/bytefulminds/branchline/-/blob/main/MANUAL.md).
 
 ## [0.2.0] - 2026-10-26
 
@@ -83,6 +87,7 @@ drives the Git you already have installed.
 - The macOS and Windows builds are not signed yet. See the installation notes in the README.
 - See "Known limitations" in the README for the rest.
 
-[Unreleased]: https://gitlab.com/bytefulminds/branchline/-/compare/v0.2.0...main
+[Unreleased]: https://gitlab.com/bytefulminds/branchline/-/compare/v0.2.1...main
+[0.2.1]: https://gitlab.com/bytefulminds/branchline/-/releases/v0.2.1
 [0.2.0]: https://gitlab.com/bytefulminds/branchline/-/releases/v0.2.0
 [0.1.0]: https://gitlab.com/bytefulminds/branchline/-/releases/v0.1.0
