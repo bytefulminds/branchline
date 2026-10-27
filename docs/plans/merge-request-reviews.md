@@ -27,6 +27,10 @@ person decides what is right. Nothing is posted until the person says so.
 - **Large merge requests:** every change gets a round up to about 40 changed files. Above that,
   the quest covers the largest and riskiest changes first, and says which files it skipped.
 - **Points are visible,** during the quest and in the summary, to motivate a proper review.
+- **AI features only exist when AI is on.** With AI turned off in Settings, nothing of the
+  quest, self-review, points or review notes appears anywhere in the window: no buttons, menu
+  items, palette commands, sidebar entries or hints. See
+  [Visible only with AI turned on](#visible-only-with-ai-turned-on).
 
 ## How it works for the user
 
@@ -38,7 +42,7 @@ person decides what is right. Nothing is posted until the person says so.
 3. **Open a merge request:** Branchline fetches it and shows its commits and changed files in
    the usual diff viewer (one column or side by side, syntax highlighting). Existing comments
    on GitLab show next to their lines.
-4. **Start the review quest** (when an AI is connected). The review is split into rounds, one
+4. **Start the review quest** (only shown when AI is turned on). The review is split into rounds, one
    file or a few related changes each. Per round the AI asks one to three questions. A
    progress bar shows how much of the merge request you have covered.
 5. **Answer, and find things.** Wrong quiz answers are no failure: the explanation points at
@@ -49,6 +53,23 @@ person decides what is right. Nothing is posted until the person says so.
 
 The quest is optional. Without an AI, or with the quest skipped, Branchline is still a good
 place to read a merge request and leave comments on lines.
+
+### Visible only with AI turned on
+
+All AI parts of this feature follow one switch: AI turned on in Settings (today "Suggest
+commit messages", which becomes a general "Use AI" switch with the provider settings below
+it). When it is off:
+
+- The merge request view shows no "Start review quest" button, no score and no AI comment
+  suggestions; it is a plain merge request reader.
+- "Review my branch" is not in the Changes view, the branch menu or the command palette.
+- The review notes section in Settings and its sidebar or menu entries are not shown.
+- Keyboard shortcuts for these actions do nothing and are left out of the shortcut list.
+- No AI request is made, and stored review notes and scores are kept but not shown.
+
+Turning AI on makes them appear right away, without a restart; turning it off hides them
+again, also in the middle of a quest (the quest ends, its draft comments are kept). Tests
+check both states: with AI off, none of these controls are in the page.
 
 ## The game
 
@@ -74,7 +95,8 @@ reviewer to code that does not exist.
 quest on the current branch's changes against its upstream or the branch it will merge into.
 It only starts when you choose it. Findings become notes for yourself instead of review
 comments, and the questions lean towards what a reviewer is likely to ask, so you can fix
-things before anyone else sees them. It needs no GitLab account, only an AI provider.
+things before anyone else sees them. It needs no GitLab account, only AI turned on with a
+provider set up.
 
 ### Large merge requests
 
