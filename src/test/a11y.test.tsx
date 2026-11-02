@@ -147,7 +147,6 @@ describe("accessibility (axe)", () => {
       ["4", "Stashes"],
       ["5", "Tags"],
       ["6", "Worktrees"],
-      ["7", "Remotes"],
     ];
     for (const [key, name] of views) {
       await user.keyboard(`{Control>}${key}{/Control}`);

@@ -7,6 +7,12 @@ description on GitLab.
 
 ## [Unreleased]
 
+### Changed
+
+- Remotes moved into the Branches view: each remote's heading shows its address and has the
+  remote's actions (fetch, edit, copy address, remove), and "Add remote" sits on the first
+  heading. The separate Remotes view and its shortcut (`Ctrl+7` / `⌘7`) are gone.
+
 ## [0.2.1] - 2026-10-27
 
 Know what Branchline is made of, and a new home page that shows what it can do.

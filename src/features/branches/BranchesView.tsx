@@ -5,6 +5,8 @@ import {
   ArrowUpFromLine,
   Check,
   Cloud,
+  CloudDownload,
+  Copy,
   FolderInput,
   FolderPlus,
   GitBranch,
@@ -13,6 +15,7 @@ import {
   GitPullRequestArrow,
   MoreHorizontal,
   Pencil,
+  Plus,
   Search,
   Trash2,
   Unplug,
@@ -24,11 +27,12 @@ import { anchorOf, useContextMenu } from "../../components/ContextMenu";
 import { EmptyState } from "../../components/EmptyState";
 import type { MenuEntry } from "../../components/Menu";
 import { Spinner } from "../../components/Spinner";
-import { displayPath, relativeTime } from "../../lib/format";
+import { displayPath, plural, relativeTime } from "../../lib/format";
 import { readJson, writeJson } from "../../services/storage";
-import type { BranchInfo, RepositoryInfo } from "../../types/git";
+import type { BranchInfo, RemoteInfo, RepositoryInfo } from "../../types/git";
 import { useIntegrateActions } from "../integrate/IntegrateActions";
 import { refDragProps, useRefDrop } from "../integrate/refDrag";
+import { describeUrl } from "../remote/describeUrl";
 import { useRemoteActions } from "../remote/RemoteActions";
 import { useWorktreeActions } from "../worktrees/WorktreeActions";
 import { useBranchActions } from "./BranchActions";
@@ -107,17 +111,24 @@ export function BranchesView({ repo }: { repo: RepositoryInfo }) {
       ),
     [branches, q, sort],
   );
+  // One group per remote, in the order Git lists them, also for a remote without fetched
+  // branches yet. Remote branches whose remote is gone (not fetched since) get their own group.
   const remotes = useMemo(() => {
-    const groups = new Map<string, BranchInfo[]>();
+    const groups = new Map<string, { info: RemoteInfo | null; all: number; list: BranchInfo[] }>();
+    for (const r of remote.remotes) groups.set(r.name, { info: r, all: 0, list: [] });
     for (const b of branches?.remote ?? []) {
-      if (q && !b.name.toLowerCase().includes(q)) continue;
       const key = b.remote ?? "remote";
-      groups.set(key, [...(groups.get(key) ?? []), b]);
+      const group = groups.get(key) ?? { info: null, all: 0, list: [] };
+      group.all += 1;
+      if (!q || b.name.toLowerCase().includes(q)) group.list.push(b);
+      groups.set(key, group);
     }
-    return [...groups.entries()].map(
-      ([remote, list]) => [remote, sortBranches(list, sort)] as const,
-    );
-  }, [branches, q, sort]);
+    return [...groups.entries()]
+      .filter(([, g]) => !q || g.list.length > 0)
+      .map(([name, g]) => ({ name, ...g, list: sortBranches(g.list, sort) }));
+  }, [branches, remote.remotes, q, sort]);
+  const tracked = (name: string) =>
+    (branches?.local ?? []).filter((b) => b.upstream?.startsWith(`${name}/`)).length;
 
   const current = repo.head.kind === "branch" ? repo.head.name : null;
   const integrateEntries = (b: BranchInfo): MenuEntry[] => [
@@ -219,6 +230,100 @@ export function BranchesView({ repo }: { repo: RepositoryInfo }) {
     { type: "separator", id: "sep" },
     ...integrateEntries(b),
   ];
+
+  const busy = repo.operation !== null;
+  const networkBusy = remote.activity !== null;
+  const remoteHeadMenu = (r: RemoteInfo): MenuEntry[] => [
+    {
+      id: "fetch",
+      label: `Fetch ${r.name}`,
+      icon: <CloudDownload size={16} />,
+      disabled: networkBusy,
+      onSelect: () => remote.fetchRemote(r.name),
+    },
+    {
+      id: "edit",
+      label: "Edit remote…",
+      description: "Rename or change the address",
+      icon: <Pencil size={16} />,
+      disabled: busy,
+      onSelect: () => remote.editRemote(r),
+    },
+    {
+      id: "copy",
+      label: "Copy address",
+      icon: <Copy size={16} />,
+      onSelect: () => void navigator.clipboard?.writeText(r.url).catch(() => {}),
+    },
+    {
+      id: "add",
+      label: "Add remote…",
+      icon: <Plus size={16} />,
+      disabled: busy,
+      onSelect: remote.addRemote,
+    },
+    { type: "separator", id: "sep" },
+    {
+      id: "remove",
+      label: "Remove remote…",
+      icon: <Trash2 size={16} />,
+      danger: true,
+      disabled: busy || networkBusy,
+      onSelect: () => remote.removeRemote(r),
+    },
+  ];
+
+  /** Heading of a remote's group: name, address and counts, with its actions like a row's. */
+  const remoteHead = (name: string, info: RemoteInfo | null, count: number, first: boolean) => {
+    const entries = info ? remoteHeadMenu(info) : [];
+    const n = tracked(name);
+    const label = info ? describeUrl(info.url) : "Remote no longer configured";
+    return (
+      <div
+        className="bl-remote-head"
+        onContextMenu={(e) => {
+          if (!info) return;
+          e.preventDefault();
+          showMenu({ x: e.clientX, y: e.clientY }, entries, `Actions for remote ${name}`);
+        }}
+      >
+        <h2 className="bl-section-label bl-remote-head__name">
+          <Cloud size={12} aria-hidden /> {name}
+        </h2>
+        <span
+          className="bl-remote-head__meta text-small text-muted truncate"
+          title={
+            info
+              ? [info.url, info.pushUrl && `push: ${info.pushUrl}`].filter(Boolean).join("\n")
+              : undefined
+          }
+        >
+          {label} · {plural(count, "branch", "branches")}
+          {n > 0 && ` · ${n} tracked`}
+        </span>
+        <span className="bl-remote-head__actions">
+          {first && (
+            <Button size="sm" variant="secondary" disabled={busy} onClick={remote.addRemote}>
+              Add remote
+            </Button>
+          )}
+          {info && (
+            <button
+              type="button"
+              className="bl-row-action"
+              aria-label={`More actions for remote ${name}`}
+              aria-haspopup="menu"
+              onClick={(e) =>
+                showMenu(anchorOf(e.currentTarget), entries, `Actions for remote ${name}`)
+              }
+            >
+              <MoreHorizontal size={15} aria-hidden />
+            </button>
+          )}
+        </span>
+      </div>
+    );
+  };
 
   const row = (b: BranchInfo, entries: MenuEntry[], primary: () => void, remote: boolean) => (
     <li
@@ -378,21 +483,37 @@ export function BranchesView({ repo }: { repo: RepositoryInfo }) {
           </p>
         )}
 
-        {remotes.map(([remote, list]) => (
-          <div key={remote}>
-            <h2 className="bl-section-label bl-branches__group">
-              <Cloud size={12} aria-hidden /> {remote}
-            </h2>
-            <ul className="bl-branch-list" aria-label={`Branches on ${remote}`}>
-              {list.map((b) => row(b, remoteMenu(b), () => actions.checkoutRemote(b.name), true))}
-            </ul>
-          </div>
+        {remotes.map((g, i) => (
+          <section key={g.name} aria-label={`Remote ${g.name}`}>
+            {remoteHead(g.name, g.info, g.all, i === 0)}
+            {g.list.length ? (
+              <ul className="bl-branch-list" aria-label={`Branches on ${g.name}`}>
+                {g.list.map((b) =>
+                  row(b, remoteMenu(b), () => actions.checkoutRemote(b.name), true),
+                )}
+              </ul>
+            ) : (
+              <p className="bl-branches__empty text-secondary text-small">
+                No branches yet. Fetch {g.name} to see them.
+              </p>
+            )}
+          </section>
         ))}
-        {branches.remote.length === 0 && !q && (
+        {remotes.length === 0 && !q && (
           <EmptyState
-            title="No remote branches"
-            description="Add a remote and fetch to see its branches here."
-          />
+            icon={<Cloud size={22} aria-hidden />}
+            title="No remotes"
+            description="Add a remote, such as a repository on GitHub or GitLab, to fetch, pull and push."
+          >
+            <Button
+              variant="secondary"
+              icon={<Plus size={16} aria-hidden />}
+              disabled={busy}
+              onClick={remote.addRemote}
+            >
+              Add remote
+            </Button>
+          </EmptyState>
         )}
       </div>
     </section>

@@ -7,7 +7,7 @@ before the first release found and changed.
 
 - **Automated (every test run):** `src/test/a11y.test.tsx` runs [axe-core](https://github.com/dequelabs/axe-core)
   on the welcome screen, every workspace view (Changes with a diff in both layouts, History
-  with filters, Branches, Stashes, Tags, Worktrees, Remotes), the command palette, the
+  with filters, Branches with its remotes, Stashes, Tags, Worktrees), the command palette, the
   shortcut overview, About, every Settings section and the merge editor. Any violation fails
   the build.
 - **Not automated:** jsdom has no layout, so color contrast and target size are checked by

@@ -6,7 +6,7 @@ import { installTauriTestEnvironment, openButton, REPO, setup } from "../../test
 import type { RemoteInfo } from "../../types/git";
 import { cloneFolderName, parentOf } from "../repository/CloneDialog";
 import { remoteNameProblem, remoteUrlProblem } from "./RemoteDialog";
-import { describeUrl } from "./RemotesView";
+import { describeUrl } from "./describeUrl";
 
 installTauriTestEnvironment();
 
@@ -74,23 +74,45 @@ describe("remote helpers", () => {
   });
 });
 
-describe("remotes view", () => {
-  it("lists remotes and fetches one", async () => {
+/** Opens Branches and returns the heading row of a remote's group. */
+async function remoteHead(user: ReturnType<typeof userEvent.setup>, name: string) {
+  await user.keyboard("{Control>}3{/Control}");
+  const group = await screen.findByRole("region", { name: `Remote ${name}` });
+  return { group, head: within(group).getByRole("heading", { name }).parentElement! };
+}
+
+describe("remotes in the Branches view", () => {
+  it("shows each remote with its address and fetches one from its menu", async () => {
     const { user, calls } = await open((cmd) => {
       if (cmd === "fetch_remote")
         return { outcome: { updatedRefs: 2, upToDate: false }, repo: REPO };
     });
-    await user.keyboard("{Control>}7{/Control}");
-    const list = await screen.findByRole("list", { name: "Remotes" });
-    const rows = within(list).getAllByRole("listitem");
-    expect(rows[0]).toHaveTextContent("github.com · acme/demo");
-    expect(rows[0]).toHaveTextContent("1 branch");
-    expect(rows[1]).toHaveTextContent("https://***@gitlab.com/acme/demo.git");
-    await user.click(within(rows[1]!).getByRole("button", { name: "Fetch" }));
+    const origin = await remoteHead(user, "origin");
+    expect(origin.head).toHaveTextContent("github.com · acme/demo · 1 branch");
+    expect(
+      within(origin.group).getByRole("list", { name: "Branches on origin" }),
+    ).toBeInTheDocument();
+    const mirror = await remoteHead(user, "mirror");
+    expect(mirror.head).toHaveTextContent("gitlab.com · acme/demo · 0 branches");
+    expect(mirror.group).toHaveTextContent("No branches yet. Fetch mirror to see them.");
+    // "Add remote" sits on the first remote's heading only.
+    expect(within(origin.head).getByRole("button", { name: "Add remote" })).toBeInTheDocument();
+    expect(within(mirror.head).queryByRole("button", { name: "Add remote" })).toBeNull();
+    await user.click(
+      within(mirror.head).getByRole("button", { name: "More actions for remote mirror" }),
+    );
+    await user.click(await screen.findByRole("menuitem", { name: /Fetch mirror/ }));
     await waitFor(() =>
       expect(calls.find((c) => c.cmd === "fetch_remote")?.args.remote).toBe("mirror"),
     );
     expect(await screen.findByText("Fetched mirror")).toBeInTheDocument();
+  });
+
+  it("has no Remotes view any more", async () => {
+    const { user } = await open();
+    expect(screen.queryByRole("button", { name: /^Remotes/ })).toBeNull();
+    await user.keyboard("{Control>}7{/Control}");
+    expect(screen.getByRole("heading", { name: "Changes", level: 1 })).toBeInTheDocument();
   });
 
   it("adds a remote and fetches it", async () => {
@@ -98,8 +120,9 @@ describe("remotes view", () => {
       if (cmd === "add_remote") return null;
       if (cmd === "fetch_remote")
         return { outcome: { updatedRefs: 0, upToDate: true }, repo: REPO };
+      if (cmd === "list_branches") return { local: [], remote: [] };
     }, []);
-    await user.keyboard("{Control>}7{/Control}");
+    await user.keyboard("{Control>}3{/Control}");
     expect(await screen.findByRole("heading", { name: "No remotes" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Add remote" }));
     const dialog = await screen.findByRole("dialog", { name: "Add remote" });
@@ -126,15 +149,23 @@ describe("remotes view", () => {
     );
   });
 
+  it("adds a second remote from the heading", async () => {
+    const { user } = await open(undefined, [ORIGIN]);
+    const { head } = await remoteHead(user, "origin");
+    await user.click(within(head).getByRole("button", { name: "Add remote" }));
+    const dialog = await screen.findByRole("dialog", { name: "Add remote" });
+    // origin is taken: the name starts empty, with the usual name for a fork's original as hint.
+    expect(within(dialog).getByLabelText("Name")).toHaveValue("");
+    expect(within(dialog).getByLabelText("Name")).toHaveAttribute("placeholder", "upstream");
+  });
+
   it("renames a remote and keeps a hidden token", async () => {
     const { user, calls } = await open((cmd) => {
       if (cmd === "edit_remote") return null;
     });
-    await user.keyboard("{Control>}7{/Control}");
-    const list = await screen.findByRole("list", { name: "Remotes" });
-    const row = within(list).getAllByRole("listitem")[1]!;
-    await user.click(within(row).getByRole("button", { name: /More actions/ }));
-    await user.click(await screen.findByRole("menuitem", { name: /Edit/ }));
+    const { head } = await remoteHead(user, "mirror");
+    await user.click(within(head).getByRole("button", { name: "More actions for remote mirror" }));
+    await user.click(await screen.findByRole("menuitem", { name: /Edit remote/ }));
     const dialog = await screen.findByRole("dialog", { name: "Edit remote mirror" });
     expect(dialog).toHaveTextContent("Leave it as it is to keep it.");
     const save = within(dialog).getByRole("button", { name: "Save" });
@@ -153,15 +184,13 @@ describe("remotes view", () => {
     );
   });
 
-  it("removes a remote after confirmation", async () => {
+  it("removes a remote after confirmation, from a right-click on its heading", async () => {
     const { user, calls } = await open((cmd) => {
       if (cmd === "remove_remote") return null;
     });
-    await user.keyboard("{Control>}7{/Control}");
-    const list = await screen.findByRole("list", { name: "Remotes" });
-    const row = within(list).getAllByRole("listitem")[0]!;
-    await user.click(within(row).getByRole("button", { name: /More actions/ }));
-    await user.click(await screen.findByRole("menuitem", { name: /Remove/ }));
+    const { head } = await remoteHead(user, "origin");
+    await user.pointer({ keys: "[MouseRight]", target: head });
+    await user.click(await screen.findByRole("menuitem", { name: /Remove remote/ }));
     const ask = await screen.findByRole("alertdialog", { name: "Remove remote origin?" });
     expect(ask).toHaveTextContent("Nothing changes on the server");
     await user.click(within(ask).getByRole("button", { name: "Remove remote" }));

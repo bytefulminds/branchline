@@ -50,7 +50,6 @@ const VIEWS: { view: WorkspaceView; title: string; icon: React.ReactNode }[] = [
   { view: "stashes", title: "Stashes", icon: <Archive size={16} /> },
   { view: "tags", title: "Tags", icon: <Tag size={16} /> },
   { view: "worktrees", title: "Worktrees", icon: <FolderGit2 size={16} /> },
-  { view: "remotes", title: "Remotes", icon: <Cloud size={16} /> },
 ];
 
 export interface AppCommandHandlers {
