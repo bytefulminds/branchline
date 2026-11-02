@@ -115,10 +115,13 @@ Updates are signed with Branchline's own update key, so only genuine releases ar
   push.
 - Clear messages for failed sign-in, unknown SSH hosts, unreachable or missing remotes, rejected
   pushes and diverged branches, with the next step offered where there is one.
-- Remotes view: list remotes with their addresses and branch counts, fetch one or all, add a
-  remote (optionally fetching it right away), rename it or change its fetch and push addresses,
-  and remove it. Addresses are shown without user names or tokens, and a hidden token is kept
-  when you save. Passwords in addresses are refused; use a credential helper instead.
+- Remotes are part of the Branches view: each remote has its own group, with its address and
+  branch count in the heading. The heading's menu (or a right-click on it) fetches that remote,
+  edits it (rename, or change its fetch and push addresses), copies its address or removes it.
+  "Add remote" is on the first remote's heading, in that menu and in the command palette; with
+  no remotes yet, Branches shows it in the middle. A new remote can be fetched right away.
+  Addresses are shown without user names or tokens, and a hidden token is kept when you save.
+  Passwords in addresses are refused; use a credential helper instead.
 
 ## Stashes, tags and worktrees
 
@@ -224,7 +227,7 @@ keyboard shortcut in the app.
 | `Ctrl+K` or `Ctrl+Shift+P` | `⌘K` or `⇧⌘P` | Command palette |
 | `Ctrl+O` | `⌘O` | Open a repository |
 | `Ctrl+R` or `F5` | `⌘R` | Refresh |
-| `Ctrl+1` to `Ctrl+7` | `⌘1` to `⌘7` | Changes, History, Branches, Stashes, Tags, Worktrees, Remotes |
+| `Ctrl+1` to `Ctrl+6` | `⌘1` to `⌘6` | Changes, History, Branches, Stashes, Tags, Worktrees |
 | `Ctrl+F` | `⌘F` | Search commits in History |
 | `Ctrl+Enter` | `⌘↵` | Commit |
 | `Ctrl+J` | `⌘J` | Git console |
@@ -381,7 +384,7 @@ src/                     React + TypeScript frontend
   features/changes/      Changed-file model, list, diff, syntax highlighting and commit box
   features/history/      Commit list, graph, search filters and commit details
   features/branches/     Branch list, switcher and branch dialogs
-  features/remote/       Remotes view and dialog; fetch, pull and push toolbar and actions
+  features/remote/       Remote dialog; fetch, pull and push toolbar and actions
   features/stash/        Stashes view, stash dialog and actions
   features/tags/         Tags view, tag dialog and actions
   features/integrate/    Merge, rebase, cherry-pick, revert and the operation banner

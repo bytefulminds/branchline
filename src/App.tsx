@@ -22,7 +22,6 @@ import { RemoteActionsProvider } from "./features/remote/RemoteActions";
 import { StashActionsProvider } from "./features/stash/StashActions";
 import { StashesView } from "./features/stash/StashesView";
 import { TagActionsProvider } from "./features/tags/TagActions";
-import { RemotesView } from "./features/remote/RemotesView";
 import { TagsView } from "./features/tags/TagsView";
 import { WorktreeActionsProvider } from "./features/worktrees/WorktreeActions";
 import { WorktreesView } from "./features/worktrees/WorktreesView";
@@ -46,7 +45,6 @@ const VIEW_KEYS: Record<string, WorkspaceView> = {
   "4": "stashes",
   "5": "tags",
   "6": "worktrees",
-  "7": "remotes",
 };
 
 function Workspace() {
@@ -223,8 +221,6 @@ function Workspace() {
           />
         ) : view === "branches" ? (
           <BranchesView key={state.repo.path} repo={state.repo} />
-        ) : view === "remotes" ? (
-          <RemotesView busy={controller.operation !== null} />
         ) : view === "worktrees" ? (
           <WorktreesView repo={state.repo} busy={controller.operation !== null} />
         ) : view === "tags" ? (

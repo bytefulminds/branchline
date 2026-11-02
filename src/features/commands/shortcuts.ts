@@ -17,7 +17,6 @@ export const SHORTCUTS = {
   stashes: mod("4"),
   tags: mod("5"),
   worktrees: mod("6"),
-  remotes: mod("7"),
   searchHistory: mod("F"),
   console: mod("J"),
   commit: mod("↵"),
@@ -40,8 +39,8 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
       { keys: SHORTCUTS.settings, action: "Settings" },
       { keys: SHORTCUTS.console, action: "Show or hide the Git console" },
       {
-        keys: `${SHORTCUTS.changes} to ${mod("7")}`,
-        action: "Changes, History, Branches, Stashes, Tags, Worktrees, Remotes",
+        keys: `${SHORTCUTS.changes} to ${mod("6")}`,
+        action: "Changes, History, Branches, Stashes, Tags, Worktrees",
       },
       { keys: `${shift}F10 or Menu key`, action: "Context menu of the selected row" },
       { keys: "Esc", action: "Close a dialog, menu or panel" },

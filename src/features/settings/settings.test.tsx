@@ -174,9 +174,7 @@ describe("settings in effect", () => {
     fireEvent.click(openButton());
     await screen.findByRole("heading", { name: "Changes" });
     // The timer starts once the remotes are known.
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: /Remotes/ })).toHaveTextContent("1"),
-    );
+    await waitFor(() => expect(screen.getByRole("button", { name: /^Fetch/ })).toBeEnabled());
     expect(calls.some((c) => c.cmd === "fetch_remote")).toBe(false);
     await act(async () => {
       await vi.advanceTimersByTimeAsync(5 * 60_000 + 10);

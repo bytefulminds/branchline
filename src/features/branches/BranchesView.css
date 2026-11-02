@@ -167,3 +167,40 @@
   padding: 0 var(--space-2);
   font-size: var(--text-small-size);
 }
+
+/* Heading of a remote's group: like a row, with the actions shown on hover or focus. */
+.bl-remote-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 32px;
+  margin: var(--space-4) 0 var(--space-1);
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-md);
+}
+.bl-remote-head:hover {
+  background: var(--color-hover);
+}
+.bl-remote-head__name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex: none;
+  margin: 0;
+}
+.bl-remote-head__meta {
+  flex: 1;
+  min-width: 0;
+}
+.bl-remote-head__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex: none;
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-standard);
+}
+.bl-remote-head:hover .bl-remote-head__actions,
+.bl-remote-head:focus-within .bl-remote-head__actions {
+  opacity: 1;
+}

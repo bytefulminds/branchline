@@ -91,7 +91,7 @@ export function RemoteDialog({
           id={ids.name}
           className="bl-input mono"
           value={name}
-          placeholder="origin"
+          placeholder={existing.includes("origin") ? "upstream" : "origin"}
           spellCheck={false}
           autoComplete="off"
           data-autofocus={remote ? undefined : true}
