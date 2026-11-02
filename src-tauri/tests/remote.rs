@@ -53,6 +53,9 @@ struct Setup {
 }
 
 fn setup() -> Setup {
+    // Use this process's PATH instead of asking the login shell (which can take seconds on a
+    // developer's machine and would skew the timing checks below).
+    let _ = branchline_lib::shell_env::init_with(None);
     let tmp = TempDir::new().unwrap();
     let root = tmp.path();
     let seed = root.join("seed");
@@ -429,6 +432,7 @@ fn a_hanging_fetch_can_be_cancelled() {
         std::thread::sleep(Duration::from_millis(400));
         cancel("slow-op");
     });
+    // (Even when the cancel comes before the fetch registered, it is applied.)
     let err = fetch(&s(&t.a), Some("slow"), "slow-op", &mut no_progress()).unwrap_err();
     assert_eq!(err.kind(), "cancelled");
     assert!(
