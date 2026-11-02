@@ -37,6 +37,9 @@ pub struct Account {
     pub url: String,
     /// Lowercase host name of `url`, used to match remotes.
     pub host: String,
+    /// The user's id on the server (0 for accounts saved before Branchline kept it).
+    #[serde(default)]
+    pub id: u64,
     pub username: String,
     pub name: String,
     pub access: Access,

@@ -9,8 +9,11 @@ export interface GitLogEntry {
   startedAt: number;
   /** null while running. */
   durationMs: number | null;
+  /** `git`, or the service for an API request (`GitLab`). */
+  program: string;
+  /** Folder the command ran in; for an API request, the server. */
   cwd: string;
-  /** Arguments after `git`. */
+  /** Arguments after `git`; for an API request, the method and the path. */
   args: string[];
   readOnly: boolean;
   exitCode: number | null;
@@ -31,9 +34,14 @@ export const gitLogService = {
   clear: () => call<void>("clear_git_command_log"),
 };
 
-/** The command as you would type it in a terminal (POSIX quoting where needed). */
-export function formatCommand(args: string[]): string {
+/** The command as you would type it in a terminal (POSIX quoting where needed), or for an
+ * API request the method and address (`GitLab GET /api/v4/user`). */
+export function formatCommand(args: string[], program = "git"): string {
+  if (program !== "git") return [program, ...args].join(" ");
   const quote = (a: string) =>
     a === "" ? "''" : /^[\w@%+=:,./-]+$/.test(a) ? a : `'${a.replace(/'/g, `'\\''`)}'`;
   return ["git", ...args.map(quote)].join(" ");
 }
+
+/** Whether an entry is an API request rather than a Git command. */
+export const isRequest = (e: { program?: string }) => !!e.program && e.program !== "git";

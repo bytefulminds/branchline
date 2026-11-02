@@ -3,24 +3,28 @@ import { useId, useState } from "react";
 import { Button } from "../../components/Button";
 import { useConfirm } from "../../components/ConfirmDialog";
 import { forgeService } from "../../services/forge";
-import type { Access } from "../../types/forge";
+import type { Access, Account, ForgeKind } from "../../types/forge";
 import type { GitError } from "../../types/git";
 import { Avatar } from "../history/Avatar";
+import { FORGES, forgeInfo, PLANNED_FORGES } from "../reviews/forges";
 import { useReviews } from "../reviews/ReviewsProvider";
 import { Field } from "./SettingControls";
 
 const ACCESS: Record<Access, string> = {
   write: "Can read merge requests, comment and approve",
   read: "Can read merge requests (read_api); commenting and approving need the api scope",
-  unknown: "Connected (this GitLab version does not say what the token may do)",
+  unknown: "Connected (this server version does not say what the token may do)",
 };
 
-/** Settings > Accounts: GitLab accounts, with their tokens in the system's password store. */
+/** Settings > Accounts: accounts on hosting services (GitLab now; GitHub and Bitbucket
+ * later), with their tokens in the system's password store. */
 export function AccountsSection() {
-  const { accounts, connectGitlab, disconnect } = useReviews();
+  const { accounts, connect: connectAccount, disconnect } = useReviews();
   const confirm = useConfirm();
-  const ids = { url: useId(), token: useId() };
-  const [url, setUrl] = useState("https://gitlab.com");
+  const ids = { kind: useId(), url: useId(), token: useId() };
+  const [kind, setKind] = useState<ForgeKind>("gitlab");
+  const f = FORGES[kind];
+  const [url, setUrl] = useState(f.defaultUrl);
   const [token, setToken] = useState("");
   const [state, setState] = useState<
     | { s: "idle" }
@@ -32,7 +36,7 @@ export function AccountsSection() {
   const connect = async () => {
     setState({ s: "connecting" });
     try {
-      const account = await connectGitlab(url, token);
+      const account = await connectAccount(kind, url, token);
       setToken("");
       setState({ s: "done", who: `${account.name} (@${account.username}) on ${account.host}` });
     } catch (e) {
@@ -40,24 +44,24 @@ export function AccountsSection() {
     }
   };
 
-  const remove = async (accountUrl: string, host: string) => {
+  const remove = async (a: Account) => {
     const ok = await confirm({
-      title: `Disconnect ${host}?`,
-      description:
-        "Branchline forgets the account and deletes its token from this computer's password store. The token itself stays valid on GitLab until you revoke it there.",
+      title: `Disconnect ${a.host}?`,
+      description: `Branchline forgets the account and deletes its token from this computer's password store. The token itself stays valid on ${forgeInfo(a.kind).name} until you revoke it there.`,
       confirmLabel: "Disconnect",
       destructive: true,
     });
-    if (ok) await disconnect(accountUrl).catch(() => {});
+    if (ok) await disconnect(a.kind, a.url).catch(() => {});
   };
 
   return (
     <>
       <p className="bl-setting__help bl-setting__intro">
-        Connect your GitLab account to see the merge requests waiting for your review, in the
-        Reviews view. Branchline uses a <strong>personal access token</strong>, kept in this
-        computer&apos;s password store (Keychain, Credential Manager or the Secret Service), and
-        only contacts the server you enter here.
+        Connect your account on a hosting service to see its merge requests in the Reviews view: the
+        ones waiting for your review, the ones you created, and all open ones. Branchline uses a{" "}
+        <strong>personal access token</strong>, kept in this computer&apos;s password store
+        (Keychain, Credential Manager or the Secret Service), and only contacts the server you enter
+        here. GitLab works today; {PLANNED_FORGES.join(" and ")} are planned.
       </p>
 
       {accounts.length > 0 && (
@@ -70,14 +74,14 @@ export function AccountsSection() {
                   {a.name} <span className="text-secondary">@{a.username}</span>
                 </span>
                 <span className="text-small text-muted">
-                  {a.url} · {ACCESS[a.access]}
+                  {forgeInfo(a.kind).name} · {a.url} · {ACCESS[a.access]}
                 </span>
               </span>
               <Button
                 size="sm"
                 variant="ghost"
                 icon={<LogOut size={14} aria-hidden />}
-                onClick={() => void remove(a.url, a.host)}
+                onClick={() => void remove(a)}
               >
                 Disconnect
               </Button>
@@ -87,11 +91,34 @@ export function AccountsSection() {
       )}
 
       <h4 className="bl-settings__subhead">
-        {accounts.length ? "Connect another GitLab account" : "Connect GitLab"}
+        {accounts.length ? "Connect another account" : "Connect an account"}
       </h4>
+      <Field label="Service" htmlFor={ids.kind}>
+        <select
+          id={ids.kind}
+          className="bl-input"
+          value={kind}
+          onChange={(e) => {
+            const next = e.target.value as ForgeKind;
+            setKind(next);
+            setUrl(FORGES[next].defaultUrl);
+          }}
+        >
+          {(Object.keys(FORGES) as ForgeKind[]).map((k) => (
+            <option key={k} value={k}>
+              {FORGES[k].name}
+            </option>
+          ))}
+          {PLANNED_FORGES.map((name) => (
+            <option key={name} disabled>
+              {name} (coming later)
+            </option>
+          ))}
+        </select>
+      </Field>
       <Field
-        label="GitLab address"
-        help="https://gitlab.com, or the address of your company's GitLab."
+        label={`${f.name} address`}
+        help={`${f.defaultUrl}, or the address of your company's ${f.name}.`}
         htmlFor={ids.url}
       >
         <input
@@ -107,14 +134,13 @@ export function AccountsSection() {
         label="Personal access token"
         help={
           <>
-            Make one on GitLab with the <code className="mono">api</code> scope (or{" "}
-            <code className="mono">read_api</code> to only read).{" "}
+            Make {f.tokenHelp} under your own profile, so it acts as you.{" "}
             <button
               type="button"
               className="bl-link-button"
-              onClick={() => void forgeService.openTokenPage(url).catch(() => {})}
+              onClick={() => void forgeService.openTokenPage(kind, url).catch(() => {})}
             >
-              Create a token on GitLab <ExternalLink size={12} aria-hidden />
+              Create a token on {f.name} <ExternalLink size={12} aria-hidden />
             </button>
           </>
         }

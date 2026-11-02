@@ -705,38 +705,41 @@ pub fn forge_accounts() -> Vec<crate::forge::accounts::Account> {
     crate::forge::accounts::list()
 }
 
-/// Check a GitLab token and remember the account; the token goes to the system's
-/// credential store and never comes back to the frontend.
+/// Check a token with a hosting service and remember the account; the token goes to the
+/// system's credential store and never comes back to the frontend.
 #[tauri::command]
-pub async fn connect_gitlab(
+pub async fn connect_account(
+    kind: crate::forge::accounts::ForgeKind,
     url: String,
     token: String,
 ) -> Result<crate::forge::accounts::Account, GitError> {
-    blocking(move || crate::forge::gitlab::connect(&url, &token)).await
+    blocking(move || crate::forge::connect(kind, &url, &token)).await
 }
 
 /// Forget an account and delete its token.
 #[tauri::command]
-pub async fn disconnect_account(url: String) -> Result<(), GitError> {
-    blocking(move || {
-        crate::forge::accounts::remove(crate::forge::accounts::ForgeKind::Gitlab, &url)
-    })
-    .await
+pub async fn disconnect_account(
+    kind: crate::forge::accounts::ForgeKind,
+    url: String,
+) -> Result<(), GitError> {
+    blocking(move || crate::forge::accounts::remove(kind, &url)).await
 }
 
-/// The GitLab project the repository belongs to, and whether its account is connected.
+/// The hosting service project the repository belongs to, and whether its account is connected.
 #[tauri::command]
 pub async fn review_source(repo: String) -> Result<Option<crate::forge::ReviewSource>, GitError> {
     blocking(move || crate::forge::review_source(&repo)).await
 }
 
-/// Merge requests waiting for your review, in this repository's project or everywhere.
+/// Open merge requests to review, created by you, or all open ones; in this repository's
+/// project or (except all open ones) everywhere on the server.
 #[tauri::command]
 pub async fn review_requests(
     repo: String,
     all_projects: bool,
+    filter: crate::forge::RequestFilter,
 ) -> Result<crate::forge::ReviewList, GitError> {
-    blocking(move || crate::forge::review_requests(&repo, all_projects)).await
+    blocking(move || crate::forge::review_requests(&repo, all_projects, filter)).await
 }
 
 /// Open a page of a connected account's server (a merge request) in the browser.
@@ -753,11 +756,15 @@ pub fn open_forge_page(app: tauri::AppHandle, url: String) -> Result<(), GitErro
         .map_err(|e| GitError::Internal(format!("cannot open the browser: {e}")))
 }
 
-/// Open the page where GitLab makes personal access tokens, with name and scope filled in.
+/// Open the service's page for making a token, with name and scope filled in.
 #[tauri::command]
-pub fn open_gitlab_token_page(app: tauri::AppHandle, url: String) -> Result<(), GitError> {
+pub fn open_token_page(
+    app: tauri::AppHandle,
+    kind: crate::forge::accounts::ForgeKind,
+    url: String,
+) -> Result<(), GitError> {
     use tauri_plugin_opener::OpenerExt;
-    let page = crate::forge::gitlab::token_page(&url)?;
+    let page = crate::forge::token_page(kind, &url)?;
     app.opener()
         .open_url(page, None::<&str>)
         .map_err(|e| GitError::Internal(format!("cannot open the browser: {e}")))

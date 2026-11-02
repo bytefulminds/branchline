@@ -246,6 +246,28 @@ describe("branch switcher in the title bar", () => {
   });
 });
 
+describe("remote branches in the branch menu", () => {
+  it("lists remote branches without a local branch and checks one out", async () => {
+    const { user, calls } = await open((cmd) =>
+      cmd === "checkout_remote_branch" ? REPO : undefined,
+    );
+    const pill = await screen.findByRole("button", { name: /Branch: main/ });
+    await waitFor(() => expect(calls.some((c) => c.cmd === "list_branches")).toBe(true));
+    await user.click(pill);
+    const menu = await screen.findByRole("menu");
+    expect(within(menu).getByText("Check out a remote branch")).toBeInTheDocument();
+    // origin/main is tracked by main (listed above), so only origin/shared is offered.
+    expect(within(menu).queryByRole("menuitem", { name: /origin\/main/ })).toBeNull();
+    await user.click(within(menu).getByRole("menuitem", { name: /origin\/shared/ }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.cmd === "checkout_remote_branch")?.args).toEqual({
+        repo: REPO.path,
+        remoteBranch: "origin/shared",
+      }),
+    );
+  });
+});
+
 describe("commit context menu", () => {
   it("creates a branch at a commit from the history", async () => {
     const commits = makeHistory(3);

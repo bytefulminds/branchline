@@ -14,8 +14,9 @@ import { EmptyState } from "../../components/EmptyState";
 import { Spinner } from "../../components/Spinner";
 import { plural, relativeTime } from "../../lib/format";
 import { forgeService } from "../../services/forge";
-import type { MergeRequest } from "../../types/forge";
+import type { MergeRequest, RequestFilter, ReviewList } from "../../types/forge";
 import { Avatar } from "../history/Avatar";
+import { forgeInfo, type ForgeInfo } from "./forges";
 import { useReviews } from "./ReviewsProvider";
 import "../branches/BranchesView.css";
 import "./ReviewsView.css";
@@ -93,6 +94,14 @@ function Row({ mr, showProject }: { mr: MergeRequest; showProject: boolean }) {
           <span className="mono truncate" title={`${mr.sourceBranch} into ${mr.targetBranch}`}>
             {mr.sourceBranch} → {mr.targetBranch}
           </span>
+          <span
+            className="bl-review__reviewers truncate"
+            title={mr.reviewers.map((r) => `${r.name} (@${r.username})`).join(", ") || undefined}
+          >
+            {mr.reviewers.length
+              ? `Reviewers: ${mr.reviewers.map((r) => r.name).join(", ")}`
+              : "No reviewers"}
+          </span>
         </span>
       </span>
       <span className="bl-review__status text-small text-muted">
@@ -126,12 +135,55 @@ function Row({ mr, showProject }: { mr: MergeRequest; showProject: boolean }) {
   );
 }
 
-/** Merge requests on GitLab where you are a reviewer, for this project or all projects. */
+const FILTER_LABELS: { id: RequestFilter; label: string }[] = [
+  { id: "reviewRequested", label: "To review" },
+  { id: "createdByYou", label: "Created by you" },
+  { id: "allOpen", label: "All open" },
+];
+
+function summary(filter: RequestFilter, data: ReviewList, f: ForgeInfo): string {
+  const n = data.items.length;
+  const what = n === 1 ? f.noun : f.nouns;
+  const more = data.truncated ? " (newest shown)" : "";
+  switch (filter) {
+    case "reviewRequested":
+      return `${n} ${what} waiting for your review${more}`;
+    case "createdByYou":
+      return `${n} open ${what} created by you${more}`;
+    case "allOpen":
+      return `${n} open ${what}${more}`;
+  }
+}
+
+/** What the empty list means, including whom and where Branchline asked, so a wrong
+ * account or project is easy to spot. */
+function emptyText(filter: RequestFilter, data: ReviewList, f: ForgeInfo): string {
+  const where = data.project ?? `any project on ${data.account.host}`;
+  const who = `@${data.account.username}`;
+  switch (filter) {
+    case "reviewRequested":
+      return `No open ${f.nouns} in ${where} have ${who} as a reviewer.`;
+    case "createdByYou":
+      return `${who} has no open ${f.nouns} in ${where}.`;
+    case "allOpen":
+      return `${where} has no open ${f.nouns}.`;
+  }
+}
+
+/** Open merge requests on the repository's hosting service: those waiting for your review,
+ * those you created, or all open ones; for this project or all projects. */
 export function ReviewsView() {
-  const { source, list, allProjects, setAllProjects, refresh } = useReviews();
+  const { source, list, allProjects, setAllProjects, filter, setFilter, refresh } = useReviews();
   const data = list.status === "ready" ? list.list : list.status === "idle" ? null : list.previous;
   const loading = list.status === "loading";
   const items = data?.items ?? [];
+  const f = forgeInfo(source?.account?.kind ?? data?.account.kind);
+  const listLabel =
+    filter === "reviewRequested"
+      ? `${f.nouns[0]!.toUpperCase()}${f.nouns.slice(1)} to review`
+      : filter === "createdByYou"
+        ? `Your ${f.nouns}`
+        : `Open ${f.nouns}`;
 
   return (
     <section className="bl-branches" aria-label="Reviews">
@@ -139,22 +191,33 @@ export function ReviewsView() {
         <div className="bl-branches__title">
           <h1 className="text-h2">Reviews</h1>
           <span className="text-small text-secondary truncate">
-            {data
-              ? `${plural(items.length, "merge request")} waiting for you${
-                  data.truncated ? " (newest shown)" : ""
-                }`
-              : ""}
+            {data ? summary(filter, data, f) : ""}
           </span>
+        </div>
+        <div className="bl-segmented" role="group" aria-label="Which merge requests">
+          {FILTER_LABELS.map((x) => (
+            <button
+              key={x.id}
+              type="button"
+              className="bl-segmented__option"
+              aria-pressed={filter === x.id}
+              onClick={() => setFilter(x.id)}
+            >
+              {x.label}
+            </button>
+          ))}
         </div>
         <label className="bl-branches__sort text-small">
           <span className="visually-hidden">Show merge requests from</span>
           <select
             className="bl-input"
             value={allProjects ? "all" : "project"}
+            disabled={filter === "allOpen"}
+            title={filter === "allOpen" ? `All open ${f.nouns} are listed per project` : undefined}
             onChange={(e) => setAllProjects(e.target.value === "all")}
           >
             <option value="project">{source ? source.project : "This project"}</option>
-            <option value="all">All projects on {source?.host ?? "GitLab"}</option>
+            <option value="all">All projects on {source?.host ?? f.name}</option>
           </select>
         </label>
         <IconButton
@@ -175,22 +238,18 @@ export function ReviewsView() {
         )}
         {!data && loading ? (
           <div className="bl-history__loading" role="status">
-            <Spinner size={18} /> Loading merge requests…
+            <Spinner size={18} /> Loading {f.nouns}…
           </div>
         ) : data && items.length === 0 ? (
           <EmptyState
             icon={<CircleCheck size={22} aria-hidden />}
-            tone="success"
-            title="Nothing to review"
-            description={
-              allProjects
-                ? `No open merge requests on ${data.account.host} have you as a reviewer.`
-                : `No open merge requests in ${data.project} have you as a reviewer.`
-            }
+            tone={filter === "reviewRequested" ? "success" : "neutral"}
+            title={filter === "reviewRequested" ? "Nothing to review" : `No ${f.nouns}`}
+            description={emptyText(filter, data, f)}
           />
         ) : (
           data && (
-            <ul className="bl-branch-list bl-reviews__list" aria-label="Merge requests to review">
+            <ul className="bl-branch-list bl-reviews__list" aria-label={listLabel}>
               {items.map((mr) => (
                 <Row key={`${mr.projectId}!${mr.iid}`} mr={mr} showProject={allProjects} />
               ))}
@@ -200,8 +259,8 @@ export function ReviewsView() {
         {data && (
           <p className="bl-reviews__note text-small text-muted">
             Signed in as {data.account.name} (@{data.account.username}) on {data.account.host}.
-            Double-click a merge request to open it on GitLab; reviewing it in Branchline comes
-            next.
+            Double-click a {f.noun} to open it on {f.name}; reviewing it in Branchline comes next.
+            The requests Branchline makes are listed in the Git console.
           </p>
         )}
       </div>

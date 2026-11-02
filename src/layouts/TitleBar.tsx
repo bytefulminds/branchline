@@ -1,5 +1,6 @@
 import {
   ChevronDown,
+  Cloud,
   Code2,
   Command,
   FolderSearch,
@@ -37,6 +38,8 @@ import "./TitleBar.css";
 
 /** Most recently active local branches shown in the quick switcher. */
 const QUICK_SWITCH_LIMIT = 12;
+/** Remote branches listed below the local ones in the branch menu. */
+const QUICK_REMOTE_LIMIT = 10;
 
 export function TitleBar({
   controller,
@@ -139,9 +142,16 @@ export function TitleBar({
       : []),
   ];
 
-  const local = [...(branchActions.branches?.local ?? [])]
+  const allLocal = branchActions.branches?.local ?? [];
+  const local = [...allLocal]
     .sort((a, b) => Number(b.isCurrent) - Number(a.isCurrent) || b.tipTime - a.tipTime)
     .slice(0, QUICK_SWITCH_LIMIT);
+  // Remote branches without a local branch yet (those are switched to above), newest first.
+  const tracked = new Set(allLocal.map((b) => b.upstream).filter(Boolean));
+  const remoteOnly = (branchActions.branches?.remote ?? [])
+    .filter((b) => !tracked.has(b.name) && !b.name.endsWith("/HEAD"))
+    .sort((a, b) => b.tipTime - a.tipTime);
+  const remoteShown = remoteOnly.slice(0, QUICK_REMOTE_LIMIT);
   const branchEntries: MenuEntry[] = [
     { type: "header", id: "branches-header", label: "Switch branch" },
     ...local.map<MenuEntry>((b) => ({
@@ -154,6 +164,27 @@ export function TitleBar({
     })),
     ...(local.length === 0
       ? ([{ type: "header", id: "no-branches", label: "No branches yet" }] as MenuEntry[])
+      : []),
+    ...(remoteShown.length
+      ? ([
+          { type: "separator", id: "remote-sep" },
+          {
+            type: "header",
+            id: "remote-header",
+            label:
+              remoteOnly.length > remoteShown.length
+                ? `Check out a remote branch (newest ${remoteShown.length} of ${remoteOnly.length})`
+                : "Check out a remote branch",
+          },
+          ...remoteShown.map<MenuEntry>((b) => ({
+            id: `remote:${b.name}`,
+            label: b.name,
+            description: b.tipSummary,
+            icon: <Cloud size={16} aria-hidden />,
+            disabled: repo?.operation != null,
+            onSelect: () => branchActions.checkoutRemote(b.name),
+          })),
+        ] as MenuEntry[])
       : []),
     { type: "separator", id: "branches-sep" },
     {

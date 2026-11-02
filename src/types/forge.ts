@@ -1,6 +1,10 @@
 /** Mirrors src-tauri/src/forge: accounts on hosting services and merge requests. */
 
+/** Supported services; GitHub and Bitbucket are planned. */
 export type ForgeKind = "gitlab";
+
+/** Which open requests to list. "allOpen" works for one project only. */
+export type RequestFilter = "reviewRequested" | "createdByYou" | "allOpen";
 
 /** What the token may do: read merge requests, also comment and approve, or unknown. */
 export type Access = "read" | "write" | "unknown";
@@ -10,6 +14,8 @@ export interface Account {
   /** Server address, for example `https://gitlab.com`. */
   url: string;
   host: string;
+  /** The user's id on the server (0 for accounts saved by an earlier version). */
+  id: number;
   username: string;
   name: string;
   access: Access;
@@ -36,6 +42,7 @@ export interface MergeRequest {
   title: string;
   webUrl: string;
   author: Person;
+  reviewers: Person[];
   sourceBranch: string;
   targetBranch: string;
   draft: boolean;

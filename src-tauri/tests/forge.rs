@@ -7,7 +7,10 @@ use std::process::Command;
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use branchline_lib::forge::accounts::{self, Access, ForgeKind};
-use branchline_lib::forge::{gitlab, is_account_page, review_requests, review_source};
+use branchline_lib::forge::{
+    gitlab, is_account_page, review_requests, review_source, RequestFilter,
+};
+use branchline_lib::git::command_log;
 use branchline_lib::secrets;
 use tempfile::TempDir;
 
@@ -99,6 +102,23 @@ fn path(t: &TempDir) -> String {
 
 const USER: &str = r#"{"id":7,"username":"ada","name":"Ada Lovelace"}"#;
 
+/// A merge request by `author` with `reviewers`, given as (id, username).
+fn mr_by(
+    project_id: u64,
+    iid: u64,
+    full: &str,
+    author: (u64, &str),
+    reviewers: &[(u64, &str)],
+) -> serde_json::Value {
+    let mut m = mr(project_id, iid, full);
+    m["author"] = serde_json::json!({ "id": author.0, "username": author.1, "name": author.1 });
+    m["reviewers"] = reviewers
+        .iter()
+        .map(|(id, u)| serde_json::json!({ "id": id, "username": u, "name": u }))
+        .collect();
+    m
+}
+
 fn mr(project_id: u64, iid: u64, full: &str) -> serde_json::Value {
     serde_json::json!({
         "project_id": project_id,
@@ -124,9 +144,17 @@ fn gitlab_route(path: &str, token: Option<&str>) -> (u16, String, &'static str) 
     let body = match path {
         "/api/v4/user" => USER.to_string(),
         "/api/v4/personal_access_tokens/self" => r#"{"scopes":["api"]}"#.into(),
+        // Every open merge request of the project; Branchline picks its own.
         p if p.starts_with("/api/v4/projects/group%2Fsub%2Fapp/merge_requests?") => {
-            serde_json::json!([mr(11, 1, "group/sub/app!1"), mr(11, 2, "group/sub/app!2")])
-                .to_string()
+            serde_json::json!([
+                mr_by(11, 1, "group/sub/app!1", (3, "tom"), &[(7, "ada")]),
+                // Same user, other spelling: matched by id.
+                mr_by(11, 2, "group/sub/app!2", (3, "tom"), &[(7, "Ada")]),
+                // Your own merge request, with yourself as reviewer.
+                mr_by(11, 3, "group/sub/app!3", (7, "ada"), &[(7, "ada")]),
+                mr_by(11, 4, "group/sub/app!4", (3, "tom"), &[(9, "bob")]),
+            ])
+            .to_string()
         }
         p if p.starts_with("/api/v4/merge_requests?") => {
             serde_json::json!([mr(11, 1, "group/sub/app!1"), mr(12, 9, "other/lib!9")]).to_string()
@@ -236,18 +264,21 @@ fn lists_merge_requests_to_review_in_the_repositorys_project() {
     assert_eq!(source.project, "group/sub/app");
     assert_eq!(source.remote, "origin");
     assert!(source.account.is_none());
-    let err = review_requests(&path(&t), false).unwrap_err().to_string();
+    let err = review_requests(&path(&t), false, RequestFilter::ReviewRequested)
+        .unwrap_err()
+        .to_string();
     assert!(err.contains("Settings > Accounts"), "{err}");
 
     gitlab::connect(&url, TOKEN).unwrap();
-    let list = review_requests(&path(&t), false).unwrap();
+    let list = review_requests(&path(&t), false, RequestFilter::ReviewRequested).unwrap();
     assert_eq!(list.project.as_deref(), Some("group/sub/app"));
     assert!(!list.truncated);
-    assert_eq!(list.items.len(), 2);
+    let iids: Vec<u64> = list.items.iter().map(|m| m.iid).collect();
+    assert_eq!(iids, [1, 2, 3], "picked by reviewer id, including your own");
     let first = &list.items[0];
-    assert_eq!(first.iid, 1);
     assert_eq!(first.project_path, "group/sub/app");
-    assert_eq!(first.author.name, "Tom Jansen");
+    assert_eq!(first.author.name, "tom");
+    assert_eq!(first.reviewers[0].username, "ada");
     assert_eq!(first.comments, 3);
     assert_eq!(first.pipeline.as_deref(), Some("failed"));
     assert_eq!(first.approved_by_you, Some(true));
@@ -267,7 +298,58 @@ fn lists_merge_requests_to_review_in_the_repositorys_project() {
         .find(|l| l.contains("/projects/group%2Fsub%2Fapp/merge_requests?"))
         .expect("asks for the project's merge requests");
     assert!(query.contains("state=opened"), "{query}");
-    assert!(query.contains("reviewer_username=ada"), "{query}");
+    assert!(
+        !query.contains("reviewer_username"),
+        "filtered in Branchline: {query}"
+    );
+
+    let mine = review_requests(&path(&t), false, RequestFilter::CreatedByYou).unwrap();
+    assert_eq!(mine.items.iter().map(|m| m.iid).collect::<Vec<_>>(), [3]);
+    let all = review_requests(&path(&t), false, RequestFilter::AllOpen).unwrap();
+    assert_eq!(all.items.len(), 4);
+    let err = review_requests(&path(&t), true, RequestFilter::AllOpen)
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("Choose one project"), "{err}");
+}
+
+#[test]
+fn records_requests_in_the_git_console_without_the_token() {
+    let _g = serial();
+    let (url, _) = fake_gitlab(gitlab_route);
+    gitlab::connect(&url, TOKEN).unwrap();
+    let t = repo(&[("origin", format!("{url}/group/sub/app.git"))]);
+    review_requests(&path(&t), false, RequestFilter::ReviewRequested).unwrap();
+    let entries = command_log::since(0);
+    let list = entries
+        .iter()
+        .find(|e| {
+            e.program == "GitLab"
+                && e.cwd == url
+                && e.args
+                    .get(1)
+                    .is_some_and(|a| a.contains("group%2Fsub%2Fapp"))
+        })
+        .expect("the list request is in the console");
+    assert_eq!(list.args[0], "GET");
+    assert_eq!(list.exit_code, Some(200));
+    assert_eq!(list.ok, Some(true));
+    assert!(
+        !list.read_only,
+        "the list is shown with routine reads hidden"
+    );
+    assert!(list.stdout.contains("\"iid\":1"), "{}", list.stdout);
+    // Details per row are routine.
+    assert!(entries
+        .iter()
+        .any(|e| e.program == "GitLab" && e.read_only && e.args[1].ends_with("/approvals")));
+    for e in entries
+        .iter()
+        .filter(|e| e.program == "GitLab" && e.cwd == url)
+    {
+        let all = format!("{} {:?} {} {}", e.cwd, e.args, e.stdout, e.stderr);
+        assert!(!all.contains(TOKEN), "{all}");
+    }
 }
 
 #[test]
@@ -276,7 +358,7 @@ fn lists_merge_requests_in_all_projects() {
     let (url, _) = fake_gitlab(gitlab_route);
     gitlab::connect(&url, TOKEN).unwrap();
     let t = repo(&[("origin", format!("{url}/group/sub/app.git"))]);
-    let list = review_requests(&path(&t), true).unwrap();
+    let list = review_requests(&path(&t), true, RequestFilter::ReviewRequested).unwrap();
     assert_eq!(list.project, None);
     let projects: Vec<&str> = list.items.iter().map(|m| m.project_path.as_str()).collect();
     assert_eq!(projects, ["group/sub/app", "other/lib"]);
@@ -327,11 +409,13 @@ fn explains_missing_projects_and_rate_limits() {
     });
     gitlab::connect(&url, TOKEN).unwrap();
     let gone = repo(&[("origin", format!("{url}/gone/app.git"))]);
-    let err = review_requests(&path(&gone), false)
+    let err = review_requests(&path(&gone), false, RequestFilter::ReviewRequested)
         .unwrap_err()
         .to_string();
     assert!(err.contains("could not find the project gone/app"), "{err}");
-    let err = review_requests(&path(&gone), true).unwrap_err().to_string();
+    let err = review_requests(&path(&gone), true, RequestFilter::ReviewRequested)
+        .unwrap_err()
+        .to_string();
     assert!(err.contains("Try again in 30 seconds"), "{err}");
 }
 

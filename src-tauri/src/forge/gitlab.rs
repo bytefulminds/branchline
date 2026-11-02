@@ -5,15 +5,19 @@
 
 use std::time::Duration;
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 use super::accounts::{self, Access, Account, ForgeKind};
+use super::{MergeRequest, Person, RequestFilter};
 use crate::ai::{agent, is_loopback};
 use crate::error::GitError;
+use crate::git::command_log;
 use crate::secrets;
 
 /// At most this many merge requests are listed (newest activity first).
 pub const MAX_REVIEWS: usize = 50;
+/// Open merge requests read from one project before picking yours.
+const PROJECT_PAGE: usize = 100;
 /// Extra calls per merge request (pipeline and approvals) run this many at a time.
 const PARALLEL: usize = 6;
 
@@ -77,9 +81,38 @@ struct Response {
     retry_after: Option<String>,
 }
 
+/// A GET request, recorded in the Git console (without the token). `routine` requests (the
+/// extra details per row) are hidden there with routine reads.
 fn get(base: &str, token: &str, path_and_query: &str) -> Result<Response, GitError> {
+    request(base, token, path_and_query, false)
+}
+
+fn get_routine(base: &str, token: &str, path_and_query: &str) -> Result<Response, GitError> {
+    request(base, token, path_and_query, true)
+}
+
+fn request(
+    base: &str,
+    token: &str,
+    path_and_query: &str,
+    routine: bool,
+) -> Result<Response, GitError> {
+    let path = format!("/api/v4{path_and_query}");
+    let running = command_log::start_request("GitLab", base, "GET", &path, routine);
+    let result = send(base, token, &path);
+    command_log::finish_request(
+        running,
+        match &result {
+            Ok(r) => Ok((r.status, r.body.as_str())),
+            Err(e) => Err(e.to_string()),
+        },
+    );
+    result
+}
+
+fn send(base: &str, token: &str, path: &str) -> Result<Response, GitError> {
     let agent = agent(base, Duration::from_secs(15), Duration::from_secs(30));
-    let url = format!("{base}/api/v4{path_and_query}");
+    let url = format!("{base}{path}");
     let mut res = agent
         .get(&url)
         .header("PRIVATE-TOKEN", token)
@@ -158,6 +191,8 @@ fn json<T: for<'de> Deserialize<'de>>(res: &Response) -> Result<T, GitError> {
 
 #[derive(Deserialize)]
 struct User {
+    #[serde(default)]
+    id: u64,
     username: String,
     #[serde(default)]
     name: String,
@@ -209,6 +244,7 @@ pub fn connect(raw_url: &str, token: &str) -> Result<Account, GitError> {
         kind: ForgeKind::Gitlab,
         url,
         host,
+        id: user.id,
         name: if user.name.is_empty() {
             user.username.clone()
         } else {
@@ -222,39 +258,6 @@ pub fn connect(raw_url: &str, token: &str) -> Result<Account, GitError> {
     Ok(account)
 }
 
-/// A person on GitLab, as shown in lists.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Person {
-    pub name: String,
-    pub username: String,
-}
-
-/// A merge request in the Reviews list.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MergeRequest {
-    pub project_id: u64,
-    /// `group/project`.
-    pub project_path: String,
-    pub iid: u64,
-    pub title: String,
-    pub web_url: String,
-    pub author: Person,
-    pub source_branch: String,
-    pub target_branch: String,
-    pub draft: bool,
-    /// ISO 8601 times as GitLab sends them.
-    pub created_at: String,
-    pub updated_at: String,
-    pub comments: u64,
-    /// Latest pipeline status (`success`, `failed`, `running`, ...), when known.
-    pub pipeline: Option<String>,
-    /// Whether you already approved it; `None` when GitLab did not say.
-    pub approved_by_you: Option<bool>,
-    pub has_conflicts: bool,
-}
-
 #[derive(Deserialize)]
 struct ApiMergeRequest {
     project_id: u64,
@@ -262,6 +265,8 @@ struct ApiMergeRequest {
     title: String,
     web_url: String,
     author: ApiPerson,
+    #[serde(default)]
+    reviewers: Vec<ApiPerson>,
     source_branch: String,
     target_branch: String,
     #[serde(default)]
@@ -280,6 +285,8 @@ struct ApiMergeRequest {
 
 #[derive(Deserialize)]
 struct ApiPerson {
+    #[serde(default)]
+    id: u64,
     username: String,
     #[serde(default)]
     name: String,
@@ -326,34 +333,73 @@ pub fn encode_path(path: &str) -> String {
     out
 }
 
-/// Open merge requests where the account is a reviewer: in one project (`group/project`)
-/// or, with `None`, in every project the account can see. Newest activity first.
-pub fn review_requests(
+/// Open merge requests in one project (`group/project`) or, with `None`, in every project
+/// the account can see, filtered on the account's role. Newest activity first.
+pub fn requests(
     account: &Account,
     project: Option<&str>,
+    filter: RequestFilter,
 ) -> Result<Vec<MergeRequest>, GitError> {
     let token = account.token()?;
-    let user = encode_path(&account.username);
-    let query = format!(
-        "state=opened&reviewer_username={user}&order_by=updated_at&sort=desc&per_page={MAX_REVIEWS}"
-    );
+    let me = |p: &ApiPerson| {
+        (account.id != 0 && p.id == account.id)
+            || p.username.eq_ignore_ascii_case(&account.username)
+    };
+    // For one project Branchline asks for every open merge request and picks yours itself,
+    // by user id: that does not depend on GitLab's filters, and shows the same list the
+    // project's page does. Across all projects that would be far too much, so there GitLab
+    // filters on your user name.
     let (path, what) = match project {
         Some(p) => (
-            format!("/projects/{}/merge_requests?{query}", encode_path(p)),
+            format!(
+                "/projects/{}/merge_requests?state=opened&order_by=updated_at&sort=desc&per_page={PROJECT_PAGE}",
+                encode_path(p)
+            ),
             format!("the project {p}"),
         ),
-        None => (
-            format!("/merge_requests?scope=all&{query}"),
-            "your merge requests".to_string(),
-        ),
+        None => {
+            let user = encode_path(&account.username);
+            let who = match filter {
+                RequestFilter::ReviewRequested => format!("reviewer_username={user}"),
+                RequestFilter::CreatedByYou => format!("author_username={user}"),
+                RequestFilter::AllOpen => {
+                    return Err(forge(
+                        "Choose one project to see all of its open merge requests.",
+                    ))
+                }
+            };
+            (
+                format!(
+                    "/merge_requests?scope=all&state=opened&{who}&order_by=updated_at&sort=desc&per_page={MAX_REVIEWS}"
+                ),
+                "your merge requests".to_string(),
+            )
+        }
     };
     let res = get(&account.url, &token, &path)?;
     if res.status != 200 {
         return Err(status_error(&res, &what));
     }
     let list: Vec<ApiMergeRequest> = json(&res)?;
+    let person = |p: ApiPerson| Person {
+        name: if p.name.is_empty() {
+            p.username.clone()
+        } else {
+            p.name
+        },
+        username: p.username,
+    };
     let mut items: Vec<MergeRequest> = list
         .into_iter()
+        // GitLab already filtered the list for all projects.
+        .filter(|m| {
+            project.is_none()
+                || match filter {
+                    RequestFilter::ReviewRequested => m.reviewers.iter().any(me),
+                    RequestFilter::CreatedByYou => me(&m.author),
+                    RequestFilter::AllOpen => true,
+                }
+        })
         .take(MAX_REVIEWS)
         .map(|m| {
             let project_path = m
@@ -369,14 +415,8 @@ pub fn review_requests(
                 iid: m.iid,
                 title: m.title,
                 web_url: m.web_url,
-                author: Person {
-                    name: if m.author.name.is_empty() {
-                        m.author.username.clone()
-                    } else {
-                        m.author.name
-                    },
-                    username: m.author.username,
-                },
+                author: person(m.author),
+                reviewers: m.reviewers.into_iter().map(person).collect(),
                 source_branch: m.source_branch,
                 target_branch: m.target_branch,
                 draft: m.draft || m.work_in_progress,
@@ -397,14 +437,14 @@ pub fn review_requests(
                 let token = &token;
                 s.spawn(move || {
                     let base = format!("/projects/{}/merge_requests/{}", mr.project_id, mr.iid);
-                    if let Ok(r) = get(&account.url, token, &base) {
+                    if let Ok(r) = get_routine(&account.url, token, &base) {
                         if r.status == 200 {
                             if let Ok(d) = json::<Details>(&r) {
                                 mr.pipeline = d.head_pipeline.map(|p| p.status);
                             }
                         }
                     }
-                    if let Ok(r) = get(&account.url, token, &format!("{base}/approvals")) {
+                    if let Ok(r) = get_routine(&account.url, token, &format!("{base}/approvals")) {
                         if r.status == 200 {
                             if let Ok(a) = json::<Approvals>(&r) {
                                 mr.approved_by_you = Some(

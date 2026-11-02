@@ -12,7 +12,7 @@ Everything Branchline can do, and how. For a quick tour with screenshots, see th
 - [Stashes, tags and worktrees](#stashes-tags-and-worktrees)
 - [Merge, rebase, cherry-pick and revert](#merge-rebase-cherry-pick-and-revert)
 - [Conflicts and the merge editor](#conflicts-and-the-merge-editor)
-- [Merge requests to review (GitLab)](#merge-requests-to-review-gitlab)
+- [Merge requests (GitLab)](#merge-requests-gitlab)
 - [AI commit messages](#ai-commit-messages)
 - [Git console and hooks](#git-console-and-hooks)
 - [Settings](#settings)
@@ -103,7 +103,9 @@ Updates are signed with Branchline's own update key, so only genuine releases ar
   and delete them. Remote branches check out as tracking branches; unmerged branches need a
   second confirmation before deletion; switching never overwrites uncommitted work.
 - Sort by name or by last commit (remembered); the current branch stays on top.
-- Quick branch switcher in the title bar, and every branch in the command palette.
+- Quick branch switcher in the title bar: your most recent local branches, and below them
+  the newest remote branches that have no local branch yet. Choosing one of those checks it
+  out as a tracking branch. Every branch is also in the command palette.
 - Drag a branch (in Branches, or its label in History) onto another branch or a commit to merge
   or rebase; a menu offers what is possible from there.
 
@@ -171,23 +173,33 @@ Updates are signed with Branchline's own update key, so only genuine releases ar
   editor opened it. Binary files, symbolic links and files deleted on one side get whole-file
   choices (keep one version or delete the file).
 
-## Merge requests to review (GitLab)
+## Merge requests (GitLab)
 
-- Connect your GitLab account in Settings > Accounts: the address (GitLab.com or your own
-  server) and a personal access token. "Create a token on GitLab" opens the right page with
+- Connect your GitLab account in Settings > Accounts: choose the service (GitLab today;
+  GitHub and Bitbucket are planned), the address (GitLab.com or your own server) and a
+  personal access token. Make the token under your own profile, so it acts as you. "Create a token on GitLab" opens the right page with
   the name and the `api` scope filled in; `read_api` is enough to only read. Branchline checks
   the token before it keeps it, and says what it may do.
 - The token is kept in your system's password store (macOS Keychain, Windows Credential
   Manager, or the Secret Service on Linux, such as GNOME Keyring or KWallet), never in a
   settings file. Disconnect deletes it there; revoke it on GitLab to make it stop working.
 - When the open repository has a remote on a connected server, the sidebar shows **Reviews**
-  (`Ctrl+7` / `⌘7`) with the number of open merge requests where you are a reviewer. In a
-  fork, the `upstream` remote's project is used, otherwise `origin`.
+  (`Ctrl+7` / `⌘7`) with the number of open merge requests where you are a reviewer, your own
+  included when you set yourself as reviewer. In a fork, the `upstream` remote's project is
+  used, otherwise `origin`.
+- Three lists: **To review** (you are a reviewer), **Created by you** and **All open**. For
+  the repository's project, Branchline reads all of its open merge requests and picks the
+  ones for you itself, by your user id. **All projects** on the server asks GitLab to filter
+  instead; All open is for one project only.
 - Each merge request shows its title, number, author, source and target branch, when it was
-  last updated, and whether it is a draft, has conflicts, has comments, what its pipeline
-  did, and whether you already approved it. Show only the repository's project, or all
-  projects on that server. The list loads when the repository opens and with Refresh; it is
-  not polled. Up to 50 merge requests are listed, newest activity first.
+  last updated, its reviewers, and whether it is a draft, has conflicts, has comments, what
+  its pipeline did, and whether you already approved it. The lists load when the repository
+  opens, with Refresh, and when the window gets focus (at most every 30 seconds, with
+  Settings > General > Refresh when Branchline gets focus); they are not polled. Up to 50
+  merge requests are listed, newest activity first.
+- Every request Branchline sends to GitLab is listed in the Git console (`Ctrl+J` / `⌘J`):
+  the address, the HTTP status, how long it took and the response, never the token. The
+  details fetched per row (pipeline, approvals) count as routine reads.
 - Open (or double-click) opens a merge request on GitLab. Reviewing it in Branchline, with an
   optional AI review game, is planned; see [the plan](docs/plans/merge-request-reviews.md).
 
@@ -210,6 +222,7 @@ Updates are signed with Branchline's own update key, so only genuine releases ar
 - Routine reads such as `status` are hidden unless you ask for them; failures always show.
   Filter on failed commands only, or search the commands and their output.
 - A failed commit or push offers "Show Git output", which opens the console on that command.
+- Requests to GitLab show up there too (see [Merge requests](#merge-requests-gitlab)).
   Copy a command to run it yourself in a terminal.
 - Git hooks such as Husky and lint-staged find the same tools as your terminal. Apps started
   from the Dock or Finder get a minimal PATH, so at startup Branchline asks your login shell
@@ -228,7 +241,7 @@ Open Settings with `Ctrl+,` / `⌘,` or the gear in the title bar. Changes are s
 - **Identity and signing:** name, email and commit signing (GPG, SSH or X.509), for all
   repositories (`~/.gitconfig`) or only the open one.
 - **Accounts:** GitLab accounts for the Reviews view; see
-  [Merge requests to review](#merge-requests-to-review-gitlab).
+  [Merge requests](#merge-requests-gitlab).
 - **Editor and diff:** the editor and terminal that "Open in editor", "Open in terminal" and
   "Show in Finder/Explorer" use (repository menu, and a button on each changed file), diff
   layout, syntax highlighting, context lines, ignoring whitespace, tab width and code font size.

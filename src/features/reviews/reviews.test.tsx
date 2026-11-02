@@ -12,6 +12,7 @@ const ACCOUNT: Account = {
   kind: "gitlab",
   url: "https://gitlab.com",
   host: "gitlab.com",
+  id: 7,
   username: "ada",
   name: "Ada Lovelace",
   access: "write",
@@ -24,6 +25,7 @@ const MR = (iid: number, extra: Partial<MergeRequest> = {}): MergeRequest => ({
   title: `Change ${iid}`,
   webUrl: `https://gitlab.com/acme/demo/-/merge_requests/${iid}`,
   author: { name: "Tom Jansen", username: "tom" },
+  reviewers: [{ name: "Ada Lovelace", username: "ada" }],
   sourceBranch: "feature/x",
   targetBranch: "main",
   draft: false,
@@ -64,8 +66,11 @@ async function start(
         project: "acme/demo",
         account: state.accounts[0] ?? null,
       };
-    if (cmd === "review_requests") return LIST(args.allProjects as boolean);
-    if (cmd === "connect_gitlab") {
+    if (cmd === "review_requests")
+      return args.filter === "createdByYou"
+        ? { ...LIST(false), items: [MR(5, { author: { name: "Ada Lovelace", username: "ada" } })] }
+        : LIST(args.allProjects as boolean);
+    if (cmd === "connect_account") {
       state.accounts = [ACCOUNT];
       return ACCOUNT;
     }
@@ -111,14 +116,16 @@ describe("reviews", () => {
     expect(token).toHaveAttribute("type", "password");
     await user.click(screen.getByRole("button", { name: /Create a token on GitLab/ }));
     await waitFor(() =>
-      expect(calls.find((c) => c.cmd === "open_gitlab_token_page")?.args.url).toBe(
-        "https://gitlab.com",
-      ),
+      expect(calls.find((c) => c.cmd === "open_token_page")?.args).toEqual({
+        kind: "gitlab",
+        url: "https://gitlab.com",
+      }),
     );
     await user.type(token, "glpat-secret");
     await user.click(screen.getByRole("button", { name: "Connect" }));
     await waitFor(() =>
-      expect(calls.find((c) => c.cmd === "connect_gitlab")?.args).toEqual({
+      expect(calls.find((c) => c.cmd === "connect_account")?.args).toEqual({
+        kind: "gitlab",
         url: "https://gitlab.com",
         token: "glpat-secret",
       }),
@@ -148,7 +155,8 @@ describe("reviews", () => {
     expect(rows[0]).toHaveTextContent("Comments: 3");
     expect(rows[1]).toHaveTextContent("Draft");
     expect(rows[1]).toHaveTextContent("Approved by you");
-    expect(screen.getByText("2 merge requests waiting for you")).toBeInTheDocument();
+    expect(screen.getByText("2 merge requests waiting for your review")).toBeInTheDocument();
+    expect(rows[0]).toHaveTextContent("Reviewers: Ada Lovelace");
 
     await user.click(within(rows[0]!).getByRole("button", { name: "Open" }));
     await waitFor(() =>
@@ -160,6 +168,35 @@ describe("reviews", () => {
       expect(calls.filter((c) => c.cmd === "review_requests").at(-1)?.args.allProjects).toBe(true),
     );
     expect(await screen.findByText("other/lib!9")).toBeInTheDocument();
+  });
+
+  it("switches between to review, created by you and all open", async () => {
+    const { user, calls } = await start(true);
+    const nav = await screen.findByRole("button", { name: /^Reviews/ });
+    await user.click(nav);
+    await screen.findByRole("list", { name: "Merge requests to review" });
+    const which = screen.getByRole("group", { name: "Which merge requests" });
+
+    await user.click(within(which).getByRole("button", { name: "Created by you" }));
+    expect(within(which).getByRole("button", { name: "Created by you" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    const mine = await screen.findByRole("list", { name: "Your merge requests" });
+    expect(mine).toHaveTextContent("Change 5");
+    expect(screen.getByText("1 open merge request created by you")).toBeInTheDocument();
+    // The sidebar keeps counting what waits for your review.
+    expect(nav).toHaveTextContent("2");
+
+    await user.click(within(which).getByRole("button", { name: "All open" }));
+    expect(screen.getByLabelText("Show merge requests from")).toBeDisabled();
+    await waitFor(() =>
+      expect(calls.filter((c) => c.cmd === "review_requests").at(-1)?.args).toEqual({
+        repo: REPO.path,
+        allProjects: false,
+        filter: "allOpen",
+      }),
+    );
   });
 
   it("explains errors and shows when nothing waits", async () => {
@@ -177,6 +214,10 @@ describe("reviews", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("GitLab did not accept the token.");
     await user.click(screen.getByRole("button", { name: "Refresh reviews" }));
     expect(await screen.findByRole("heading", { name: "Nothing to review" })).toBeInTheDocument();
+    // Says whom and where it asked, so a wrong account or project stands out.
+    expect(
+      screen.getByText("No open merge requests in acme/demo have @ada as a reviewer."),
+    ).toBeInTheDocument();
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
@@ -191,7 +232,10 @@ describe("reviews", () => {
     expect(ask).toHaveTextContent("stays valid on GitLab until you revoke it");
     await user.click(within(ask).getByRole("button", { name: "Disconnect" }));
     await waitFor(() =>
-      expect(calls.find((c) => c.cmd === "disconnect_account")?.args.url).toBe(ACCOUNT.url),
+      expect(calls.find((c) => c.cmd === "disconnect_account")?.args).toEqual({
+        kind: "gitlab",
+        url: ACCOUNT.url,
+      }),
     );
     await user.keyboard("{Escape}");
     await waitFor(() => expect(screen.queryByRole("button", { name: /^Reviews/ })).toBeNull());

@@ -13,13 +13,25 @@ description on GitLab.
   the repository's project or all projects, with their pipeline, comments, drafts, conflicts
   and whether you already approved. Connect your GitLab account (GitLab.com or your own
   server) with a personal access token in the new Settings > Accounts; the token is kept in
-  the system's password store.
+  the system's password store. Three lists: to review (your own merge requests too, when you
+  are their reviewer), created by you, and all open in the project, each with its reviewers.
+  The lists refresh when Branchline gets focus.
+- The Git console also lists every request Branchline sends to GitLab, with its status and
+  response (never the token).
+- The branch menu in the title bar also lists remote branches without a local branch, to
+  check one out in one click.
 
 ### Changed
 
 - Remotes moved into the Branches view: each remote's heading shows its address and has the
   remote's actions (fetch, edit, copy address, remove), and "Add remote" sits on the first
   heading. The separate Remotes view and its shortcut (`Ctrl+7` / `⌘7`) are gone.
+
+### Fixed
+
+- Stopping a fetch, pull, push or clone right after starting it could be lost, so the
+  operation ran on until it finished or timed out. An early stop is now kept until the
+  operation starts.
 
 ## [0.2.1] - 2026-10-27
 

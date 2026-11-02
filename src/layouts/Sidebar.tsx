@@ -87,8 +87,7 @@ export function Sidebar({
   const { tags } = useTagActions();
   const { worktrees } = useWorktreeActions();
   const reviews = useReviews();
-  const reviewCount =
-    reviews.list.status === "ready" ? reviews.list.list.items.length || undefined : undefined;
+  const reviewCount = reviews.toReview || undefined;
 
   return (
     <nav className="bl-sidebar-frame" aria-label="Repository navigation">
