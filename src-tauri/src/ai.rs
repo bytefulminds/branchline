@@ -102,7 +102,9 @@ pub fn is_loopback(url: &str) -> bool {
             .is_ok_and(|ip| ip.is_loopback())
 }
 
-fn agent(url: &str, per_read: Duration, total: Duration) -> ureq::Agent {
+/// HTTP client without redirects, with time limits, and without system proxies for
+/// servers on this computer. Shared with the GitLab client.
+pub(crate) fn agent(url: &str, per_read: Duration, total: Duration) -> ureq::Agent {
     let mut config = ureq::Agent::config_builder()
         .http_status_as_error(false)
         .max_redirects(0)

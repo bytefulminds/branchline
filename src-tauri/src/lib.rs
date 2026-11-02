@@ -8,9 +8,11 @@
 pub mod ai;
 pub mod commands;
 pub mod error;
+pub mod forge;
 pub mod git;
 pub mod measure;
 pub mod open;
+pub mod secrets;
 pub mod settings;
 pub mod shell_env;
 pub mod watcher;
@@ -29,6 +31,7 @@ pub fn run() {
             shell_env::init_in_background();
             if let Ok(dir) = app.path().app_config_dir() {
                 settings::init(dir.join("settings.json"));
+                forge::accounts::init(dir.join("accounts.json"));
             }
             window::create_main(app)?;
             measure::mark_window_created();
@@ -65,6 +68,13 @@ pub fn run() {
             commands::pull_branch,
             commands::push_branch,
             commands::cancel_remote_operation,
+            commands::forge_accounts,
+            commands::connect_gitlab,
+            commands::disconnect_account,
+            commands::review_source,
+            commands::review_requests,
+            commands::open_forge_page,
+            commands::open_gitlab_token_page,
             commands::ai_server_info,
             commands::git_command_log,
             commands::clear_git_command_log,

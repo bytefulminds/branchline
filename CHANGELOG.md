@@ -7,6 +7,14 @@ description on GitLab.
 
 ## [Unreleased]
 
+### Added
+
+- Reviews (`Ctrl+7` / `⌘7`): the open merge requests on GitLab where you are a reviewer, for
+  the repository's project or all projects, with their pipeline, comments, drafts, conflicts
+  and whether you already approved. Connect your GitLab account (GitLab.com or your own
+  server) with a personal access token in the new Settings > Accounts; the token is kept in
+  the system's password store.
+
 ### Changed
 
 - Remotes moved into the Branches view: each remote's heading shows its address and has the

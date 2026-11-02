@@ -12,6 +12,7 @@ Everything Branchline can do, and how. For a quick tour with screenshots, see th
 - [Stashes, tags and worktrees](#stashes-tags-and-worktrees)
 - [Merge, rebase, cherry-pick and revert](#merge-rebase-cherry-pick-and-revert)
 - [Conflicts and the merge editor](#conflicts-and-the-merge-editor)
+- [Merge requests to review (GitLab)](#merge-requests-to-review-gitlab)
 - [AI commit messages](#ai-commit-messages)
 - [Git console and hooks](#git-console-and-hooks)
 - [Settings](#settings)
@@ -170,6 +171,26 @@ Updates are signed with Branchline's own update key, so only genuine releases ar
   editor opened it. Binary files, symbolic links and files deleted on one side get whole-file
   choices (keep one version or delete the file).
 
+## Merge requests to review (GitLab)
+
+- Connect your GitLab account in Settings > Accounts: the address (GitLab.com or your own
+  server) and a personal access token. "Create a token on GitLab" opens the right page with
+  the name and the `api` scope filled in; `read_api` is enough to only read. Branchline checks
+  the token before it keeps it, and says what it may do.
+- The token is kept in your system's password store (macOS Keychain, Windows Credential
+  Manager, or the Secret Service on Linux, such as GNOME Keyring or KWallet), never in a
+  settings file. Disconnect deletes it there; revoke it on GitLab to make it stop working.
+- When the open repository has a remote on a connected server, the sidebar shows **Reviews**
+  (`Ctrl+7` / `⌘7`) with the number of open merge requests where you are a reviewer. In a
+  fork, the `upstream` remote's project is used, otherwise `origin`.
+- Each merge request shows its title, number, author, source and target branch, when it was
+  last updated, and whether it is a draft, has conflicts, has comments, what its pipeline
+  did, and whether you already approved it. Show only the repository's project, or all
+  projects on that server. The list loads when the repository opens and with Refresh; it is
+  not polled. Up to 50 merge requests are listed, newest activity first.
+- Open (or double-click) opens a merge request on GitLab. Reviewing it in Branchline, with an
+  optional AI review game, is planned; see [the plan](docs/plans/merge-request-reviews.md).
+
 ## AI commit messages
 
 - Connect your own [Ollama](https://ollama.com) server (local or on your network) in
@@ -206,6 +227,8 @@ Open Settings with `Ctrl+,` / `⌘,` or the gear in the title bar. Changes are s
   branches on fetch, push annotated tags with commits.
 - **Identity and signing:** name, email and commit signing (GPG, SSH or X.509), for all
   repositories (`~/.gitconfig`) or only the open one.
+- **Accounts:** GitLab accounts for the Reviews view; see
+  [Merge requests to review](#merge-requests-to-review-gitlab).
 - **Editor and diff:** the editor and terminal that "Open in editor", "Open in terminal" and
   "Show in Finder/Explorer" use (repository menu, and a button on each changed file), diff
   layout, syntax highlighting, context lines, ignoring whitespace, tab width and code font size.
@@ -228,6 +251,7 @@ keyboard shortcut in the app.
 | `Ctrl+O` | `⌘O` | Open a repository |
 | `Ctrl+R` or `F5` | `⌘R` | Refresh |
 | `Ctrl+1` to `Ctrl+6` | `⌘1` to `⌘6` | Changes, History, Branches, Stashes, Tags, Worktrees |
+| `Ctrl+7` | `⌘7` | Reviews (with a GitLab account connected) |
 | `Ctrl+F` | `⌘F` | Search commits in History |
 | `Ctrl+Enter` | `⌘↵` | Commit |
 | `Ctrl+J` | `⌘J` | Git console |
@@ -268,6 +292,11 @@ select lines), dialogs and panels. See [docs/accessibility.md](docs/accessibilit
   changed files, the branch name and recent commit subjects. Unstaged files are never sent.
   The address may not contain credentials, redirects are not followed, and system proxies
   are skipped for `localhost`. Settings warn when the server is not on this computer.
+- GitLab tokens are stored in the system's password store and never reach the app's web
+  view; Branchline sends them only to the server they were made for, in a request header
+  (never in an address). Addresses must use `https://` (plain `http://` only for a server on
+  this computer), may not contain credentials, and redirects are not followed. Merge request
+  pages open in the browser only when they belong to a connected server.
 - The webview has a strict CSP and only the Tauri permissions it needs (window controls, the
   folder picker, the app version, installing updates and restarting). Web links open in the
   browser only for Branchline's own GitLab pages, ollama.com and package pages on npmjs.com
@@ -321,6 +350,9 @@ by page. Method and all numbers per platform: [docs/performance.md](docs/perform
 - The changed-file list is capped at 10,000 entries.
 - Bare repositories are not supported.
 - Paths that are not valid UTF-8 are shown with replacement characters.
+- Reviews work with GitLab only for now (GitHub and Bitbucket are planned) and list at most
+  50 merge requests. On Linux, keeping a token needs a running Secret Service (GNOME Keyring,
+  KWallet); without one, Settings says so.
 - Runs on macOS and Linux; Windows has not been run yet. Automated tests and measurements so far
   ran on Linux.
 
@@ -393,6 +425,7 @@ src/                     React + TypeScript frontend
   features/settings/     Settings screen and provider
   features/about/        About section and the open-source package list
   features/console/      Git console
+  features/reviews/      Reviews view and the accounts and review state behind it
   features/commands/     Command palette, keyboard shortcut map
   features/updates/      Update checks
   features/measure/      Startup and interaction timing (--measure-startup)
@@ -416,6 +449,8 @@ src-tauri/               Rust backend
   src/git/create.rs      Clone and init
   src/git/identity.rs    user.name, user.email and commit signing (global or per repository)
   src/settings.rs        Settings file (JSON in the app's configuration folder)
+  src/secrets.rs         Tokens in the system's password store
+  src/forge/             GitLab accounts, remote parsing and the merge requests to review
   src/shell_env.rs       PATH from the login shell, for hooks
   src/open.rs            Open in editor or terminal, show in the file manager
   src/ai.rs              Commit message suggestions from an Ollama server

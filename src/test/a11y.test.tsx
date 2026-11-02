@@ -11,11 +11,20 @@ import { describe, it } from "vitest";
 import App from "../App";
 import { audit } from "./axe";
 import { installTauriTestEnvironment, makeHistory, openButton, REPO, setup } from "./harness";
+import type { Account } from "../types/forge";
 import type { RepositoryInfo } from "../types/git";
 
 installTauriTestEnvironment();
 
 const COMMITS = makeHistory(30);
+const ACCOUNT: Account = {
+  kind: "gitlab",
+  url: "https://gitlab.com",
+  host: "gitlab.com",
+  username: "ada",
+  name: "Ada Lovelace",
+  access: "write",
+};
 const REPO_AT_HEAD: RepositoryInfo = {
   ...REPO,
   head: { kind: "branch", name: "main", oid: COMMITS[0]!.oid },
@@ -92,6 +101,34 @@ async function start() {
     if (cmd === "list_tags") return [];
     if (cmd === "list_remotes")
       return [{ name: "origin", url: "https://example.com/repo.git", pushUrl: null }];
+    if (cmd === "forge_accounts") return [ACCOUNT];
+    if (cmd === "review_source")
+      return { remote: "origin", host: "gitlab.com", project: "acme/demo", account: ACCOUNT };
+    if (cmd === "review_requests")
+      return {
+        account: ACCOUNT,
+        project: "acme/demo",
+        truncated: false,
+        items: [
+          {
+            projectId: 1,
+            projectPath: "acme/demo",
+            iid: 4,
+            title: "Add the forecast cache",
+            webUrl: "https://gitlab.com/acme/demo/-/merge_requests/4",
+            author: { name: "Tom Jansen", username: "tom" },
+            sourceBranch: "feature/cache",
+            targetBranch: "main",
+            draft: true,
+            createdAt: "2026-10-30T09:00:00Z",
+            updatedAt: "2026-11-01T09:00:00Z",
+            comments: 2,
+            pipeline: "success",
+            approvedByYou: true,
+            hasConflicts: true,
+          },
+        ],
+      };
     if (cmd === "get_identity") return { global: identity, repository: null };
     if (cmd === "plugin:app|version") return "0.1.0";
     if (cmd === "git_command_log")
@@ -147,6 +184,7 @@ describe("accessibility (axe)", () => {
       ["4", "Stashes"],
       ["5", "Tags"],
       ["6", "Worktrees"],
+      ["7", "Reviews"],
     ];
     for (const [key, name] of views) {
       await user.keyboard(`{Control>}${key}{/Control}`);
@@ -195,6 +233,7 @@ describe("accessibility (axe)", () => {
       "General",
       "Git",
       "Identity & signing",
+      "Accounts",
       "Editor & diff",
       "Confirmations",
       "AI commit messages",

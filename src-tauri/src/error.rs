@@ -129,6 +129,11 @@ pub enum GitError {
     #[error("{0}")]
     Ai(String),
 
+    /// GitLab (or another hosting service) failed, refused the token or is not set up; the
+    /// message says why and what to do.
+    #[error("{0}")]
+    Forge(String),
+
     #[error("Unexpected Git output: {0}")]
     Parse(String),
 
@@ -178,6 +183,7 @@ impl GitError {
             GitError::WorktreeDirty { .. } => "worktreeDirty",
             GitError::InvalidRemote(_) => "invalidRemote",
             GitError::Ai(_) => "ai",
+            GitError::Forge(_) => "forge",
             GitError::Parse(_) => "parse",
             GitError::Internal(_) => "internal",
         }

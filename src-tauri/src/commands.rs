@@ -699,6 +699,70 @@ pub async fn suggest_commit_message(
     .await
 }
 
+/// Connected accounts on hosting services (without tokens).
+#[tauri::command]
+pub fn forge_accounts() -> Vec<crate::forge::accounts::Account> {
+    crate::forge::accounts::list()
+}
+
+/// Check a GitLab token and remember the account; the token goes to the system's
+/// credential store and never comes back to the frontend.
+#[tauri::command]
+pub async fn connect_gitlab(
+    url: String,
+    token: String,
+) -> Result<crate::forge::accounts::Account, GitError> {
+    blocking(move || crate::forge::gitlab::connect(&url, &token)).await
+}
+
+/// Forget an account and delete its token.
+#[tauri::command]
+pub async fn disconnect_account(url: String) -> Result<(), GitError> {
+    blocking(move || {
+        crate::forge::accounts::remove(crate::forge::accounts::ForgeKind::Gitlab, &url)
+    })
+    .await
+}
+
+/// The GitLab project the repository belongs to, and whether its account is connected.
+#[tauri::command]
+pub async fn review_source(repo: String) -> Result<Option<crate::forge::ReviewSource>, GitError> {
+    blocking(move || crate::forge::review_source(&repo)).await
+}
+
+/// Merge requests waiting for your review, in this repository's project or everywhere.
+#[tauri::command]
+pub async fn review_requests(
+    repo: String,
+    all_projects: bool,
+) -> Result<crate::forge::ReviewList, GitError> {
+    blocking(move || crate::forge::review_requests(&repo, all_projects)).await
+}
+
+/// Open a page of a connected account's server (a merge request) in the browser.
+#[tauri::command]
+pub fn open_forge_page(app: tauri::AppHandle, url: String) -> Result<(), GitError> {
+    use tauri_plugin_opener::OpenerExt;
+    if !crate::forge::is_account_page(&url) {
+        return Err(GitError::Forge(
+            "Branchline only opens pages of the servers you connected.".into(),
+        ));
+    }
+    app.opener()
+        .open_url(url, None::<&str>)
+        .map_err(|e| GitError::Internal(format!("cannot open the browser: {e}")))
+}
+
+/// Open the page where GitLab makes personal access tokens, with name and scope filled in.
+#[tauri::command]
+pub fn open_gitlab_token_page(app: tauri::AppHandle, url: String) -> Result<(), GitError> {
+    use tauri_plugin_opener::OpenerExt;
+    let page = crate::forge::gitlab::token_page(&url)?;
+    app.opener()
+        .open_url(page, None::<&str>)
+        .map_err(|e| GitError::Internal(format!("cannot open the browser: {e}")))
+}
+
 /// Cancel a running fetch, pull, push, clone or suggestion. Unknown ids are ignored.
 #[tauri::command]
 pub fn cancel_remote_operation(op_id: String) {

@@ -1,6 +1,7 @@
 # Plan: review merge requests in Branchline, with an AI as a game master
 
-Status: planned. Work happens on the branch `feature/review-with-ollama`.
+Status: phase 1 (GitLab account and Reviews view) is built; the rest is planned. Work
+happens on the branch `feature/review-with-ollama`.
 
 ## Goal
 
