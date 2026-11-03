@@ -210,6 +210,10 @@ fn suggests_a_message_from_the_staged_changes_only() {
     let body: serde_json::Value = serde_json::from_str(&seen[0].1).unwrap();
     assert_eq!(body["model"], "llama3.2:latest");
     assert_eq!(body["stream"], true);
+    // Thinking models answer directly, with room for the whole prompt.
+    assert_eq!(body["think"], false);
+    assert!(body["options"]["num_ctx"].as_u64().unwrap() >= 8192);
+    assert!(body["options"]["num_predict"].as_u64().is_some());
     let user = body["messages"][1]["content"].as_str().unwrap();
     assert!(user.contains("+hello there"), "the staged diff is sent");
     assert!(user.contains("Branch: main"));
@@ -525,4 +529,70 @@ fn cloud_providers_need_a_key_and_use_their_own_address() {
     assert!(save_key(AiProvider::Ollama, "x").is_err());
     save_key(AiProvider::Openai, "").unwrap();
     save_key(AiProvider::Anthropic, "").unwrap();
+}
+
+#[test]
+fn stops_a_model_that_only_keeps_thinking() {
+    let t = repo();
+    let (url, _) = fake_ollama(|_| {
+        let line = serde_json::json!({
+            "message": { "role": "assistant", "content": "", "thinking": "x".repeat(1000) },
+            "done": false
+        });
+        (200, format!("{line}\n").repeat(60))
+    });
+    let mut shown = 0;
+    let err =
+        suggest_commit_message(&path(&t), &cfg(&url), "op-ai-8", &mut |_| shown += 1).unwrap_err();
+    assert!(err.to_string().contains("kept thinking"), "{err}");
+    assert_eq!(shown, 0, "reasoning is never shown as the message");
+}
+
+#[test]
+fn retries_without_think_for_models_that_cannot_think() {
+    let t = repo();
+    // A server that refuses `think` the first time, like some Ollama versions do.
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let url = format!("http://{}", listener.local_addr().unwrap());
+    let bodies: Arc<Mutex<Vec<String>>> = Arc::default();
+    let log = bodies.clone();
+    std::thread::spawn(move || {
+        for stream in listener.incoming() {
+            let Ok(mut stream) = stream else { break };
+            let mut reader = BufReader::new(stream.try_clone().unwrap());
+            let mut line = String::new();
+            reader.read_line(&mut line).unwrap();
+            let mut length = 0;
+            loop {
+                let mut h = String::new();
+                reader.read_line(&mut h).unwrap();
+                if h.trim().is_empty() {
+                    break;
+                }
+                if let Some(v) = h.to_ascii_lowercase().strip_prefix("content-length:") {
+                    length = v.trim().parse().unwrap();
+                }
+            }
+            let mut body = vec![0; length];
+            reader.read_exact(&mut body).unwrap();
+            let body = String::from_utf8_lossy(&body).to_string();
+            let (status, answer) = if body.contains("\"think\"") {
+                (
+                    400,
+                    r#"{"error":"\"llama3.2:latest\" does not support thinking"}"#.to_string(),
+                )
+            } else {
+                (200, ndjson(&["fix: works anyway"]))
+            };
+            log.lock().unwrap().push(body);
+            let _ = write!(
+                stream,
+                "HTTP/1.1 {status} X\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{answer}",
+                answer.len()
+            );
+        }
+    });
+    let message = suggest_commit_message(&path(&t), &cfg(&url), "op-ai-9", &mut |_| {}).unwrap();
+    assert_eq!(message, "fix: works anyway");
+    assert_eq!(bodies.lock().unwrap().len(), 2);
 }

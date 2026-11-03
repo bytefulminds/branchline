@@ -232,6 +232,9 @@ Updates are signed with Branchline's own update key, so only genuine releases ar
 - With AI and "Suggest commit messages" on, "Suggest message" in the commit box writes a summary and
   description for the staged changes. The text streams in, `Esc` or Stop cancels it, and a
   message you had typed can be restored with Undo.
+- Thinking models (Qwen 3, DeepSeek R1, gpt-oss) are asked to answer without a thinking
+  step in Ollama, which is much faster for commit messages. Branchline also sets Ollama's
+  context size so the whole shortened diff fits.
 - Only the staged diff (shortened), the list of changed files, the branch name and recent commit
   subjects are sent, and only when you ask. See [Privacy and security](#privacy-and-security).
 

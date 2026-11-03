@@ -41,6 +41,10 @@ description on GitLab.
 
 ### Fixed
 
+- Commit message suggestions with thinking models in Ollama (Qwen 3, DeepSeek R1 and others)
+  could take minutes, show nothing and end with a time-out. Branchline now asks these models
+  to answer without thinking first, gives Ollama enough context for the whole diff, and stops
+  a model that keeps reasoning without answering.
 - Stopping a fetch, pull, push or clone right after starting it could be lost, so the
   operation ran on until it finished or timed out. An early stop is now kept until the
   operation starts.

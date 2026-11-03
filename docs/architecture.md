@@ -244,7 +244,10 @@ progress (read from `rebase-merge/msgnum` and `end`).
 
 - `src/ai/provider.rs` talks to the provider chosen in Settings with `ureq`, from the
   backend, so the webview's CSP stays closed to the network:
-  - Ollama: `/api/tags`, `/api/version`, `/api/chat` (NDJSON stream).
+  - Ollama: `/api/tags`, `/api/version`, `/api/chat` (NDJSON stream), with `think: false`
+    (retried without it when a version refuses it), `num_ctx` sized to the prompt (8,192 to
+    32,768 tokens) and `num_predict` as a limit. Reasoning that a model still streams is
+    counted, never shown, and stops the request beyond 48,000 characters.
   - OpenAI-compatible servers (LM Studio, vLLM, llama.cpp, OpenRouter): `GET {base}/models`
     and `POST {base}/chat/completions` with `stream: true` (server-sent events, text in
     `choices[0].delta.content`, ending with `data: [DONE]`). Optional `Bearer` key.

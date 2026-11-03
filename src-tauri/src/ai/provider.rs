@@ -461,8 +461,26 @@ pub fn models_at(
 /// One piece of a streamed answer.
 enum Piece {
     Text(String),
+    /// Reasoning that thinking models stream before the answer (never shown).
+    Thinking(usize),
     Done,
     Skip,
+}
+
+/// Most reasoning accepted before the answer starts. A thinking model whose context is too
+/// small can otherwise keep reasoning until the request times out.
+const MAX_THINKING: usize = 48_000;
+
+/// Context window for Ollama: room for the prompt and the answer. Ollama's default (often
+/// 4,096 tokens) is smaller than a commit prompt, which cuts the diff off and can leave a
+/// model generating until the time limit.
+fn ollama_context(prompt_chars: usize, max_tokens: u32) -> u32 {
+    // About three characters per token for code, rounded up to a multiple of 2,048.
+    let wanted = (prompt_chars / 3) as u32 + max_tokens + 512;
+    wanted
+        .div_ceil(2048)
+        .saturating_mul(2048)
+        .clamp(8192, 32_768)
 }
 
 fn unreadable(provider: AiProvider) -> GitError {
@@ -483,6 +501,7 @@ fn ollama_piece(line: &str, model: &str) -> Result<Piece, GitError> {
             Some(model),
         ));
     }
+    let thinking = v["message"]["thinking"].as_str().unwrap_or_default();
     if v["done"].as_bool() == Some(true) {
         let text = v["message"]["content"].as_str().unwrap_or_default();
         return Ok(if text.is_empty() {
@@ -493,6 +512,7 @@ fn ollama_piece(line: &str, model: &str) -> Result<Piece, GitError> {
     }
     Ok(match v["message"]["content"].as_str() {
         Some(t) if !t.is_empty() => Piece::Text(t.to_string()),
+        _ if !thinking.is_empty() => Piece::Thinking(thinking.len()),
         _ => Piece::Skip,
     })
 }
@@ -507,8 +527,15 @@ fn openai_piece(provider: AiProvider, data: &str, model: &str) -> Result<Piece, 
     if !v["error"].is_null() {
         return Err(server_error(provider, 500, data, Some(model)));
     }
-    Ok(match v["choices"][0]["delta"]["content"].as_str() {
+    let delta = &v["choices"][0]["delta"];
+    // LM Studio, vLLM and OpenRouter send reasoning as `reasoning_content` or `reasoning`.
+    let reasoning = delta["reasoning_content"]
+        .as_str()
+        .or_else(|| delta["reasoning"].as_str())
+        .unwrap_or_default();
+    Ok(match delta["content"].as_str() {
         Some(t) if !t.is_empty() => Piece::Text(t.to_string()),
+        _ if !reasoning.is_empty() => Piece::Thinking(reasoning.len()),
         _ => Piece::Skip,
     })
 }
@@ -559,11 +586,18 @@ pub fn chat(
     let (path, body) = match ep.provider {
         AiProvider::Ollama => (
             format!("{base}/api/chat"),
+            // Thinking models (Qwen 3, DeepSeek R1, gpt-oss) answer right away instead of
+            // reasoning for minutes first; older Ollama versions ignore `think`.
             json!({
                 "model": model,
                 "stream": true,
+                "think": false,
                 "messages": messages,
-                "options": { "temperature": 0.2 },
+                "options": {
+                    "temperature": 0.2,
+                    "num_ctx": ollama_context(system.len() + user.len(), max_tokens),
+                    "num_predict": max_tokens,
+                },
             }),
         ),
         AiProvider::OpenaiCompatible => (
@@ -601,13 +635,27 @@ pub fn chat(
         (Duration::from_secs(180), Duration::from_secs(600))
     };
     let agent = agent(base, per_read, total);
-    let mut req = agent.post(&path);
-    for (k, v) in headers(ep.provider, ep.key.as_deref()) {
-        req = req.header(k, v);
+    let send = |body: &Value| {
+        let mut req = agent.post(&path);
+        for (k, v) in headers(ep.provider, ep.key.as_deref()) {
+            req = req.header(k, v);
+        }
+        req.send_json(body)
+            .map_err(|e| unreachable(ep.provider, base, e))
+    };
+    let mut body = body;
+    let mut res = send(&body)?;
+    if res.status().as_u16() == 400 && ep.provider == AiProvider::Ollama {
+        // Some Ollama versions refuse `think` for models without a thinking mode.
+        let answer = read_body(res, 64 * 1024);
+        if !answer.contains("does not support thinking") {
+            return Err(server_error(ep.provider, 400, &answer, Some(model)));
+        }
+        if let Some(fields) = body.as_object_mut() {
+            fields.remove("think");
+        }
+        res = send(&body)?;
     }
-    let res = req
-        .send_json(&body)
-        .map_err(|e| unreachable(ep.provider, base, e))?;
     let status = res.status().as_u16();
     if status != 200 {
         let body = read_body(res, 64 * 1024);
@@ -615,6 +663,7 @@ pub fn chat(
     }
 
     let reader = BufReader::new(res.into_body().into_reader().take(8 * 1024 * 1024));
+    let mut thought = 0usize;
     for line in reader.lines() {
         if token.is_cancelled() {
             return Err(GitError::Cancelled);
@@ -656,6 +705,15 @@ pub fn chat(
             Piece::Text(t) => {
                 if !on_text(&t) {
                     break;
+                }
+            }
+            Piece::Thinking(n) => {
+                thought += n;
+                if thought > MAX_THINKING {
+                    return Err(GitError::Ai(
+                        "The model kept thinking without writing an answer. Try again, or choose a model without a thinking mode."
+                            .into(),
+                    ));
                 }
             }
             Piece::Done => break,
@@ -760,6 +818,33 @@ mod tests {
         assert!(msg(AiProvider::Anthropic, 529, "", None).contains("busy"));
         assert!(msg(AiProvider::Openai, 404, "", Some("gpt-x")).contains("not available at openai"));
         assert!(msg(AiProvider::OpenaiCompatible, 404, "", None).contains("ends in /v1"));
+    }
+
+    #[test]
+    fn gives_ollama_room_for_the_prompt() {
+        assert_eq!(ollama_context(100, 4096), 8192);
+        // A full commit prompt (about 15,000 characters) does not fit in 8,192 with the answer.
+        assert_eq!(ollama_context(15_000, 4096), 10_240);
+        assert_eq!(ollama_context(10_000_000, 4096), 32_768);
+    }
+
+    #[test]
+    fn counts_reasoning_without_showing_it() {
+        assert!(matches!(
+            ollama_piece(
+                r#"{"message":{"role":"assistant","content":"","thinking":"Let me see"},"done":false}"#,
+                "m"
+            ),
+            Ok(Piece::Thinking(10))
+        ));
+        assert!(matches!(
+            openai_piece(
+                AiProvider::OpenaiCompatible,
+                r#"{"choices":[{"delta":{"reasoning_content":"hmm"}}]}"#,
+                "m"
+            ),
+            Ok(Piece::Thinking(3))
+        ));
     }
 
     #[test]
