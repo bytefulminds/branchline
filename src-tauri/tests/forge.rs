@@ -374,6 +374,30 @@ fn lists_merge_requests_in_all_projects() {
 }
 
 #[test]
+fn lists_all_projects_when_the_repository_is_on_another_server() {
+    let _g = serial();
+    let (url, seen) = fake_gitlab(gitlab_route);
+    gitlab::connect(&url, TOKEN).unwrap();
+    // The demo repository's remote is somewhere else (or a folder).
+    let t = repo(&[(
+        "origin",
+        "https://gitlab.example.org/team/app.git".to_string(),
+    )]);
+    let list = review_requests(&path(&t), false, RequestFilter::ReviewRequested).unwrap();
+    assert_eq!(list.project, None, "all projects on the connected server");
+    assert!(!list.items.is_empty());
+    assert!(seen
+        .lock()
+        .unwrap()
+        .iter()
+        .any(|(r, _)| r.contains("/api/v4/merge_requests?") && r.contains("reviewer_username")));
+    let err = review_requests(&path(&t), false, RequestFilter::AllOpen)
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("Choose one project"), "{err}");
+}
+
+#[test]
 fn prefers_upstream_and_remotes_with_an_account() {
     let _g = serial();
     let (url, _) = fake_gitlab(gitlab_route);

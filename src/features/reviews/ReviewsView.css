@@ -76,3 +76,6 @@
   outline: 2px solid var(--color-accent);
   outline-offset: 1px;
 }
+.bl-reviews__note {
+  margin: 0 0 var(--space-3);
+}

@@ -371,9 +371,11 @@ export function IntegrateActionsProvider({
         ? `the newest merge commit (${short})`
         : info.limited
           ? `commit ${short}`
-          : info.from
-            ? `the commit where ${branch} started from ${info.from} (${short})`
-            : `commit ${short}, the last one ${branch} shares with its upstream branch`;
+          : info.start === "unpushed"
+            ? `commit ${short}, the last one ${branch} shares with ${info.from ?? "its upstream branch"}`
+            : info.start === "created"
+              ? `the commit where ${branch} was created${info.from ? ` from ${info.from}` : ""} (${short})`
+              : `the commit where ${branch} started from ${info.from ?? "another branch"} (${short})`;
       setIrebase({ base: info.base, label, rewrite: info });
     } catch (e) {
       report("Could not rewrite history", e as GitError);

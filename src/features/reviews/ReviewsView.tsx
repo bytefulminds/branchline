@@ -192,10 +192,11 @@ function emptyText(filter: RequestFilter, data: ReviewList, f: ForgeInfo): strin
 /** Open merge requests on the repository's hosting service: those waiting for your review,
  * those you created, or all open ones; for this project or all projects. */
 export function ReviewsView({ repoPath }: { repoPath: string }) {
-  const { source, list, allProjects, setAllProjects, filter, setFilter, refresh } = useReviews();
+  const { source, matched, list, allProjects, setAllProjects, filter, setFilter, refresh } =
+    useReviews();
   const [opened, setOpened] = useState<MergeRequest | null>(null);
   const inProject = (mr: MergeRequest) =>
-    !!source && mr.projectPath.toLowerCase() === source.project.toLowerCase();
+    matched && !!source && mr.projectPath.toLowerCase() === source.project.toLowerCase();
   const data = list.status === "ready" ? list.list : list.status === "idle" ? null : list.previous;
   const loading = list.status === "loading";
   const items = data?.items ?? [];
@@ -231,7 +232,7 @@ export function ReviewsView({ repoPath }: { repoPath: string }) {
           </span>
         </div>
         <div className="bl-segmented" role="group" aria-label="Which merge requests">
-          {FILTER_LABELS.map((x) => (
+          {FILTER_LABELS.filter((x) => matched || x.id !== "allOpen").map((x) => (
             <button
               key={x.id}
               type="button"
@@ -243,19 +244,23 @@ export function ReviewsView({ repoPath }: { repoPath: string }) {
             </button>
           ))}
         </div>
-        <label className="bl-branches__sort text-small">
-          <span className="visually-hidden">Show merge requests from</span>
-          <select
-            className="bl-input"
-            value={allProjects ? "all" : "project"}
-            disabled={filter === "allOpen"}
-            title={filter === "allOpen" ? `All open ${f.nouns} are listed per project` : undefined}
-            onChange={(e) => setAllProjects(e.target.value === "all")}
-          >
-            <option value="project">{source ? source.project : "This project"}</option>
-            <option value="all">All projects on {source?.host ?? f.name}</option>
-          </select>
-        </label>
+        {matched && (
+          <label className="bl-branches__sort text-small">
+            <span className="visually-hidden">Show merge requests from</span>
+            <select
+              className="bl-input"
+              value={allProjects ? "all" : "project"}
+              disabled={filter === "allOpen"}
+              title={
+                filter === "allOpen" ? `All open ${f.nouns} are listed per project` : undefined
+              }
+              onChange={(e) => setAllProjects(e.target.value === "all")}
+            >
+              <option value="project">{source ? source.project : "This project"}</option>
+              <option value="all">All projects on {source?.host ?? f.name}</option>
+            </select>
+          </label>
+        )}
         <IconButton
           label="Refresh reviews"
           icon={loading ? <Spinner size={14} /> : <RefreshCw size={15} aria-hidden />}
@@ -266,6 +271,13 @@ export function ReviewsView({ repoPath }: { repoPath: string }) {
       </div>
 
       <div className="bl-branches__body">
+        {!matched && data && (
+          <p className="bl-reviews__note text-small text-secondary" role="note">
+            This repository has no remote on {data.account.host}, so these are your {f.nouns} in all
+            projects there. They open on the website; {f.nouns} of a repository with a remote on{" "}
+            {data.account.host} open in Branchline.
+          </p>
+        )}
         {list.status === "error" && (
           <div className="bl-banner bl-banner--error" role="alert">
             <TriangleAlert size={16} aria-hidden />

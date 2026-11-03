@@ -131,13 +131,27 @@ fn range(root: &Path, base: &str) -> Result<Vec<PlanCommit>, GitError> {
     Ok(commits)
 }
 
+/// How "Rewrite history" found its start.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum StartKind {
+    /// Where the branch was created (from its reflog).
+    Created,
+    /// Where it forked from another branch.
+    Branch,
+    /// The last commit it shares with its upstream branch (the commits not pushed yet).
+    Unpushed,
+}
+
 /// Where "Rewrite history" starts for the current branch.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RewriteBase {
     /// The commits after this one are rewritten.
     pub base: String,
-    /// The branch the current one started from (`main`, `origin/develop`), if found.
+    pub start: StartKind,
+    /// The branch it started from (`develop`, `origin/feature/x`), or for `Unpushed` the
+    /// upstream branch, when known.
     pub from: Option<String>,
     /// Commits after `base`.
     pub commits: usize,
@@ -162,9 +176,10 @@ fn count(root: &Path, range: &str) -> Result<usize, GitError> {
         .unwrap_or(0))
 }
 
-/// Find where the current branch's own commits start: the closest merge base with the
-/// branch it most likely came from (the remote's default branch, `main`, `master`,
-/// `develop` or `trunk`), or else the commits not pushed yet.
+/// Find where the current branch's own commits start: where it was created (from the
+/// branch's reflog) or the closest fork point with another branch, leaving out branches
+/// made from this one later. On `main`, `master` and `trunk`, and when nothing else fits:
+/// the commits not pushed yet.
 pub fn rewrite_base(repo: &str) -> Result<RewriteBase, GitError> {
     let (root, _) = resolve_paths(repo)?;
     let info = inspect(repo)?;
@@ -183,67 +198,119 @@ pub fn rewrite_base(repo: &str) -> Result<RewriteBase, GitError> {
         ],
     )?;
 
-    // Candidate branches, as short names: local and remote main, master, develop and
-    // trunk, and the remote's default branch (`origin/HEAD`).
-    const USUAL: [&str; 4] = ["main", "master", "develop", "trunk"];
-    let mut candidates: Vec<String> = Vec::new();
-    let local = text(
-        &root,
-        &["for-each-ref", "--format=%(refname:short)", "refs/heads"],
-    )?
-    .unwrap_or_default();
-    candidates.extend(
-        local
-            .lines()
-            .filter(|n| USUAL.contains(n))
-            .map(str::to_string),
-    );
-    let remote = text(
+    // What the branch's reflog says: where it was created, and every commit it pointed at
+    // here. A fork point that is one of the branch's own commits belongs to a branch made
+    // from this one later, not to the branch it came from.
+    let reflog = text(
         &root,
         &[
-            "for-each-ref",
-            "--format=%(refname:short)%00%(symref:short)",
-            "refs/remotes",
+            "reflog",
+            "show",
+            "--format=%H%x00%gs",
+            &format!("refs/heads/{branch}"),
+            "--",
         ],
     )?
     .unwrap_or_default();
-    for line in remote.lines() {
-        let (name, target) = line.split_once('\0').unwrap_or((line, ""));
-        if !target.is_empty() {
-            candidates.push(target.to_string());
-        } else if name
-            .split_once('/')
-            .is_some_and(|(_, b)| USUAL.contains(&b))
-        {
-            candidates.push(name.to_string());
-        }
-    }
-    candidates.sort();
-    candidates.dedup();
-    candidates.retain(|c| *c != branch && Some(c) != upstream.as_ref());
+    let own: std::collections::HashSet<&str> = reflog
+        .lines()
+        .filter_map(|l| l.split('\0').next())
+        .collect();
+    let remotes: Vec<String> = text(&root, &["remote"])?
+        .unwrap_or_default()
+        .lines()
+        .map(str::to_string)
+        .collect();
+    let is_remote_ref = |name: &str| {
+        name.starts_with("refs/remotes/")
+            || remotes.iter().any(|r| name.starts_with(&format!("{r}/")))
+    };
+    // The oldest entry: "branch: Created from develop" (or "from HEAD"). A branch made from
+    // its own copy on a remote says nothing about where the work started.
+    let created = reflog.lines().last().and_then(|l| {
+        let (oid, message) = l.split_once('\0')?;
+        let source = message.strip_prefix("branch: Created from ")?.trim();
+        (!is_remote_ref(source)).then(|| (oid.to_string(), source.to_string()))
+    });
+    let is_branch = |name: &str| {
+        git(
+            &root,
+            &[
+                "show-ref",
+                "--verify",
+                "--quiet",
+                &format!("refs/heads/{name}"),
+            ],
+        )
+        .is_ok_and(|o| o.code == 0)
+    };
 
-    let mut best: Option<(String, String, usize)> = None;
-    for c in &candidates {
-        let Some(base) = text(&root, &["merge-base", "HEAD", c])? else {
-            continue;
-        };
-        let n = count(&root, &format!("{base}..HEAD"))?;
-        if n > 0 && best.as_ref().map_or(true, |(_, _, m)| n < *m) {
-            best = Some((base, c.clone(), n));
+    // Trunk branches have no start of their own: only their commits not pushed yet.
+    const TRUNKS: [&str; 3] = ["main", "master", "trunk"];
+    let mut options: Vec<(String, StartKind, Option<String>)> = Vec::new();
+    if !TRUNKS.contains(&branch.as_str()) {
+        if let Some((oid, source)) = &created {
+            // "develop" names a branch; "HEAD", "develop~12" or a commit id do not.
+            let named = is_branch(source).then(|| source.clone());
+            options.push((oid.clone(), StartKind::Created, named));
+        }
+        let refs = text(
+            &root,
+            &[
+                "for-each-ref",
+                "--format=%(refname:short)%00%(symref)",
+                "refs/heads",
+                "refs/remotes",
+            ],
+        )?
+        .unwrap_or_default();
+        for line in refs.lines() {
+            let (name, symref) = line.split_once('\0').unwrap_or((line, ""));
+            // Leave out the branch itself, its copies on remotes and `origin/HEAD`.
+            let same = name == branch
+                || remotes
+                    .iter()
+                    .any(|r| name == format!("{r}/{branch}") || name == r)
+                || Some(name) == upstream.as_deref();
+            if same || !symref.is_empty() {
+                continue;
+            }
+            let Some(fork) = text(&root, &["merge-base", "HEAD", name])? else {
+                continue;
+            };
+            let first = created.as_ref().map(|(oid, _)| oid.as_str());
+            if own.contains(fork.as_str()) && Some(fork.as_str()) != first {
+                continue;
+            }
+            options.push((fork, StartKind::Branch, Some(name.to_string())));
         }
     }
-    let (mut base, from) = match best {
-        Some((base, from, _)) => (base, Some(from)),
+
+    let mut best: Option<(String, StartKind, Option<String>, usize)> = None;
+    for (oid, kind, from) in options {
+        if git(&root, &["merge-base", "--is-ancestor", &oid, "HEAD"])?.code != 0 {
+            continue;
+        }
+        let n = count(&root, &format!("{oid}..HEAD"))?;
+        // Ties go to the first found: the reflog, then local branches before remote ones.
+        if n > 0 && best.as_ref().map_or(true, |(_, _, _, m)| n < *m) {
+            best = Some((oid, kind, from, n));
+        }
+    }
+    let (mut base, start, from) = match best {
+        Some((base, kind, from, _)) => (base, kind, from),
         None => match upstream
             .as_deref()
             .map(|u| text(&root, &["merge-base", "HEAD", u]))
             .transpose()?
             .flatten()
         {
-            Some(base) if count(&root, &format!("{base}..HEAD"))? > 0 => (base, None),
+            Some(base) if count(&root, &format!("{base}..HEAD"))? > 0 => {
+                (base, StartKind::Unpushed, upstream.clone())
+            }
             _ => {
                 return Err(GitError::Unsupported(format!(
-                    "Branchline could not tell where {branch} started: it has no commits after main, master or develop, and none that are not pushed. Use \"Rebase interactively from here\" on the commit to start after."
+                    "Branchline could not tell where {branch} started: no other branch shares its history, and it has no commits that are not pushed. Use \"Rebase interactively from here\" on the commit to start after."
                 )))
             }
         },
@@ -284,6 +351,7 @@ pub fn rewrite_base(repo: &str) -> Result<RewriteBase, GitError> {
     };
     Ok(RewriteBase {
         base,
+        start,
         from,
         commits,
         published,

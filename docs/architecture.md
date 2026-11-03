@@ -355,10 +355,13 @@ removed when the rebase finishes or is aborted, also when it finishes later thro
 When later commits are squashed or fixed up into a reworded commit, the `exec` line comes after
 them, so the new message is the one of the combined commit.
 
-"Rewrite history" (`rewrite_base`) picks the start: the closest merge base of HEAD with local
-or remote `main`, `master`, `develop` or `trunk` and the remote's default branch (leaving out
-the branch itself and its upstream), else the merge base with the upstream branch (the commits
-not pushed yet). It then starts after the newest merge commit in that range, and caps the range
+"Rewrite history" (`rewrite_base`) picks the start nearest to HEAD among: where the branch
+was created (the oldest entry of its reflog, `branch: Created from …`, unless it was made from
+its own copy on a remote), and its merge base with every other local and remote branch. Its
+own copies on remotes and its upstream are left out, and so is a merge base that is one of the
+branch's own commits (it is in the branch's reflog): that is a branch made from this one later.
+On `main`, `master` and `trunk`, and when nothing fits, it is the merge base with the upstream
+branch (the commits not pushed yet). It then starts after the newest merge commit in that range, and caps the range
 at 300 commits. The number of those commits already on the upstream is reported, for the force
 push warning.
 

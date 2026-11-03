@@ -28,8 +28,11 @@ export interface ReviewsState {
   accounts: Account[];
   /** The hosting service project of the open repository, when it has one. */
   source: ReviewSource | null;
-  /** The Reviews view is offered: the repository's host has a connected account. */
+  /** The Reviews view is offered: an account is connected. */
   available: boolean;
+  /** The repository has a remote on a connected account's server, so its own project can be
+   * listed and its merge requests opened in Branchline. Otherwise all projects are listed. */
+  matched: boolean;
   allProjects: boolean;
   setAllProjects: (all: boolean) => void;
   filter: RequestFilter;
@@ -49,6 +52,7 @@ const ReviewsContext = createContext<ReviewsState>({
   accounts: [],
   source: null,
   available: false,
+  matched: false,
   allProjects: false,
   setAllProjects: noop,
   filter: "reviewRequested",
@@ -147,20 +151,23 @@ export function useReviewsState(repoPath: string | null): ReviewsState {
   }, [repoPath, accounts]);
 
   const current = repoPath && source?.path === repoPath ? source.source : null;
-  const available = !!current?.account;
-  // "All open" is for one project only.
-  const scopeAll = allProjects && filter !== "allOpen";
+  const matched = !!current?.account;
+  // Shown once the repository's remotes are known, so the first list is the right one.
+  const available = accounts.length > 0 && source?.path === repoPath;
+  // Without the repository's own project, "All open" (one project only) is not offered.
+  const shownFilter: RequestFilter = !matched && filter === "allOpen" ? "reviewRequested" : filter;
+  const scopeAll = !matched || (allProjects && shownFilter !== "allOpen");
 
-  const list = useRequestList(repoPath, available, scopeAll, filter, round);
+  const list = useRequestList(repoPath, available, scopeAll, shownFilter, round);
   // The sidebar counts what waits for your review; reuse the list when it is that one.
   const badge = useRequestList(
     repoPath,
-    available && filter !== "reviewRequested",
-    allProjects,
+    available && shownFilter !== "reviewRequested",
+    !matched || allProjects,
     "reviewRequested",
     round,
   );
-  const counted = filter === "reviewRequested" ? list : badge;
+  const counted = shownFilter === "reviewRequested" ? list : badge;
   const toReview = counted.status === "ready" ? counted.list.items.length : null;
 
   const refresh = useCallback(() => {
@@ -208,9 +215,10 @@ export function useReviewsState(repoPath: string | null): ReviewsState {
     accounts,
     source: current,
     available,
+    matched,
     allProjects: scopeAll,
     setAllProjects,
-    filter,
+    filter: shownFilter,
     setFilter,
     list,
     toReview,

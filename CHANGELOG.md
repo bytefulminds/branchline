@@ -10,8 +10,9 @@ description on GitLab.
 ### Added
 
 - Rewrite history: on the newest commit of the current branch (in History, Branches or the
-  command palette), Branchline finds where the branch's own commits start and opens the
-  interactive rebase for them. It warns when some of them are already pushed.
+  command palette), Branchline opens the interactive rebase for only that branch's own
+  commits: from where the branch was created, or where it forked from the nearest other
+  branch. It warns when some of them are already pushed.
 - Interactive rebase shows squashed and fixed-up commits indented above the commit they go
   into, and the combined commit can get a message of its own.
 - With AI on, the interactive rebase can suggest which commits to combine, with a message for
@@ -37,6 +38,8 @@ description on GitLab.
 
 ### Changed
 
+- Reviews is shown whenever a GitLab account is connected. In a repository without a remote
+  on that server, it lists your merge requests in all projects there.
 - Settings > AI commit messages is now Settings > AI, with a general "Use AI" switch. With AI
   off, no AI feature appears anywhere. "Suggest commit messages" is a separate switch below
   it.

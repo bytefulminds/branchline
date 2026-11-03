@@ -458,7 +458,10 @@ export interface PlanCommit {
 export interface RewriteBase {
   /** The commits after this one are rewritten. */
   base: string;
-  /** The branch the current one started from ("main", "origin/develop"), if found. */
+  /** How the start was found: where the branch was created, where it forked from another
+   * branch, or the last commit shared with its upstream (the commits not pushed yet). */
+  start: "created" | "branch" | "unpushed";
+  /** The branch it started from, or for "unpushed" the upstream branch, when known. */
   from: string | null;
   commits: number;
   /** Already on the upstream branch: rewriting them needs a force push. */

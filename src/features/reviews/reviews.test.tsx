@@ -177,6 +177,25 @@ describe("reviews", () => {
     expect(await screen.findByText("other/lib!9")).toBeInTheDocument();
   });
 
+  it("lists all projects when the repository is on another server", async () => {
+    const { user, calls } = await start(true, (cmd) => {
+      if (cmd === "review_source")
+        return { remote: "origin", host: "gitlab.example.org", project: "x/y", account: null };
+    });
+    await user.click(await screen.findByRole("button", { name: /^Reviews/ }));
+    expect(await screen.findByRole("note")).toHaveTextContent(
+      "This repository has no remote on gitlab.com",
+    );
+    expect(calls.filter((c) => c.cmd === "review_requests").at(-1)?.args.allProjects).toBe(true);
+    // Its own project is unknown: no project choice and no "All open".
+    expect(screen.queryByLabelText("Show merge requests from")).toBeNull();
+    expect(screen.queryByRole("button", { name: "All open" })).toBeNull();
+    const list = await screen.findByRole("list", { name: "Merge requests to review" });
+    // Nothing opens in Branchline: every Open goes to the website.
+    for (const open of within(list).getAllByRole("button", { name: /^Open$/ }))
+      expect(open).toHaveAttribute("title", expect.stringContaining("opens on the website"));
+  });
+
   it("switches between to review, created by you and all open", async () => {
     const { user, calls } = await start(true);
     const nav = await screen.findByRole("button", { name: /^Reviews/ });

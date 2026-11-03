@@ -155,9 +155,10 @@ Updates are signed with Branchline's own update key, so only genuine releases ar
   into it and a "+2 combined" badge on that commit. "Edit message" gives the combined commit a
   message of its own, starting from the messages Git would keep.
 - Rewrite history ("Rewrite history of …" on the newest commit in History, on the current
-  branch in Branches, or in the command palette) finds where the branch's own commits start:
-  where it left `main`, `master`, `develop` or `trunk` (or the remote's default branch), or,
-  on such a branch itself, the commits that are not pushed yet. It stops after the newest
+  branch in Branches, or in the command palette) shows only the branch's own commits: from
+  where the branch was created, or where it forked from the nearest other branch (so a branch
+  made from `develop` stops at the commit it was made from). On `main`, `master` or `trunk`
+  itself, it shows the commits that are not pushed yet. It stops after the newest
   merge commit, and says how many of the commits are already pushed (those need a force push
   afterwards).
 - With AI on, "Suggest with AI" in the rebase window asks your AI provider which neighbouring
@@ -197,10 +198,13 @@ Updates are signed with Branchline's own update key, so only genuine releases ar
 - The token is kept in your system's password store (macOS Keychain, Windows Credential
   Manager, or the Secret Service on Linux, such as GNOME Keyring or KWallet), never in a
   settings file. Disconnect deletes it there; revoke it on GitLab to make it stop working.
-- When the open repository has a remote on a connected server, the sidebar shows **Reviews**
-  (`Ctrl+7` / `⌘7`) with the number of open merge requests where you are a reviewer, your own
-  included when you set yourself as reviewer. In a fork, the `upstream` remote's project is
-  used, otherwise `origin`.
+- With an account connected, the sidebar shows **Reviews** (`Ctrl+7` / `⌘7`) with the number
+  of open merge requests where you are a reviewer, your own included when you set yourself as
+  reviewer. When the open repository has a remote on that server, its project is used (in a
+  fork the `upstream` remote's project, otherwise `origin`), and its merge requests open in
+  Branchline. Otherwise Reviews lists your merge requests in all projects on the server (the
+  first connected account), and they open on the website. Without an account, Reviews is not
+  shown at all.
 - Three lists: **To review** (you are a reviewer), **Created by you** and **All open**. For
   the repository's project, Branchline reads all of its open merge requests and picks the
   ones for you itself, by your user id. **All projects** on the server asks GitLab to filter

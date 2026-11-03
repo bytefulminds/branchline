@@ -121,7 +121,8 @@ async function openRewrite(extra: Extra = () => undefined) {
     if (cmd === "rewrite_base")
       return {
         base: oid(100),
-        from: "origin/develop",
+        start: "created",
+        from: "develop",
         commits: 3,
         published: 1,
         afterMerge: false,
@@ -371,7 +372,7 @@ describe("rewrite history", () => {
     await waitFor(() =>
       expect(calls.find((c) => c.cmd === "rebase_plan_commits")?.args.base).toBe(oid(100)),
     );
-    expect(dialog).toHaveTextContent("after the commit where main started from origin/develop");
+    expect(dialog).toHaveTextContent("after the commit where main was created from develop");
     expect(dialog).toHaveTextContent("1 of these commits are already pushed");
     // No AI while it is off.
     expect(within(dialog).queryByRole("button", { name: /Suggest with AI/ })).toBeNull();

@@ -6,7 +6,7 @@ use std::process::Command;
 
 use branchline_lib::git::integrate::{step, Step};
 use branchline_lib::git::rebase_plan::{
-    interactive_rebase, plan_commits, rewrite_base, PlanAction, PlanStep,
+    interactive_rebase, plan_commits, rewrite_base, PlanAction, PlanStep, StartKind,
 };
 use branchline_lib::git::repository::{inspect, RepoOperation};
 use tempfile::TempDir;
@@ -354,6 +354,54 @@ fn rewrite_history_on_main_uses_the_commits_not_pushed() {
     git(&d, &["branch", "-q", "--set-upstream-to=origin/main"]);
     let found = rewrite_base(&s(&d)).unwrap();
     assert_eq!(found.base, c[1]);
-    assert_eq!(found.from, None);
+    assert_eq!(found.start, StartKind::Unpushed);
+    assert_eq!(found.from.as_deref(), Some("origin/main"));
     assert_eq!(found.commits, 2);
+}
+
+#[test]
+fn rewrite_history_starts_where_the_branch_was_made_from_another_feature_branch() {
+    let (_t, d, _base, c) = repo_in("from-feature");
+    // main has commits 1 and 2; feature/cities adds 3 and 4; feature/darkmode is made
+    // from feature/cities and adds two commits of its own.
+    git(&d, &["switch", "-q", "-c", "feature/cities", &c[3]]);
+    git(&d, &["branch", "-q", "-f", "main", &c[1]]);
+    git(&d, &["switch", "-q", "-c", "feature/darkmode"]);
+    for name in ["dark.txt", "theme.txt"] {
+        fs::write(d.join(name), "x\n").unwrap();
+        git(&d, &["add", "-A"]);
+        git(&d, &["commit", "-q", "-m", name]);
+    }
+    let first = git(&d, &["rev-parse", "HEAD~1"]);
+    let found = rewrite_base(&s(&d)).unwrap();
+    assert_eq!(found.base, c[3], "the tip of feature/cities, not main");
+    assert_eq!(found.commits, 2);
+    assert_eq!(found.start, StartKind::Created);
+
+    // A branch made from feature/darkmode later does not cut its history short.
+    git(&d, &["branch", "-q", "feature/darkmode-v2", &first]);
+    let found = rewrite_base(&s(&d)).unwrap();
+    assert_eq!(found.base, c[3]);
+    assert_eq!(found.commits, 2);
+    git(&d, &["branch", "-q", "-D", "feature/darkmode-v2"]);
+
+    // Without a reflog (a fresh clone), the closest other branch still decides.
+    fs::remove_dir_all(d.join(".git/logs")).unwrap();
+    let found = rewrite_base(&s(&d)).unwrap();
+    assert_eq!(found.base, c[3]);
+    assert_eq!(found.from.as_deref(), Some("feature/cities"));
+    assert_eq!(found.start, StartKind::Branch);
+}
+
+#[test]
+fn rewrite_history_starts_where_the_branch_left_main_after_main_moved_on() {
+    let (_t, d, _base, c) = repo_in("moved-on");
+    // feature/x is made at commit 2, while main went on to commit 4.
+    git(&d, &["switch", "-q", "-c", "feature/x", &c[1]]);
+    fs::write(d.join("x.txt"), "x\n").unwrap();
+    git(&d, &["add", "-A"]);
+    git(&d, &["commit", "-q", "-m", "x"]);
+    let found = rewrite_base(&s(&d)).unwrap();
+    assert_eq!(found.base, c[1]);
+    assert_eq!(found.commits, 1);
 }
