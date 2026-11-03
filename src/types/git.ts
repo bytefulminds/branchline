@@ -454,6 +454,32 @@ export interface PlanCommit {
   authorTime: number;
 }
 
+/** Mirrors `RewriteBase` in `src-tauri/src/git/rebase_plan.rs`. */
+export interface RewriteBase {
+  /** The commits after this one are rewritten. */
+  base: string;
+  /** The branch the current one started from ("main", "origin/develop"), if found. */
+  from: string | null;
+  commits: number;
+  /** Already on the upstream branch: rewriting them needs a force push. */
+  published: number;
+  /** The range starts after the newest merge commit. */
+  afterMerge: boolean;
+  /** Cut to the newest 300 commits. */
+  limited: boolean;
+}
+
+/** Mirrors `SquashGroup` in `src-tauri/src/ai/rebase.rs`: commits oldest first. */
+export interface SquashGroup {
+  commits: string[];
+  message: string;
+  reason: string | null;
+}
+
+export interface RebaseSuggestion {
+  groups: SquashGroup[];
+}
+
 export type PlanAction = "pick" | "reword" | "squash" | "fixup" | "drop";
 
 export interface PlanStep {

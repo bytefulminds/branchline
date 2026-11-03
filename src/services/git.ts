@@ -11,6 +11,8 @@ import type {
   OperationStep,
   PlanCommit,
   PlanStep,
+  RebaseSuggestion,
+  RewriteBase,
   GitError,
   GitVersion,
   LineRequest,
@@ -247,6 +249,11 @@ export const gitService = {
   /** Commits after `base` on the current branch, oldest first. */
   rebasePlanCommits: (repo: string, base: string) =>
     call<PlanCommit[]>("rebase_plan_commits", { repo, base }),
+  /** Where "Rewrite history" starts for the current branch. */
+  rewriteBase: (repo: string) => call<RewriteBase>("rewrite_base", { repo }),
+  /** AI suggestion of commits to combine after `base`; cancel with `cancelRemote(opId)`. */
+  suggestRebase: (repo: string, base: string, opId: string) =>
+    call<RebaseSuggestion>("suggest_rebase", { repo, base, opId }),
   /** Rewrite the commits after `base`; `plan` is oldest first and names every commit once. */
   interactiveRebase: (repo: string, base: string, plan: PlanStep[], autostash: boolean) =>
     call<IntegrateResult>("interactive_rebase", { repo, base, plan, autostash }),

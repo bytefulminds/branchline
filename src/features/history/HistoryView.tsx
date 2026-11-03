@@ -245,14 +245,30 @@ export function HistoryView({
         disabled: !current || oid === headOid || busyOp,
         onSelect: () => integrate.rebase({ kind: "commit", oid }, `commit ${short}`),
       },
-      {
-        id: "interactive",
-        label: "Rebase interactively from here…",
-        description: "Reorder, reword, squash or drop the commits after this one",
-        icon: <ListOrdered size={16} />,
-        disabled: !current || oid === headOid || busyOp,
-        onSelect: () => integrate.interactive(oid, `commit ${short}`),
-      },
+      ...(oid === headOid && current
+        ? [
+            {
+              id: "rewrite",
+              label: `Rewrite history of ${current}…`,
+              description: "Squash, reword, reorder or drop the commits of this branch",
+              icon: <ListOrdered size={16} />,
+              disabled: busyOp,
+              onSelect: () => integrate.rewriteHistory(),
+            },
+          ]
+        : []),
+      ...(oid === headOid
+        ? []
+        : [
+            {
+              id: "interactive",
+              label: "Rebase interactively from here…",
+              description: "Reorder, reword, squash or drop the commits after this one",
+              icon: <ListOrdered size={16} />,
+              disabled: !current || busyOp,
+              onSelect: () => integrate.interactive(oid, `commit ${short}`),
+            },
+          ]),
       {
         id: "cherry-pick",
         label: "Cherry-pick commit",

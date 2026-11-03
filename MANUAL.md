@@ -151,6 +151,20 @@ Updates are signed with Branchline's own update key, so only genuine releases ar
 - Interactive rebase ("Rebase interactively from here…" on a commit in History): drag commits
   into a new order (or use `Alt+↑` / `Alt+↓`), and pick, reword, squash, fix up or drop each
   one. Branchline checks the plan before Git runs it.
+- Commits you squash or fix up are shown indented above the commit they go into, with a line
+  into it and a "+2 combined" badge on that commit. "Edit message" gives the combined commit a
+  message of its own, starting from the messages Git would keep.
+- Rewrite history ("Rewrite history of …" on the newest commit in History, on the current
+  branch in Branches, or in the command palette) finds where the branch's own commits start:
+  where it left `main`, `master`, `develop` or `trunk` (or the remote's default branch), or,
+  on such a branch itself, the commits that are not pushed yet. It stops after the newest
+  merge commit, and says how many of the commits are already pushed (those need a force push
+  afterwards).
+- With AI on, "Suggest with AI" in the rebase window asks your AI provider which neighbouring
+  commits belong together (work in progress, typo and review fixes) and for a message for each
+  resulting commit. It only fills in the plan: nothing runs until you choose Start rebase, and
+  Reset undoes the suggestion. Sent: the commit messages, their changed files and (for up to 40
+  commits) shortened diffs.
 - Select several commits in History (`Ctrl`/`⌘`+click to add one, `Shift`+click or
   `Shift+↑`/`↓` for a range, `Esc` to go back to one) and cherry-pick them in one go. They are
   applied oldest first; commits already on the branch are skipped, and a conflict stops the

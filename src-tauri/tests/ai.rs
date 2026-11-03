@@ -8,6 +8,7 @@ use std::process::Command;
 use std::sync::{Arc, Mutex};
 
 use branchline_lib::ai::provider::{self, chat, endpoint, models_at, save_key, Endpoint};
+use branchline_lib::ai::rebase::suggest_rebase;
 use branchline_lib::ai::suggest_commit_message;
 use branchline_lib::error::GitError;
 use branchline_lib::git::remote::cancel;
@@ -595,4 +596,82 @@ fn retries_without_think_for_models_that_cannot_think() {
     let message = suggest_commit_message(&path(&t), &cfg(&url), "op-ai-9", &mut |_| {}).unwrap();
     assert_eq!(message, "fix: works anyway");
     assert_eq!(bodies.lock().unwrap().len(), 2);
+}
+
+#[test]
+fn suggests_which_commits_to_squash_with_messages() {
+    let t = repo();
+    let d = t.path();
+    git(d, &["commit", "-qm", "feat: greet visitors"]);
+    let base = String::from_utf8(
+        Command::new("git")
+            .args(["rev-parse", "HEAD~1"])
+            .current_dir(d)
+            .output()
+            .unwrap()
+            .stdout,
+    )
+    .unwrap()
+    .trim()
+    .to_string();
+    fs::write(d.join("greet.txt"), "hi\nhello there!\n").unwrap();
+    git(d, &["commit", "-qam", "fix typo"]);
+    fs::write(d.join("other.txt"), "other\n").unwrap();
+    git(d, &["add", "other.txt"]);
+    git(d, &["commit", "-qm", "docs: add other"]);
+
+    let (url, seen) = fake_ollama(|_| {
+        let answer = serde_json::json!({ "groups": [
+            { "commits": [1, 2], "message": "feat: greet visitors", "reason": "The second fixes a typo in the first." },
+            { "commits": [3], "message": "docs: add other" }
+        ]});
+        (200, ndjson(&[&answer.to_string()]))
+    });
+    let s = suggest_rebase(&path(&t), &cfg(&url), &base, "op-ai-10").unwrap();
+    assert_eq!(s.groups.len(), 2);
+    assert_eq!(s.groups[0].commits.len(), 2);
+    assert_eq!(s.groups[0].message, "feat: greet visitors");
+
+    let seen = seen.lock().unwrap();
+    let body: serde_json::Value = serde_json::from_str(&seen[0].1).unwrap();
+    assert_eq!(
+        body["format"]["type"], "object",
+        "Ollama gets the JSON schema"
+    );
+    let user = body["messages"][1]["content"].as_str().unwrap();
+    assert!(user.contains("## Commit 2") && user.contains("fix typo"));
+    assert!(user.contains("+hello there!"), "diffs are included");
+    assert!(!user.contains("UNSTAGED-SECRET"));
+}
+
+#[test]
+fn a_rebase_suggestion_that_does_not_fit_is_retried_then_explained() {
+    let t = repo();
+    let d = t.path();
+    git(d, &["commit", "-qm", "one"]);
+    fs::write(d.join("greet.txt"), "two\n").unwrap();
+    git(d, &["commit", "-qam", "two"]);
+    let (url, seen) = fake_ollama(|_| {
+        (
+            200,
+            ndjson(&[r#"{"groups":[{"commits":[2,1],"message":"x"}]}"#]),
+        )
+    });
+    let err = suggest_rebase(&path(&t), &cfg(&url), "HEAD~2", "op-ai-11");
+    // "HEAD~2" is not a commit id.
+    assert!(err.is_err());
+    let base = String::from_utf8(
+        Command::new("git")
+            .args(["rev-parse", "HEAD~2"])
+            .current_dir(d)
+            .output()
+            .unwrap()
+            .stdout,
+    )
+    .unwrap()
+    .trim()
+    .to_string();
+    let err = suggest_rebase(&path(&t), &cfg(&url), &base, "op-ai-12").unwrap_err();
+    assert!(err.to_string().contains("did not fit"), "{err}");
+    assert_eq!(seen.lock().unwrap().len(), 2, "asked twice");
 }

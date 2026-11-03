@@ -35,10 +35,96 @@
   color: var(--color-text-muted);
   text-decoration: line-through;
 }
-.bl-irebase__row--squash,
-.bl-irebase__row--fixup {
-  margin-left: var(--space-6);
-  border-left: 2px solid var(--color-accent);
+/* Groups: commits squashed or fixed up are indented above the commit they go into, with a
+   rail that leads down into it (newest is on top). */
+.bl-irebase__row {
+  position: relative;
+}
+.bl-irebase__row--combined {
+  margin-left: 28px;
+  border-style: dashed;
+  border-color: var(--color-border-strong);
+  background: var(--color-surface);
+}
+.bl-irebase__row--combined::before,
+.bl-irebase__row--combined::after,
+.bl-irebase__row--target::before {
+  content: "";
+  position: absolute;
+  background: var(--color-accent);
+  pointer-events: none;
+}
+.bl-irebase__row--combined::before {
+  left: -17px;
+  top: -4px;
+  bottom: -4px;
+  width: 2px;
+}
+.bl-irebase__row--group-top::before {
+  top: 50%;
+}
+.bl-irebase__row--combined::after {
+  left: -17px;
+  top: 50%;
+  width: 16px;
+  height: 2px;
+}
+.bl-irebase__row--target {
+  border-color: var(--color-accent);
+}
+.bl-irebase__row--target::before {
+  left: 10px;
+  top: -4px;
+  width: 2px;
+  height: 4px;
+}
+.bl-irebase__row--orphan {
+  border-color: var(--color-error);
+}
+.bl-irebase__badge {
+  margin-left: var(--space-2);
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgb(0 209 160 / 14%);
+  color: var(--color-accent);
+  font-weight: var(--weight-semibold);
+}
+.bl-irebase__result,
+.bl-irebase__reason {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+.bl-irebase__result .bl-link-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.bl-irebase__ai {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+.bl-irebase__notes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-top: var(--space-3);
+}
+.bl-irebase__notes p {
+  margin: 0;
+}
+.bl-irebase__warning {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-1);
+  color: var(--color-warning);
+}
+.bl-irebase__warning svg {
+  flex: none;
+  margin-top: 2px;
 }
 .bl-irebase__row--reword {
   border-color: rgb(0 209 160 / 40%);

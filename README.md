@@ -56,12 +56,14 @@ action, branch and recent repository in a few letters.
 ### Branches and history, your way
 
 Create, switch, merge and rebase branches from a right-click, or drag one branch onto
-another. Clean up before you push with an interactive rebase: drag commits into a new order,
-and reword, squash or drop them, with a plan Branchline checks before Git runs it.
+another. Clean up before you push with "Rewrite history": Branchline finds where your branch
+started, you drag commits into a new order and reword, squash or drop them, and squashed
+commits are shown grouped under the commit they go into. With AI on, it can suggest which
+commits belong together and write their messages.
 
 <p align="center">
   <img src="docs/screenshots/branches.png" alt="The Branches view with a branch menu open: switch, open in a new worktree, merge, rebase, push, rename and delete" width="49%">
-  <img src="docs/screenshots/rebase.png" alt="The interactive rebase window with one commit set to drop and one set to squash into the commit below" width="49%">
+  <img src="docs/screenshots/rebase.png" alt="Rewrite history with an AI suggestion: two groups of fixed-up commits, each indented above the commit they go into, with a new message" width="49%">
 </p>
 
 ### Conflicts without the fear

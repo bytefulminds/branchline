@@ -119,6 +119,8 @@ pub fn run() {
             commands::resolve_conflict_text,
             commands::resolve_conflict_side,
             commands::rebase_plan_commits,
+            commands::rewrite_base,
+            commands::suggest_rebase,
             commands::interactive_rebase,
             commands::watch_repository,
             commands::unwatch_repository,

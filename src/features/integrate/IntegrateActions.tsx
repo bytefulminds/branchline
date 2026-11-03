@@ -19,6 +19,7 @@ import type {
   OperationStep,
   PlanStep,
   RepoOperation,
+  RewriteBase,
   RepositoryInfo,
   StartPoint,
 } from "../../types/git";
@@ -39,6 +40,8 @@ export interface IntegrateActions {
   step: (step: OperationStep) => void;
   /** Open the interactive rebase plan for the commits after `base`. */
   interactive: (base: string, label: string) => void;
+  /** Find where the current branch's own commits start and open the plan for them. */
+  rewriteHistory: () => void;
 }
 
 const noop = () => {};
@@ -50,6 +53,7 @@ const IntegrateContext = createContext<IntegrateActions>({
   revert: noop,
   step: noop,
   interactive: noop,
+  rewriteHistory: noop,
 });
 
 export function useIntegrateActions(): IntegrateActions {
@@ -88,7 +92,11 @@ export function IntegrateActionsProvider({
     null,
   );
   const [noFf, setNoFf] = useState(false);
-  const [irebase, setIrebase] = useState<{ base: string; label: string } | null>(null);
+  const [irebase, setIrebase] = useState<{
+    base: string;
+    label: string;
+    rewrite?: RewriteBase;
+  } | null>(null);
   // Retries offered in toasts call the latest merge/rebase without a dependency cycle.
   const retry = useRef<{
     merge: (source: StartPoint, label: string, o: { noFf: boolean; autostash: boolean }) => void;
@@ -353,6 +361,25 @@ export function IntegrateActionsProvider({
     [repo, confirm, perform],
   );
 
+  const rewriteHistory = useCallback(async () => {
+    if (!repo || repo.head.kind !== "branch") return;
+    const branch = repo.head.name;
+    try {
+      const info = await gitService.rewriteBase(repo.path);
+      const short = info.base.slice(0, 7);
+      const label = info.afterMerge
+        ? `the newest merge commit (${short})`
+        : info.limited
+          ? `commit ${short}`
+          : info.from
+            ? `the commit where ${branch} started from ${info.from} (${short})`
+            : `commit ${short}, the last one ${branch} shares with its upstream branch`;
+      setIrebase({ base: info.base, label, rewrite: info });
+    } catch (e) {
+      report("Could not rewrite history", e as GitError);
+    }
+  }, [repo, report]);
+
   const value = useMemo<IntegrateActions>(
     () => ({
       merge: (source, label) => {
@@ -365,8 +392,9 @@ export function IntegrateActionsProvider({
       revert,
       step: (s) => void step(s),
       interactive: (base, label) => setIrebase({ base, label }),
+      rewriteHistory: () => void rewriteHistory(),
     }),
-    [rebase, cherryPick, cherryPickMany, revert, step],
+    [rebase, cherryPick, cherryPickMany, revert, step, rewriteHistory],
   );
 
   return (
@@ -377,6 +405,7 @@ export function IntegrateActionsProvider({
           repoPath={repo.path}
           base={irebase.base}
           baseLabel={irebase.label}
+          rewrite={irebase.rewrite}
           branch={currentName(repo)}
           onCancel={() => setIrebase(null)}
           onSubmit={async (plan) => {

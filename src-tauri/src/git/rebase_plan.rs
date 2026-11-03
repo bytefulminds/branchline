@@ -10,7 +10,9 @@
 //!   faithfully without `--rebase-merges`).
 //! * Rewording is `pick` followed by `exec git commit --amend -F <file>`: the
 //!   message is written to a file in the Git directory and its path is quoted
-//!   for the shell. The files are removed when the rebase ends.
+//!   for the shell. The files are removed when the rebase ends. When later
+//!   commits are squashed or fixed up into a reworded commit, the `exec` comes
+//!   after them, so the message is the one of the combined commit.
 //! * Squash keeps both messages, fixup keeps the earlier one; no editor opens.
 
 use std::path::{Path, PathBuf};
@@ -129,6 +131,167 @@ fn range(root: &Path, base: &str) -> Result<Vec<PlanCommit>, GitError> {
     Ok(commits)
 }
 
+/// Where "Rewrite history" starts for the current branch.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RewriteBase {
+    /// The commits after this one are rewritten.
+    pub base: String,
+    /// The branch the current one started from (`main`, `origin/develop`), if found.
+    pub from: Option<String>,
+    /// Commits after `base`.
+    pub commits: usize,
+    /// How many of them are already on the upstream branch (rewriting them needs a force push).
+    pub published: usize,
+    /// The range stops at the newest merge commit, which cannot be rewritten.
+    pub after_merge: bool,
+    /// The range was cut to the newest `MAX_PLAN` commits.
+    pub limited: bool,
+}
+
+fn text(root: &Path, args: &[&str]) -> Result<Option<String>, GitError> {
+    let out = git(root, args)?;
+    Ok((out.code == 0)
+        .then(|| out.stdout_string().trim().to_string())
+        .filter(|s| !s.is_empty()))
+}
+
+fn count(root: &Path, range: &str) -> Result<usize, GitError> {
+    Ok(text(root, &["rev-list", "--count", range, "--"])?
+        .and_then(|n| n.parse().ok())
+        .unwrap_or(0))
+}
+
+/// Find where the current branch's own commits start: the closest merge base with the
+/// branch it most likely came from (the remote's default branch, `main`, `master`,
+/// `develop` or `trunk`), or else the commits not pushed yet.
+pub fn rewrite_base(repo: &str) -> Result<RewriteBase, GitError> {
+    let (root, _) = resolve_paths(repo)?;
+    let info = inspect(repo)?;
+    let HeadState::Branch { name: branch, .. } = info.head else {
+        return Err(GitError::Unsupported(
+            "Switch to a branch first; a detached HEAD has no history to rewrite.".into(),
+        ));
+    };
+    let upstream = text(
+        &root,
+        &[
+            "rev-parse",
+            "--abbrev-ref",
+            "--symbolic-full-name",
+            "@{upstream}",
+        ],
+    )?;
+
+    // Candidate branches, as short names: local and remote main, master, develop and
+    // trunk, and the remote's default branch (`origin/HEAD`).
+    const USUAL: [&str; 4] = ["main", "master", "develop", "trunk"];
+    let mut candidates: Vec<String> = Vec::new();
+    let local = text(
+        &root,
+        &["for-each-ref", "--format=%(refname:short)", "refs/heads"],
+    )?
+    .unwrap_or_default();
+    candidates.extend(
+        local
+            .lines()
+            .filter(|n| USUAL.contains(n))
+            .map(str::to_string),
+    );
+    let remote = text(
+        &root,
+        &[
+            "for-each-ref",
+            "--format=%(refname:short)%00%(symref:short)",
+            "refs/remotes",
+        ],
+    )?
+    .unwrap_or_default();
+    for line in remote.lines() {
+        let (name, target) = line.split_once('\0').unwrap_or((line, ""));
+        if !target.is_empty() {
+            candidates.push(target.to_string());
+        } else if name
+            .split_once('/')
+            .is_some_and(|(_, b)| USUAL.contains(&b))
+        {
+            candidates.push(name.to_string());
+        }
+    }
+    candidates.sort();
+    candidates.dedup();
+    candidates.retain(|c| *c != branch && Some(c) != upstream.as_ref());
+
+    let mut best: Option<(String, String, usize)> = None;
+    for c in &candidates {
+        let Some(base) = text(&root, &["merge-base", "HEAD", c])? else {
+            continue;
+        };
+        let n = count(&root, &format!("{base}..HEAD"))?;
+        if n > 0 && best.as_ref().map_or(true, |(_, _, m)| n < *m) {
+            best = Some((base, c.clone(), n));
+        }
+    }
+    let (mut base, from) = match best {
+        Some((base, from, _)) => (base, Some(from)),
+        None => match upstream
+            .as_deref()
+            .map(|u| text(&root, &["merge-base", "HEAD", u]))
+            .transpose()?
+            .flatten()
+        {
+            Some(base) if count(&root, &format!("{base}..HEAD"))? > 0 => (base, None),
+            _ => {
+                return Err(GitError::Unsupported(format!(
+                    "Branchline could not tell where {branch} started: it has no commits after main, master or develop, and none that are not pushed. Use \"Rebase interactively from here\" on the commit to start after."
+                )))
+            }
+        },
+    };
+
+    // Merge commits cannot be replayed: start after the newest one.
+    let mut after_merge = false;
+    if let Some(merge) = text(
+        &root,
+        &[
+            "rev-list",
+            "--merges",
+            "--max-count=1",
+            &format!("{base}..HEAD"),
+            "--",
+        ],
+    )? {
+        base = merge;
+        after_merge = true;
+    }
+    let mut commits = count(&root, &format!("{base}..HEAD"))?;
+    if commits == 0 {
+        return Err(GitError::Unsupported(
+            "The newest commit is a merge commit, so there is no history Branchline can rewrite here.".into(),
+        ));
+    }
+    let mut limited = false;
+    if commits > MAX_PLAN {
+        if let Some(cut) = text(&root, &["rev-parse", &format!("HEAD~{MAX_PLAN}")])? {
+            base = cut;
+            commits = MAX_PLAN;
+            limited = true;
+        }
+    }
+    let published = match &upstream {
+        Some(u) => commits.saturating_sub(count(&root, &format!("{u}..HEAD"))?),
+        None => 0,
+    };
+    Ok(RewriteBase {
+        base,
+        from,
+        commits,
+        published,
+        after_merge,
+        limited,
+    })
+}
+
 /// Quote a string for POSIX `sh` (used for paths in `exec` lines).
 pub fn shell_quote(s: &str) -> String {
     format!("'{}'", s.replace('\'', "'\"'\"'"))
@@ -169,8 +332,15 @@ pub fn build_todo(
 
     let mut todo = String::new();
     let mut messages = Vec::new();
+    // The message of a reworded commit is applied once the commits combined into it are in.
+    let mut pending: Option<String> = None;
     for step in plan {
         validate_oid(&step.oid)?;
+        if matches!(step.action, PlanAction::Pick | PlanAction::Reword) {
+            if let Some(exec) = pending.take() {
+                todo.push_str(&exec);
+            }
+        }
         match step.action {
             PlanAction::Pick => todo.push_str(&format!("pick {}\n", step.oid)),
             PlanAction::Squash => todo.push_str(&format!("squash {}\n", step.oid)),
@@ -183,13 +353,16 @@ pub fn build_todo(
                 }
                 let file = git_dir.join(format!("{MESSAGE_PREFIX}{}.txt", messages.len() + 1));
                 todo.push_str(&format!("pick {}\n", step.oid));
-                todo.push_str(&format!(
+                pending = Some(format!(
                     "exec git commit --amend --no-verify --cleanup=strip --file={}\n",
                     shell_quote(&file.to_string_lossy())
                 ));
                 messages.push((file, format!("{message}\n")));
             }
         }
+    }
+    if let Some(exec) = pending {
+        todo.push_str(&exec);
     }
     Ok((todo, messages))
 }
@@ -312,7 +485,7 @@ mod tests {
         assert_eq!(
             todo,
             format!(
-                "pick {C}\npick {A}\nexec git commit --amend --no-verify --cleanup=strip --file='/repo/.git/branchline-reword-1.txt'\nfixup {B}\n"
+                "pick {C}\npick {A}\nfixup {B}\nexec git commit --amend --no-verify --cleanup=strip --file='/repo/.git/branchline-reword-1.txt'\n"
             )
         );
         assert_eq!(messages.len(), 1);

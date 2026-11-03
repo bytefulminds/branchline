@@ -481,6 +481,12 @@ pub async fn rebase_plan_commits(repo: String, base: String) -> Result<Vec<PlanC
     blocking(move || rebase_plan::plan_commits(&repo, &base)).await
 }
 
+/// Where "Rewrite history" starts for the current branch.
+#[tauri::command]
+pub async fn rewrite_base(repo: String) -> Result<rebase_plan::RewriteBase, GitError> {
+    blocking(move || rebase_plan::rewrite_base(&repo)).await
+}
+
 /// Rewrite the commits after `base` according to `plan` (reorder, reword, squash, fixup, drop).
 #[tauri::command]
 pub async fn interactive_rebase(
@@ -683,6 +689,21 @@ pub async fn ai_server_info(
     url: String,
 ) -> Result<crate::ai::ServerInfo, GitError> {
     blocking(move || crate::ai::provider::server_info(provider, &url)).await
+}
+
+/// Suggest which commits after `base` to combine, with messages. Cancel with
+/// `cancel_remote_operation(op_id)`.
+#[tauri::command]
+pub async fn suggest_rebase(
+    repo: String,
+    base: String,
+    op_id: String,
+) -> Result<crate::ai::rebase::RebaseSuggestion, GitError> {
+    blocking(move || {
+        let cfg = settings::current().ai;
+        crate::ai::rebase::suggest_rebase(&repo, &cfg, &base, &op_id)
+    })
+    .await
 }
 
 /// Whether an API key is stored for the provider. The key itself is never returned.

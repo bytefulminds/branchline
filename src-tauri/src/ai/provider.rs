@@ -577,13 +577,39 @@ pub fn chat(
     token: &CancelToken,
     on_text: &mut dyn FnMut(&str) -> bool,
 ) -> Result<(), GitError> {
+    chat_with(ep, system, user, max_tokens, None, token, on_text)
+}
+
+/// Like [`chat`], for answers in JSON. Ollama gets `schema` as its `format`, OpenAI is asked
+/// for a JSON object; other providers rely on the prompt, so the answer must be checked.
+pub fn chat_json(
+    ep: &Endpoint,
+    system: &str,
+    user: &str,
+    max_tokens: u32,
+    schema: &Value,
+    token: &CancelToken,
+    on_text: &mut dyn FnMut(&str) -> bool,
+) -> Result<(), GitError> {
+    chat_with(ep, system, user, max_tokens, Some(schema), token, on_text)
+}
+
+fn chat_with(
+    ep: &Endpoint,
+    system: &str,
+    user: &str,
+    max_tokens: u32,
+    schema: Option<&Value>,
+    token: &CancelToken,
+    on_text: &mut dyn FnMut(&str) -> bool,
+) -> Result<(), GitError> {
     let base = &ep.base;
     let model = ep.model.as_str();
     let messages = json!([
         { "role": "system", "content": system },
         { "role": "user", "content": user },
     ]);
-    let (path, body) = match ep.provider {
+    let (path, mut body) = match ep.provider {
         AiProvider::Ollama => (
             format!("{base}/api/chat"),
             // Thinking models (Qwen 3, DeepSeek R1, gpt-oss) answer right away instead of
@@ -627,6 +653,13 @@ pub fn chat(
             }),
         ),
     };
+    if let Some(schema) = schema {
+        match ep.provider {
+            AiProvider::Ollama => body["format"] = schema.clone(),
+            AiProvider::Openai => body["response_format"] = json!({ "type": "json_object" }),
+            AiProvider::OpenaiCompatible | AiProvider::Anthropic => {}
+        }
+    }
 
     // Loading a large local model can take minutes before the first word arrives.
     let (per_read, total) = if is_cloud(ep.provider) {
@@ -643,7 +676,6 @@ pub fn chat(
         req.send_json(body)
             .map_err(|e| unreachable(ep.provider, base, e))
     };
-    let mut body = body;
     let mut res = send(&body)?;
     if res.status().as_u16() == 400 && ep.provider == AiProvider::Ollama {
         // Some Ollama versions refuse `think` for models without a thinking mode.

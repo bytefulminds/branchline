@@ -59,6 +59,8 @@ Milestones are only marked complete when the behavior works against real Git and
 - [x] Tags: create (lightweight or annotated), delete, push, delete on a remote, check out
 - [x] Merge, rebase, cherry-pick and revert, with continue, skip and abort
 - [x] Interactive rebase: reorder by dragging, reword, squash, fixup, drop
+- [x] Rewrite history of the current branch, squash groups shown indented, AI suggestions for
+      squashing and messages
 - [x] Drag a branch onto a branch or commit to merge or rebase
 - [x] Cherry-pick several commits at once
 - [x] Conflict resolution: three-pane merge editor (take ours or theirs per change, edit the

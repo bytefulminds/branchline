@@ -10,6 +10,8 @@ import {
   setup,
 } from "../../test/harness";
 import type { BranchInfo, PlanCommit, RefInfo } from "../../types/git";
+import { DEFAULT_SETTINGS } from "../../types/settings";
+import { applySuggestion, combineTargets, type Row } from "./InteractiveRebaseDialog";
 import { REF_MIME } from "./refDrag";
 
 installTauriTestEnvironment();
@@ -106,6 +108,76 @@ function transfer() {
     dropEffect: "",
   };
 }
+
+const AI_ON = { ...DEFAULT_SETTINGS, ai: { ...DEFAULT_SETTINGS.ai, enabled: true, model: "m" } };
+// History's newest commit is HEAD, so "Rewrite history" is offered on it.
+const AT_HEAD = { ...REPO, head: { kind: "branch" as const, name: "main", oid: "0".repeat(40) } };
+
+async function openRewrite(extra: Extra = () => undefined) {
+  const opened = await open((cmd, args) => {
+    const answer = extra(cmd, args);
+    if (answer !== undefined) return answer;
+    if (cmd === "inspect_repository") return AT_HEAD;
+    if (cmd === "rewrite_base")
+      return {
+        base: oid(100),
+        from: "origin/develop",
+        commits: 3,
+        published: 1,
+        afterMerge: false,
+        limited: false,
+      };
+  });
+  await opened.user.keyboard("{Control>}2{/Control}");
+  const list = await screen.findByRole("listbox", { name: "Commits" });
+  const rows = within(list).getAllByRole("option");
+  // Older commits do not offer it.
+  fireEvent.contextMenu(rows[2]!, { clientX: 300, clientY: 200 });
+  expect(await screen.findByRole("menuitem", { name: /Rebase interactively/ })).toBeInTheDocument();
+  expect(screen.queryByRole("menuitem", { name: /Rewrite history/ })).toBeNull();
+  await opened.user.keyboard("{Escape}");
+  fireEvent.contextMenu(rows[0]!, { clientX: 300, clientY: 200 });
+  await opened.user.click(await screen.findByRole("menuitem", { name: /Rewrite history of main/ }));
+  const dialog = await screen.findByRole("dialog", { name: "Rewrite history of main" });
+  const plan = await within(dialog).findByRole("list", { name: /Rebase plan/ });
+  return { ...opened, dialog, plan };
+}
+
+const rows = (actions: string[]): Row[] =>
+  actions.map((action, i) => ({
+    oid: oid(200 + i),
+    summary: `R${i}`,
+    message: `R${i}`,
+    authorName: "A",
+    authorTime: 0,
+    action: action as Row["action"],
+    draft: `R${i}`,
+  }));
+
+describe("squash groups", () => {
+  it("finds the commit each squash goes into, past drops and other squashes", () => {
+    // Newest first: R0 squash, R1 fixup, R2 drop, R3 pick, R4 squash (nothing below).
+    expect(combineTargets(rows(["squash", "fixup", "drop", "pick", "squash"]))).toEqual([
+      3,
+      3,
+      null,
+      null,
+      null,
+    ]);
+  });
+
+  it("applies an AI suggestion to the original order", () => {
+    const original = rows(["pick", "pick", "pick"]);
+    const applied = applySuggestion(original, {
+      groups: [
+        { commits: [oid(202), oid(201)], message: "feat: two in one", reason: "Same change." },
+        { commits: [oid(200)], message: "R0", reason: null },
+      ],
+    });
+    expect(applied.map((r) => r.action)).toEqual(["pick", "fixup", "reword"]);
+    expect(applied[2]).toMatchObject({ draft: "feat: two in one", aiReason: "Same change." });
+  });
+});
 
 describe("interactive rebase", () => {
   it("reorders, rewords and squashes, and sends the plan oldest first", async () => {
@@ -288,5 +360,96 @@ describe("dragging branches", () => {
     expect(row).not.toHaveAttribute("data-drop-over");
     fireEvent.drop(row, { dataTransfer });
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+  });
+});
+
+describe("rewrite history", () => {
+  it("starts where the branch began, shows squashes as a group and edits their message", async () => {
+    const { user, calls, dialog, plan } = await openRewrite((cmd) => {
+      if (cmd === "interactive_rebase") return ok;
+    });
+    await waitFor(() =>
+      expect(calls.find((c) => c.cmd === "rebase_plan_commits")?.args.base).toBe(oid(100)),
+    );
+    expect(dialog).toHaveTextContent("after the commit where main started from origin/develop");
+    expect(dialog).toHaveTextContent("1 of these commits are already pushed");
+    // No AI while it is off.
+    expect(within(dialog).queryByRole("button", { name: /Suggest with AI/ })).toBeNull();
+
+    await user.selectOptions(within(plan).getByLabelText("Action for Commit 3"), "squash");
+    const [top, middle] = within(plan).getAllByRole("listitem");
+    expect(top).toHaveClass("bl-irebase__row--combined");
+    expect(top).toHaveTextContent(`into ${oid(102).slice(0, 7)}`);
+    expect(middle).toHaveClass("bl-irebase__row--target");
+    expect(middle).toHaveTextContent("+1 combined");
+
+    await user.click(within(middle!).getByRole("button", { name: /Edit message/ }));
+    const message = within(plan).getByLabelText("Message for the combined commit of Commit 2");
+    expect(message).toHaveValue("Commit 2\n\nBody 2\n\nCommit 3\n\nBody 3");
+    await user.clear(message);
+    await user.type(message, "feat: two and three");
+    await user.click(within(dialog).getByRole("button", { name: "Start rebase" }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.cmd === "interactive_rebase")?.args.plan).toEqual([
+        { oid: oid(101), action: "pick", message: null },
+        { oid: oid(102), action: "reword", message: "feat: two and three" },
+        { oid: oid(103), action: "squash", message: null },
+      ]),
+    );
+  });
+
+  it("lets the AI suggest groups and messages, then starts the plan", async () => {
+    const { user, calls, dialog, plan } = await openRewrite((cmd) => {
+      if (cmd === "get_settings") return AI_ON;
+      if (cmd === "suggest_rebase")
+        return {
+          groups: [
+            {
+              commits: [oid(101), oid(102)],
+              message: "feat: one and two",
+              reason: "Two fixes one.",
+            },
+            { commits: [oid(103)], message: "Commit 3\n\nBody 3", reason: null },
+          ],
+        };
+      if (cmd === "interactive_rebase") return ok;
+    });
+    await user.click(within(dialog).getByRole("button", { name: /Suggest with AI/ }));
+    expect(calls.find((c) => c.cmd === "suggest_rebase")?.args).toMatchObject({
+      repo: REPO.path,
+      base: oid(100),
+    });
+    expect(await within(dialog).findByText(/2 commits combined into 1/)).toBeInTheDocument();
+    expect(within(plan).getByText("Two fixes one.")).toBeInTheDocument();
+    expect(within(plan).getByLabelText("Action for Commit 2")).toHaveValue("fixup");
+    expect(within(plan).getByLabelText("Message for the combined commit of Commit 1")).toHaveValue(
+      "feat: one and two",
+    );
+
+    await user.click(within(dialog).getByRole("button", { name: "Start rebase" }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.cmd === "interactive_rebase")?.args.plan).toEqual([
+        { oid: oid(101), action: "reword", message: "feat: one and two" },
+        { oid: oid(102), action: "fixup", message: null },
+        { oid: oid(103), action: "pick", message: null },
+      ]),
+    );
+  });
+
+  it("explains when the start cannot be found", async () => {
+    const { user } = await open((cmd) => {
+      if (cmd === "inspect_repository") return AT_HEAD;
+      if (cmd === "rewrite_base")
+        return Promise.reject({
+          kind: "unsupported",
+          message: "Branchline could not tell where main started.",
+          detail: null,
+        });
+    });
+    await user.keyboard("{Control>}k{/Control}");
+    await user.keyboard("Rewrite history");
+    await user.click(await screen.findByRole("option", { name: /Rewrite history of main/ }));
+    expect(await screen.findByText(/could not tell where main started/)).toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: /Rewrite history/ })).toBeNull();
   });
 });

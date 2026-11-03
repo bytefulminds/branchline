@@ -9,6 +9,13 @@ description on GitLab.
 
 ### Added
 
+- Rewrite history: on the newest commit of the current branch (in History, Branches or the
+  command palette), Branchline finds where the branch's own commits start and opens the
+  interactive rebase for them. It warns when some of them are already pushed.
+- Interactive rebase shows squashed and fixed-up commits indented above the commit they go
+  into, and the combined commit can get a message of its own.
+- With AI on, the interactive rebase can suggest which commits to combine, with a message for
+  each resulting commit, to review before it runs.
 - Reviews (`Ctrl+7` / `⌘7`): the open merge requests on GitLab where you are a reviewer, for
   the repository's project or all projects, with their pipeline, comments, drafts, conflicts
   and whether you already approved. Connect your GitLab account (GitLab.com or your own

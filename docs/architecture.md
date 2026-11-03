@@ -102,6 +102,8 @@ are in the way (`checkoutConflict`); nothing is changed.
 | `resolve_conflict_side(repo, path, side, fingerprint)` | `RepositoryInfo` | `ours`, `theirs` (`checkout --ours/--theirs`, or `rm` when that side deleted the file) or `delete` |
 | `rebase_plan_commits(repo, base)` | `PlanCommit[]` | Commits after `base` on the current branch, oldest first |
 | `interactive_rebase(repo, base, plan, autostash)` | `IntegrateResult` | Plan: every commit once, oldest first |
+| `rewrite_base(repo)` | `RewriteBase` | Where "Rewrite history" starts for the current branch, with the number of commits and how many are pushed |
+| `suggest_rebase(repo, base, opId)` | `RebaseSuggestion` | AI groups of neighbouring commits, oldest first, each with a message; `cancel_remote_operation(opId)` stops it |
 
 Commit ids from the UI are accepted only as hexadecimal strings, so they can never be read as
 options or revision expressions.
@@ -350,6 +352,23 @@ Rewording is a `pick` followed by `exec git commit --amend --no-verify --cleanup
 --file=<path>`; the message is written to a file in the Git directory and the path is quoted for
 the shell (a test uses a repository folder named `it's a $HOME repo`). These files and the plan are
 removed when the rebase finishes or is aborted, also when it finishes later through Continue.
+When later commits are squashed or fixed up into a reworded commit, the `exec` line comes after
+them, so the new message is the one of the combined commit.
+
+"Rewrite history" (`rewrite_base`) picks the start: the closest merge base of HEAD with local
+or remote `main`, `master`, `develop` or `trunk` and the remote's default branch (leaving out
+the branch itself and its upstream), else the merge base with the upstream branch (the commits
+not pushed yet). It then starts after the newest merge commit in that range, and caps the range
+at 300 commits. The number of those commits already on the upstream is reported, for the force
+push warning.
+
+"Suggest with AI" (`ai/rebase.rs`) sends the commits numbered oldest first, with their messages,
+`--stat` and, for up to 40 commits, diffs shortened to 24,000 characters in total. The model
+answers in JSON (Ollama gets a JSON schema as `format`, OpenAI `response_format`); the answer
+must name every commit once, in groups of consecutive commits in order, each with a message.
+An answer that does not fit is asked for once more, then reported. The frontend applies it to
+the original order: the oldest commit of a group is reworded with the message, the others are
+fixed up into it.
 
 Drag and drop uses HTML5 drag events with a private data type, so only branches dragged inside
 Branchline are accepted. The window sets `dragDropEnabled: false`: Branchline accepts no file
