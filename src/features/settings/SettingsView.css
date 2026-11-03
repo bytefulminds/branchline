@@ -98,6 +98,10 @@
 .bl-setting__intro {
   margin: var(--space-3) 0;
 }
+.bl-setting__note {
+  margin: var(--space-2) 0;
+}
+
 .bl-setting__control {
   display: flex;
   justify-content: flex-end;
@@ -203,8 +207,56 @@
   align-items: center;
   gap: var(--space-1);
 }
-.bl-setting__intro code {
+.bl-setting__intro code,
+.bl-setting__note code {
   padding: 0 4px;
   border-radius: var(--radius-sm);
   background: var(--color-surface-subtle);
+}
+
+/* Settings > Accounts */
+.bl-accounts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  list-style: none;
+}
+.bl-account {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+.bl-account__text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+.bl-account__name {
+  font-weight: var(--weight-medium);
+}
+.bl-settings__subhead {
+  margin: var(--space-4) 0 0;
+  font-size: var(--text-h3-size);
+  line-height: var(--text-h3-line);
+  font-weight: var(--weight-semibold);
+}
+.bl-link-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-accent);
+  font: inherit;
+  cursor: pointer;
+}
+.bl-link-button:hover {
+  text-decoration: underline;
 }

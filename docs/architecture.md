@@ -91,7 +91,8 @@ are in the way (`checkoutConflict`); nothing is changed.
 | `open_in_editor(repo, path?)` / `open_terminal(repo)` / `reveal_in_file_manager(repo, path?)` | `()` | Uses the editor and terminal from the settings |
 | `measure_mode()` / `measure_elapsed()` / `finish_measurement(report)` | `boolean` / `number` / `()` | Startup timing with `--measure-startup=<file>` (docs/performance.md); finishing writes the report and quits |
 | `git_command_log(since)` / `clear_git_command_log()` | `GitLogEntry[]` / `()` | Commands that started or finished after `since` (a sequence number); the console polls this once a second while open |
-| `ai_server_info(url)` | `AiServerInfo` | Ollama version and chat models (embedding models left out) |
+| `ai_server_info(provider, url)` | `AiServerInfo` | The provider's chat models (and the Ollama version); `url` is used for Ollama and OpenAI-compatible servers |
+| `ai_key_exists(provider)` / `save_ai_key(provider, key)` | `boolean` / `()` | API keys in the system's password store; the key itself never comes back, an empty key removes it |
 | `suggest_commit_message(repo, opId, onText)` | `string` | Uses the AI settings; streams the cleaned text so far; `cancel_remote_operation(opId)` stops it |
 | `list_worktrees(repo)` | `WorktreeInfo[]` | Branch or detached HEAD, locked, missing, main/open flags, number of changed files |
 | `add_worktree(repo, path, target)` | `string` | `target`: `newBranch` (name + start), `branch` or `detached`; returns the folder |
@@ -239,21 +240,40 @@ progress (read from `rebase-merge/msgnum` and `end`).
 - The first Git command waits for the answer if it is not ready yet, so a commit made in the
   first seconds still gets the right PATH. Not used on Windows.
 
-## AI commit messages
+## AI providers and commit messages
 
-- `src/ai.rs` talks to Ollama's HTTP API (`/api/tags`, `/api/version`, `/api/chat`) with
-  `ureq`, from the backend, so the webview's CSP stays closed to the network.
+- `src/ai/provider.rs` talks to the provider chosen in Settings with `ureq`, from the
+  backend, so the webview's CSP stays closed to the network:
+  - Ollama: `/api/tags`, `/api/version`, `/api/chat` (NDJSON stream), with `think: false`
+    (retried without it when a version refuses it), `num_ctx` sized to the prompt (8,192 to
+    32,768 tokens) and `num_predict` as a limit. Reasoning that a model still streams is
+    counted, never shown, and stops the request beyond 48,000 characters.
+  - OpenAI-compatible servers (LM Studio, vLLM, llama.cpp, OpenRouter): `GET {base}/models`
+    and `POST {base}/chat/completions` with `stream: true` (server-sent events, text in
+    `choices[0].delta.content`, ending with `data: [DONE]`). Optional `Bearer` key.
+  - OpenAI: the same API at `https://api.openai.com/v1`, without a temperature (reasoning
+    models refuse one). Only chat model ids are listed.
+  - Anthropic: `GET /v1/models` and `POST /v1/messages` at `https://api.anthropic.com`, with
+    `x-api-key` and `anthropic-version: 2023-06-01`. Text comes in `content_block_delta`
+    events with a `text_delta`; `message_stop` ends the answer and `error` events become
+    readable errors.
+- API keys live in the system's password store (`src/secrets.rs`, entries `ai:anthropic`,
+  `ai:openai`, `ai:openai-compatible`), read at most once per run, and never reach the
+  webview. A key is never sent over plain `http://` to another computer.
+- `src/ai/commit.rs` builds the commit message prompt and cleans the answer.
 - The prompt holds the staged diff (`git diff --cached`, no external diff or textconv), the
   `--stat` file list, the branch name and the last ten commit subjects. The diff is shortened
   per file (4,000 characters) and in total (14,000), cut at line ends, so one large generated
   file cannot push the rest out. A diff over 4 MB is left out and only the file list is sent.
-- The answer streams as NDJSON. Each chunk is cleaned (reasoning in `<think>` blocks, code
+- The answer streams in. Each piece is cleaned (reasoning in `<think>` blocks, code
   fences, a "Commit message:" label and wrapping quotes are removed) and the cleaned text so
   far is sent to the UI, which fills the summary and description. Generation stops after
   6,000 characters.
 - Errors use the `ai` kind with a message that says what to do: start Ollama, pull the
-  model, check the address. Timeouts allow for a model that takes minutes to load.
-- Addresses: `http` or `https`, host and port only (no credentials, path or query).
+  model, check the address or the key, add API credit, try again when the service is busy.
+  Timeouts allow for a local model that takes minutes to load.
+- Addresses: `http` or `https`, no credentials; Ollama host and port only, an
+  OpenAI-compatible server may have a path (`/v1`) but no query.
   Redirects are not followed; proxies from the environment are skipped for loopback hosts.
 - Nothing is contacted while the feature is off, except when the user clicks Test.
 

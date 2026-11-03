@@ -4,6 +4,7 @@ import {
   type LucideIcon,
   RefreshCw,
   Info,
+  KeyRound,
   ShieldCheck,
   Sparkles,
   UserRound,
@@ -22,20 +23,23 @@ import type {
   Settings,
 } from "../../types/settings";
 import { AboutSection } from "../about/AboutSection";
+import { AccountsSection } from "./AccountsSection";
 import { AiSection } from "./AiSection";
 import { Field, NumberSelect, type Setter, TextSetting, Toggle } from "./SettingControls";
 import { useSettings } from "./SettingsProvider";
 import "./SettingsView.css";
 
-export type SettingsSection = "general" | "git" | "identity" | "editor" | "safety" | "ai" | "about";
+export type SettingsSection =
+  "general" | "git" | "identity" | "accounts" | "editor" | "safety" | "ai" | "about";
 
 const SECTIONS: { id: SettingsSection; label: string; icon: LucideIcon }[] = [
   { id: "general", label: "General", icon: RefreshCw },
   { id: "git", label: "Git", icon: GitBranch },
   { id: "identity", label: "Identity & signing", icon: UserRound },
+  { id: "accounts", label: "Accounts", icon: KeyRound },
   { id: "editor", label: "Editor & diff", icon: Code2 },
   { id: "safety", label: "Confirmations", icon: ShieldCheck },
-  { id: "ai", label: "AI commit messages", icon: Sparkles },
+  { id: "ai", label: "AI", icon: Sparkles },
   { id: "about", label: "About Branchline", icon: Info },
 ];
 
@@ -514,6 +518,7 @@ export function SettingsView({
           {section === "general" && <GeneralSection s={settings} set={set} />}
           {section === "git" && <GitSection s={settings} set={set} />}
           {section === "identity" && <IdentitySection repoPath={repoPath} repoName={repoName} />}
+          {section === "accounts" && <AccountsSection />}
           {section === "editor" && <EditorSection s={settings} set={set} />}
           {section === "safety" && <SafetySection s={settings} set={set} />}
           {section === "ai" && <AiSection s={settings} set={set} />}

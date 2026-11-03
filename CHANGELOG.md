@@ -7,11 +7,47 @@ description on GitLab.
 
 ## [Unreleased]
 
+### Added
+
+- Reviews (`Ctrl+7` / `⌘7`): the open merge requests on GitLab where you are a reviewer, for
+  the repository's project or all projects, with their pipeline, comments, drafts, conflicts
+  and whether you already approved. Connect your GitLab account (GitLab.com or your own
+  server) with a personal access token in the new Settings > Accounts; the token is kept in
+  the system's password store. Three lists: to review (your own merge requests too, when you
+  are their reviewer), created by you, and all open in the project, each with its reviewers.
+  The lists refresh when Branchline gets focus.
+- Read a merge request in Branchline: Open in Reviews fetches its commits with your Git
+  credentials and shows the description, discussion, commits and changed files, and each
+  file's diff (one column or side by side) with its comment threads.
+- The Git console also lists every request Branchline sends to GitLab, with its status and
+  response (never the token).
+- AI providers: besides Ollama, commit messages can now come from any server with an
+  OpenAI-compatible API (LM Studio, vLLM, llama.cpp, OpenRouter), from Anthropic (Claude) or
+  from OpenAI. API keys are kept in the system's password store. Settings explains that a
+  Claude or ChatGPT subscription does not include the API, and links to where keys are made.
+- The branch menu in the title bar also lists remote branches without a local branch, to
+  check one out in one click.
+
 ### Changed
 
+- Settings > AI commit messages is now Settings > AI, with a general "Use AI" switch. With AI
+  off, no AI feature appears anywhere. "Suggest commit messages" is a separate switch below
+  it.
+- Branchline reads a token or key from the system's password store at most once per run, so
+  macOS asks for Keychain access at most once per start.
 - Remotes moved into the Branches view: each remote's heading shows its address and has the
   remote's actions (fetch, edit, copy address, remove), and "Add remote" sits on the first
   heading. The separate Remotes view and its shortcut (`Ctrl+7` / `⌘7`) are gone.
+
+### Fixed
+
+- Commit message suggestions with thinking models in Ollama (Qwen 3, DeepSeek R1 and others)
+  could take minutes, show nothing and end with a time-out. Branchline now asks these models
+  to answer without thinking first, gives Ollama enough context for the whole diff, and stops
+  a model that keeps reasoning without answering.
+- Stopping a fetch, pull, push or clone right after starting it could be lost, so the
+  operation ran on until it finished or timed out. An early stop is now kept until the
+  operation starts.
 
 ## [0.2.1] - 2026-10-27
 

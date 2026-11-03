@@ -13,6 +13,7 @@ const entry = (over: Partial<GitLogEntry>): GitLogEntry => ({
   seq: 1,
   startedAt: Date.UTC(2026, 9, 26, 12, 0, 0),
   durationMs: 12,
+  program: "git",
   cwd: REPO.path,
   args: ["status"],
   readOnly: true,
@@ -67,6 +68,7 @@ describe("console helpers", () => {
     expect(formatCommand(["add", "--", "notes/new file.md", ""])).toBe(
       "git add -- 'notes/new file.md' ''",
     );
+    expect(formatCommand(["GET", "/api/v4/user"], "GitLab")).toBe("GitLab GET /api/v4/user");
     const running = entry({ id: 5, ok: null, durationMs: null });
     const merged = mergeEntries([entry({ id: 4 }), running], [{ ...running, ok: true, seq: 9 }]);
     expect(merged.map((e) => [e.id, e.ok])).toEqual([

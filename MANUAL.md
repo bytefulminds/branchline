@@ -12,7 +12,8 @@ Everything Branchline can do, and how. For a quick tour with screenshots, see th
 - [Stashes, tags and worktrees](#stashes-tags-and-worktrees)
 - [Merge, rebase, cherry-pick and revert](#merge-rebase-cherry-pick-and-revert)
 - [Conflicts and the merge editor](#conflicts-and-the-merge-editor)
-- [AI commit messages](#ai-commit-messages)
+- [Merge requests (GitLab)](#merge-requests-gitlab)
+- [AI](#ai)
 - [Git console and hooks](#git-console-and-hooks)
 - [Settings](#settings)
 - [Keyboard shortcuts](#keyboard-shortcuts)
@@ -102,7 +103,9 @@ Updates are signed with Branchline's own update key, so only genuine releases ar
   and delete them. Remote branches check out as tracking branches; unmerged branches need a
   second confirmation before deletion; switching never overwrites uncommitted work.
 - Sort by name or by last commit (remembered); the current branch stays on top.
-- Quick branch switcher in the title bar, and every branch in the command palette.
+- Quick branch switcher in the title bar: your most recent local branches, and below them
+  the newest remote branches that have no local branch yet. Choosing one of those checks it
+  out as a tracking branch. Every branch is also in the command palette.
 - Drag a branch (in Branches, or its label in History) onto another branch or a commit to merge
   or rebase; a menu offers what is possible from there.
 
@@ -170,14 +173,68 @@ Updates are signed with Branchline's own update key, so only genuine releases ar
   editor opened it. Binary files, symbolic links and files deleted on one side get whole-file
   choices (keep one version or delete the file).
 
-## AI commit messages
+## Merge requests (GitLab)
 
-- Connect your own [Ollama](https://ollama.com) server (local or on your network) in
-  Settings > AI commit messages: test the connection, pick a model, the style (Conventional
-  Commits or plain), the language and extra team instructions.
-- With AI commit messages on, "Suggest message" in the commit box writes a summary and
+- Connect your GitLab account in Settings > Accounts: choose the service (GitLab today;
+  GitHub and Bitbucket are planned), the address (GitLab.com or your own server) and a
+  personal access token. Make the token under your own profile, so it acts as you. "Create a token on GitLab" opens the right page with
+  the name and the `api` scope filled in; `read_api` is enough to only read. Branchline checks
+  the token before it keeps it, and says what it may do.
+- The token is kept in your system's password store (macOS Keychain, Windows Credential
+  Manager, or the Secret Service on Linux, such as GNOME Keyring or KWallet), never in a
+  settings file. Disconnect deletes it there; revoke it on GitLab to make it stop working.
+- When the open repository has a remote on a connected server, the sidebar shows **Reviews**
+  (`Ctrl+7` / `⌘7`) with the number of open merge requests where you are a reviewer, your own
+  included when you set yourself as reviewer. In a fork, the `upstream` remote's project is
+  used, otherwise `origin`.
+- Three lists: **To review** (you are a reviewer), **Created by you** and **All open**. For
+  the repository's project, Branchline reads all of its open merge requests and picks the
+  ones for you itself, by your user id. **All projects** on the server asks GitLab to filter
+  instead; All open is for one project only.
+- Each merge request shows its title, number, author, source and target branch, when it was
+  last updated, its reviewers, and whether it is a draft, has conflicts, has comments, what
+  its pipeline did, and whether you already approved it. The lists load when the repository
+  opens, with Refresh, and when the window gets focus (at most every 30 seconds, with
+  Settings > General > Refresh when Branchline gets focus); they are not polled. Up to 50
+  merge requests are listed, newest activity first.
+- Every request Branchline sends to GitLab is listed in the Git console (`Ctrl+J` / `⌘J`):
+  the address, the HTTP status, how long it took and the response, never the token. The
+  details fetched per row (pipeline, approvals) count as routine reads.
+- **Open** (or double-click) reads a merge request of the repository's project in Branchline.
+  Its commits are fetched from the remote with your usual Git credentials (with progress and
+  Stop), into `refs/branchline/merge-requests/<number>`, so they never show up as a branch or
+  in History. The diff is computed locally between the merge request's base and its newest
+  commit; GitLab only provides the details and the comments.
+- The left side shows the overview (description, discussion and commits) and the changed
+  files with their line counts and how many comment threads each has. Choosing a file shows
+  its diff, in one column or side by side, with that file's comment threads above it: their
+  line, whether they are resolved, and whether they were made on an older version. System
+  notes such as "added 1 commit" are left out.
+- Merge requests of other projects (in All projects) open on GitLab, as does the button next
+  to Open. Commenting and approving from Branchline, and an optional AI review game, are
+  planned; see [the plan](docs/plans/merge-request-reviews.md).
+
+## AI
+
+- Turn on **Use AI** in Settings > AI and choose a provider:
+  - **Ollama** (private): a model on your own computer or network, from
+    [ollama.com](https://ollama.com).
+  - **OpenAI-compatible server**: LM Studio, vLLM, the llama.cpp server, OpenRouter and
+    others. Use the address that ends in `/v1`; an API key is optional.
+  - **Anthropic** (Claude) or **OpenAI** (GPT): cloud models with an API key. A Claude Pro
+    or Max plan, or a ChatGPT plan, does not include the API: make a key in the Claude
+    Console or on the OpenAI platform (Settings links to both). API use is billed per use,
+    separately from a subscription.
+- API keys go to the system's password store, never into Branchline's settings file, and
+  never come back to the window. Test lists the provider's models; pick one, then the
+  message style (Conventional Commits or plain), the language and extra team instructions.
+- With AI off, no AI feature appears anywhere in Branchline and nothing is sent.
+- With AI and "Suggest commit messages" on, "Suggest message" in the commit box writes a summary and
   description for the staged changes. The text streams in, `Esc` or Stop cancels it, and a
   message you had typed can be restored with Undo.
+- Thinking models (Qwen 3, DeepSeek R1, gpt-oss) are asked to answer without a thinking
+  step in Ollama, which is much faster for commit messages. Branchline also sets Ollama's
+  context size so the whole shortened diff fits.
 - Only the staged diff (shortened), the list of changed files, the branch name and recent commit
   subjects are sent, and only when you ask. See [Privacy and security](#privacy-and-security).
 
@@ -189,6 +246,7 @@ Updates are signed with Branchline's own update key, so only genuine releases ar
 - Routine reads such as `status` are hidden unless you ask for them; failures always show.
   Filter on failed commands only, or search the commands and their output.
 - A failed commit or push offers "Show Git output", which opens the console on that command.
+- Requests to GitLab show up there too (see [Merge requests](#merge-requests-gitlab)).
   Copy a command to run it yourself in a terminal.
 - Git hooks such as Husky and lint-staged find the same tools as your terminal. Apps started
   from the Dock or Finder get a minimal PATH, so at startup Branchline asks your login shell
@@ -206,12 +264,14 @@ Open Settings with `Ctrl+,` / `⌘,` or the gear in the title bar. Changes are s
   branches on fetch, push annotated tags with commits.
 - **Identity and signing:** name, email and commit signing (GPG, SSH or X.509), for all
   repositories (`~/.gitconfig`) or only the open one.
+- **Accounts:** GitLab accounts for the Reviews view; see
+  [Merge requests](#merge-requests-gitlab).
 - **Editor and diff:** the editor and terminal that "Open in editor", "Open in terminal" and
   "Show in Finder/Explorer" use (repository menu, and a button on each changed file), diff
   layout, syntax highlighting, context lines, ignoring whitespace, tab width and code font size.
 - **Confirmations:** turn off the questions before discarding, force pushing, rebasing a
   published branch or deleting a branch. Deleting unmerged work always asks.
-- **AI commit messages:** see [AI commit messages](#ai-commit-messages).
+- **AI:** see [AI](#ai).
 - **About Branchline** (also "About Branchline" in the command palette): version, update
   check, links, and every open-source package Branchline is built with, with its license and
   license text. The list shows ten packages at a time; search it, show more, or show all.
@@ -228,6 +288,7 @@ keyboard shortcut in the app.
 | `Ctrl+O` | `⌘O` | Open a repository |
 | `Ctrl+R` or `F5` | `⌘R` | Refresh |
 | `Ctrl+1` to `Ctrl+6` | `⌘1` to `⌘6` | Changes, History, Branches, Stashes, Tags, Worktrees |
+| `Ctrl+7` | `⌘7` | Reviews (with a GitLab account connected) |
 | `Ctrl+F` | `⌘F` | Search commits in History |
 | `Ctrl+Enter` | `⌘↵` | Commit |
 | `Ctrl+J` | `⌘J` | Git console |
@@ -263,15 +324,25 @@ select lines), dialogs and panels. See [docs/accessibility.md](docs/accessibilit
   anything reaches the UI, including error messages.
 - Force push always uses `--force-with-lease`, so it cannot overwrite commits you have not
   fetched.
-- AI suggestions only contact the Ollama server you configured, only when you ask for a
-  suggestion (or test the connection), and only send the staged diff (shortened), the list of
-  changed files, the branch name and recent commit subjects. Unstaged files are never sent.
-  The address may not contain credentials, redirects are not followed, and system proxies
-  are skipped for `localhost`. Settings warn when the server is not on this computer.
+- AI suggestions only contact the provider you chose (your Ollama or OpenAI-compatible
+  server, or the API of Anthropic or OpenAI), only when you ask for a suggestion (or test
+  the connection), and only send the staged diff (shortened), the list of changed files, the
+  branch name and recent commit subjects. Unstaged files are never sent. Addresses may not
+  contain credentials, redirects are not followed, and system proxies are skipped for
+  `localhost`. Settings warn when the server is not on this computer, and say plainly that a
+  cloud provider gets your staged changes.
+- API keys are stored in the system's password store and never reach the app's web view.
+  Branchline reads them at most once per run, and never sends a key over plain `http://` to
+  another computer.
+- GitLab tokens are stored in the system's password store and never reach the app's web
+  view; Branchline sends them only to the server they were made for, in a request header
+  (never in an address). Addresses must use `https://` (plain `http://` only for a server on
+  this computer), may not contain credentials, and redirects are not followed. Merge request
+  pages open in the browser only when they belong to a connected server.
 - The webview has a strict CSP and only the Tauri permissions it needs (window controls, the
   folder picker, the app version, installing updates and restarting). Web links open in the
-  browser only for Branchline's own GitLab pages, ollama.com and package pages on npmjs.com
-  and crates.io.
+  browser only for Branchline's own GitLab pages, ollama.com, the API key pages of Anthropic
+  and OpenAI, and package pages on npmjs.com and crates.io.
 - Updates are only installed when their signature matches the update key built into
   Branchline, and only after you agree. The update check only contacts the release page on
   GitLab.
@@ -321,6 +392,13 @@ by page. Method and all numbers per platform: [docs/performance.md](docs/perform
 - The changed-file list is capped at 10,000 entries.
 - Bare repositories are not supported.
 - Paths that are not valid UTF-8 are shown with replacement characters.
+- Reviews work with GitLab only for now (GitHub and Bitbucket are planned) and list at most
+  50 merge requests. On Linux, keeping a token needs a running Secret Service (GNOME Keyring,
+  KWallet); without one, Settings says so.
+- Reading a merge request shows its comments above the file's diff, not between the lines,
+  and shows descriptions and comments as plain text (Markdown is not formatted yet). It
+  lists the first 100 commits and comment threads. The fetched `refs/branchline/...` refs stay
+  in the repository; `git update-ref -d` removes one.
 - Runs on macOS and Linux; Windows has not been run yet. Automated tests and measurements so far
   ran on Linux.
 
@@ -393,6 +471,7 @@ src/                     React + TypeScript frontend
   features/settings/     Settings screen and provider
   features/about/        About section and the open-source package list
   features/console/      Git console
+  features/reviews/      Reviews view and the accounts and review state behind it
   features/commands/     Command palette, keyboard shortcut map
   features/updates/      Update checks
   features/measure/      Startup and interaction timing (--measure-startup)
@@ -416,9 +495,12 @@ src-tauri/               Rust backend
   src/git/create.rs      Clone and init
   src/git/identity.rs    user.name, user.email and commit signing (global or per repository)
   src/settings.rs        Settings file (JSON in the app's configuration folder)
+  src/secrets.rs         Tokens and API keys in the system's password store
+  src/forge/             GitLab accounts, remote parsing and the merge requests to review
   src/shell_env.rs       PATH from the login shell, for hooks
   src/open.rs            Open in editor or terminal, show in the file manager
-  src/ai.rs              Commit message suggestions from an Ollama server
+  src/ai/                AI providers (Ollama, OpenAI-compatible, Anthropic, OpenAI) and
+                         commit message suggestions
   src/measure.rs         Startup timing report
   src/commands.rs        Tauri IPC commands (async, off the UI thread)
   src/error.rs           Error model shared with the frontend

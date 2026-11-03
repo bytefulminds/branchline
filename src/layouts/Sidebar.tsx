@@ -5,6 +5,7 @@ import {
   FolderTree,
   GitBranch,
   GitCommitHorizontal,
+  GitPullRequest,
   History,
   Tag,
 } from "lucide-react";
@@ -14,13 +15,15 @@ import {
   currentRepositoryPath,
   type RepositoryController,
 } from "../features/repository/useRepository";
+import { useReviews } from "../features/reviews/ReviewsProvider";
 import { useTagActions } from "../features/tags/TagActions";
 import { useWorktreeActions } from "../features/worktrees/WorktreeActions";
 import { displayPath } from "../lib/format";
 import { modKeyLabel } from "../services/platform";
 import "./Sidebar.css";
 
-export type WorkspaceView = "changes" | "history" | "branches" | "stashes" | "tags" | "worktrees";
+export type WorkspaceView =
+  "changes" | "history" | "branches" | "stashes" | "tags" | "worktrees" | "reviews";
 
 const MAX_SIDEBAR_RECENT = 6;
 
@@ -83,6 +86,8 @@ export function Sidebar({
   const conflicts = repo?.changes.filter((c) => c.conflict).length ?? 0;
   const { tags } = useTagActions();
   const { worktrees } = useWorktreeActions();
+  const reviews = useReviews();
+  const reviewCount = reviews.toReview || undefined;
 
   return (
     <nav className="bl-sidebar-frame" aria-label="Repository navigation">
@@ -164,6 +169,16 @@ export function Sidebar({
                 onClick={() => onView("worktrees")}
                 count={worktrees && worktrees.length > 1 ? worktrees.length : undefined}
               />
+              {reviews.available && (
+                <NavItem
+                  icon={<GitPullRequest size={16} />}
+                  label="Reviews"
+                  title={`Merge requests to review (${modKeyLabel}7)`}
+                  active={view === "reviews"}
+                  onClick={() => onView("reviews")}
+                  count={reviewCount}
+                />
+              )}
             </ul>
           </section>
         )}

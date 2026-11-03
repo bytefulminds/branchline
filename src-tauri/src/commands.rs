@@ -675,10 +675,26 @@ pub fn clear_git_command_log() {
     crate::git::command_log::clear();
 }
 
-/// Connect to an Ollama server and list its models (the Test connection button).
+/// Connect to an AI provider and list its models (the Test button). `url` is the address
+/// for Ollama and OpenAI-compatible servers; the cloud providers have a fixed address.
 #[tauri::command]
-pub async fn ai_server_info(url: String) -> Result<crate::ai::ServerInfo, GitError> {
-    blocking(move || crate::ai::server_info(&url)).await
+pub async fn ai_server_info(
+    provider: settings::AiProvider,
+    url: String,
+) -> Result<crate::ai::ServerInfo, GitError> {
+    blocking(move || crate::ai::provider::server_info(provider, &url)).await
+}
+
+/// Whether an API key is stored for the provider. The key itself is never returned.
+#[tauri::command]
+pub async fn ai_key_exists(provider: settings::AiProvider) -> Result<bool, GitError> {
+    blocking(move || crate::ai::provider::has_key(provider)).await
+}
+
+/// Store the provider's API key in the system's credential store; empty removes it.
+#[tauri::command]
+pub async fn save_ai_key(provider: settings::AiProvider, key: String) -> Result<(), GitError> {
+    blocking(move || crate::ai::provider::save_key(provider, &key)).await
 }
 
 /// Suggest a commit message for the staged changes with the model chosen in
@@ -697,6 +713,121 @@ pub async fn suggest_commit_message(
         })
     })
     .await
+}
+
+/// Connected accounts on hosting services (without tokens).
+#[tauri::command]
+pub fn forge_accounts() -> Vec<crate::forge::accounts::Account> {
+    crate::forge::accounts::list()
+}
+
+/// Check a token with a hosting service and remember the account; the token goes to the
+/// system's credential store and never comes back to the frontend.
+#[tauri::command]
+pub async fn connect_account(
+    kind: crate::forge::accounts::ForgeKind,
+    url: String,
+    token: String,
+) -> Result<crate::forge::accounts::Account, GitError> {
+    blocking(move || crate::forge::connect(kind, &url, &token)).await
+}
+
+/// Forget an account and delete its token.
+#[tauri::command]
+pub async fn disconnect_account(
+    kind: crate::forge::accounts::ForgeKind,
+    url: String,
+) -> Result<(), GitError> {
+    blocking(move || crate::forge::accounts::remove(kind, &url)).await
+}
+
+/// The hosting service project the repository belongs to, and whether its account is connected.
+#[tauri::command]
+pub async fn review_source(repo: String) -> Result<Option<crate::forge::ReviewSource>, GitError> {
+    blocking(move || crate::forge::review_source(&repo)).await
+}
+
+/// Open merge requests to review, created by you, or all open ones; in this repository's
+/// project or (except all open ones) everywhere on the server.
+#[tauri::command]
+pub async fn review_requests(
+    repo: String,
+    all_projects: bool,
+    filter: crate::forge::RequestFilter,
+) -> Result<crate::forge::ReviewList, GitError> {
+    blocking(move || crate::forge::review_requests(&repo, all_projects, filter)).await
+}
+
+/// Open a merge request of the repository's project for reading in Branchline: details and
+/// threads from the service, its commits fetched into the repository (progress on
+/// `on_progress`, cancel with `cancel_remote_operation(op_id)`), and its changed files.
+#[tauri::command]
+pub async fn open_merge_request(
+    repo: String,
+    project_id: u64,
+    iid: u64,
+    op_id: String,
+    on_progress: Channel<Progress>,
+) -> Result<crate::forge::RequestDetail, GitError> {
+    blocking(move || {
+        crate::forge::open_request(&repo, project_id, iid, &op_id, &mut |p| {
+            let _ = on_progress.send(p);
+        })
+    })
+    .await
+}
+
+/// Diff of one file between two commits (a merge request's base and head).
+#[tauri::command]
+pub async fn range_file_diff(
+    repo: String,
+    base: String,
+    head: String,
+    path: String,
+    original_path: Option<String>,
+    force: Option<bool>,
+) -> Result<FileDiff, GitError> {
+    blocking(move || {
+        let root = repository::resolve_root(&repo)?;
+        diff::range_diff(
+            &root,
+            &base,
+            &head,
+            &path,
+            original_path.as_deref(),
+            force.unwrap_or(false),
+            &diff_options(),
+        )
+    })
+    .await
+}
+
+/// Open a page of a connected account's server (a merge request) in the browser.
+#[tauri::command]
+pub fn open_forge_page(app: tauri::AppHandle, url: String) -> Result<(), GitError> {
+    use tauri_plugin_opener::OpenerExt;
+    if !crate::forge::is_account_page(&url) {
+        return Err(GitError::Forge(
+            "Branchline only opens pages of the servers you connected.".into(),
+        ));
+    }
+    app.opener()
+        .open_url(url, None::<&str>)
+        .map_err(|e| GitError::Internal(format!("cannot open the browser: {e}")))
+}
+
+/// Open the service's page for making a token, with name and scope filled in.
+#[tauri::command]
+pub fn open_token_page(
+    app: tauri::AppHandle,
+    kind: crate::forge::accounts::ForgeKind,
+    url: String,
+) -> Result<(), GitError> {
+    use tauri_plugin_opener::OpenerExt;
+    let page = crate::forge::token_page(kind, &url)?;
+    app.opener()
+        .open_url(page, None::<&str>)
+        .map_err(|e| GitError::Internal(format!("cannot open the browser: {e}")))
 }
 
 /// Cancel a running fetch, pull, push, clone or suggestion. Unknown ids are ignored.

@@ -12,6 +12,8 @@ import {
   GitBranchPlus,
   GitCommitHorizontal,
   GitFork,
+  GitPullRequest,
+  KeyRound,
   History,
   Info,
   Keyboard,
@@ -35,6 +37,7 @@ import { useBranchActions } from "../branches/BranchActions";
 import { requestHistorySearch } from "../history/HistoryView";
 import { useIntegrateActions } from "../integrate/IntegrateActions";
 import { useRemoteActions } from "../remote/RemoteActions";
+import { useReviews } from "../reviews/ReviewsProvider";
 import { FILE_MANAGER, useOpenIn } from "../repository/useOpenIn";
 import type { RepositoryController } from "../repository/useRepository";
 import { useStashActions } from "../stash/StashActions";
@@ -50,6 +53,7 @@ const VIEWS: { view: WorkspaceView; title: string; icon: React.ReactNode }[] = [
   { view: "stashes", title: "Stashes", icon: <Archive size={16} /> },
   { view: "tags", title: "Tags", icon: <Tag size={16} /> },
   { view: "worktrees", title: "Worktrees", icon: <FolderGit2 size={16} /> },
+  { view: "reviews", title: "Reviews", icon: <GitPullRequest size={16} /> },
 ];
 
 export interface AppCommandHandlers {
@@ -58,6 +62,8 @@ export interface AppCommandHandlers {
   onClone: () => void;
   onCreate: () => void;
   onSettings: () => void;
+  /** Settings > Accounts. */
+  onAccounts: () => void;
   onShortcuts: () => void;
   onAbout: () => void;
   onCheckForUpdates: () => void;
@@ -83,6 +89,7 @@ export function AppCommandPalette({
   const worktrees = useWorktreeActions();
   const integrate = useIntegrateActions();
   const openIn = useOpenIn();
+  const reviews = useReviews();
   const [branches, setBranches] = useState<BranchInfo[]>([]);
 
   const repoPath = repo?.path ?? null;
@@ -142,7 +149,7 @@ export function AppCommandPalette({
       }
     }
 
-    for (const v of VIEWS)
+    for (const v of VIEWS.filter((v) => v.view !== "reviews" || reviews.available))
       add({
         id: `view-${v.view}`,
         title: `Go to ${v.title}`,
@@ -387,6 +394,14 @@ export function AppCommandPalette({
       run: handlers.onSettings,
     });
     add({
+      id: "accounts",
+      title: reviews.accounts.length ? "Accounts" : "Connect a GitLab account…",
+      group: "Branchline",
+      keywords: "gitlab token sign in login merge requests reviews",
+      icon: <KeyRound size={16} />,
+      run: handlers.onAccounts,
+    });
+    add({
       id: "shortcuts",
       title: "Keyboard shortcuts",
       group: "Branchline",
@@ -434,6 +449,8 @@ export function AppCommandPalette({
     worktrees,
     integrate,
     openIn,
+    reviews.available,
+    reviews.accounts.length,
   ]);
 
   return <CommandPalette commands={commands} onClose={onClose} />;

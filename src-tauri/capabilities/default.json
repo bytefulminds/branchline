@@ -33,6 +33,12 @@
           "url": "https://ollama.com/*"
         },
         {
+          "url": "https://platform.claude.com/settings/keys"
+        },
+        {
+          "url": "https://platform.openai.com/api-keys"
+        },
+        {
           "url": "https://www.npmjs.com/package/*"
         },
         {

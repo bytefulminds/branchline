@@ -113,6 +113,14 @@
 .bl-banner--warning svg {
   color: var(--color-warning);
 }
+.bl-banner--error {
+  border: 1px solid rgb(239 68 68 / 35%);
+  background: var(--color-error-subtle);
+  color: var(--color-text-primary);
+}
+.bl-banner--error svg {
+  color: var(--color-error-text);
+}
 
 .bl-changes__stash {
   margin-left: auto;

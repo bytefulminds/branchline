@@ -495,39 +495,56 @@ pub(crate) fn network_lock(root: &Path) -> Result<NetworkGuard, GitError> {
     Ok(NetworkGuard(root.to_path_buf()))
 }
 
-/// Running operations by id, so the UI can cancel them.
-fn registry() -> &'static Mutex<HashMap<String, CancelToken>> {
-    static OPS: OnceLock<Mutex<HashMap<String, CancelToken>>> = OnceLock::new();
-    OPS.get_or_init(Default::default)
+/// Running operations by id, so the UI can cancel them, and cancels that arrived before
+/// their operation registered.
+#[derive(Default)]
+struct Registry {
+    ops: HashMap<String, CancelToken>,
+    /// An operation can be asked to stop while it still prepares (resolving the repository,
+    /// checking the remote, or the first Git command reading the login shell's PATH). Such a
+    /// cancel is kept here briefly and applied when the operation registers.
+    early: HashMap<String, std::time::Instant>,
 }
 
-/// Cancel the operation started with `op_id`. Unknown ids are ignored (it may have finished).
-pub fn cancel(op_id: &str) {
-    if let Some(token) = registry()
+/// How long an early cancel waits for its operation.
+const EARLY_CANCEL_TTL: Duration = Duration::from_secs(120);
+
+fn registry() -> std::sync::MutexGuard<'static, Registry> {
+    static OPS: OnceLock<Mutex<Registry>> = OnceLock::new();
+    OPS.get_or_init(Default::default)
         .lock()
         .unwrap_or_else(|e| e.into_inner())
-        .get(op_id)
-    {
+}
+
+/// Cancel the operation started with `op_id`. An id that is not running yet is remembered
+/// for a short while, so a cancel right after starting is not lost; ids of operations that
+/// already finished are simply forgotten again.
+pub fn cancel(op_id: &str) {
+    let mut reg = registry();
+    if let Some(token) = reg.ops.get(op_id) {
         token.cancel();
+        return;
     }
+    let now = std::time::Instant::now();
+    reg.early
+        .retain(|_, at| now.duration_since(*at) < EARLY_CANCEL_TTL);
+    reg.early.insert(op_id.to_string(), now);
 }
 
 pub(crate) struct Registration(String);
 impl Drop for Registration {
     fn drop(&mut self) {
-        registry()
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .remove(&self.0);
+        registry().ops.remove(&self.0);
     }
 }
 
 pub(crate) fn register(op_id: &str) -> (CancelToken, Registration) {
     let token = CancelToken::default();
-    registry()
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .insert(op_id.to_string(), token.clone());
+    let mut reg = registry();
+    if reg.early.remove(op_id).is_some() {
+        token.cancel();
+    }
+    reg.ops.insert(op_id.to_string(), token.clone());
     (token, Registration(op_id.to_string()))
 }
 
@@ -564,6 +581,9 @@ pub(crate) fn run_network(
     on_progress: &mut dyn FnMut(Progress),
 ) -> Result<GitOutput, GitError> {
     let (cancel, _registration) = register(op_id);
+    if cancel.is_cancelled() {
+        return Err(GitError::Cancelled);
+    }
     let opts = StreamOptions {
         timeout: NETWORK_TIMEOUT,
         env: network_env(root),
@@ -607,6 +627,46 @@ pub fn fetch(
     on_progress: &mut dyn FnMut(Progress),
 ) -> Result<RemoteOutcome, GitError> {
     fetch_with(repo, remote, true, op_id, on_progress)
+}
+
+/// Make sure the commits of GitLab merge request `iid` are in the repository, up to
+/// `head`: if that commit is not here yet, fetch `refs/merge-requests/<iid>/head` from
+/// `remote` into `refs/branchline/merge-requests/<iid>`. That namespace keeps the commits
+/// reachable without showing up as a branch or in History. Uses the remote's own
+/// credentials, like any fetch, and can be cancelled with `op_id`.
+pub fn fetch_merge_request(
+    repo: &str,
+    remote: &str,
+    iid: u64,
+    head: &str,
+    op_id: &str,
+    on_progress: &mut dyn FnMut(Progress),
+) -> Result<(), GitError> {
+    super::log::validate_oid(head)?;
+    let root = resolve_root(repo)?;
+    require_remote(&root, remote)?;
+    let have = run_git(
+        &root,
+        &["cat-file", "-e", &format!("{head}^{{commit}}")],
+        DEFAULT_TIMEOUT,
+    )
+    .map(|o| o.code == 0)
+    .unwrap_or(false);
+    if have {
+        return Ok(());
+    }
+    let _net = network_lock(&root)?;
+    let refspec = format!("+refs/merge-requests/{iid}/head:refs/branchline/merge-requests/{iid}");
+    let out = run_network(
+        &root,
+        &["fetch", "--no-tags", "--progress", "--", remote, &refspec],
+        op_id,
+        on_progress,
+    )?;
+    if out.code != 0 {
+        return Err(classify_remote_failure(out.code, &out.stderr));
+    }
+    Ok(())
 }
 
 /// [`fetch`], choosing whether branches deleted on the remote are pruned.
@@ -999,6 +1059,21 @@ pub fn push(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_cancel_before_the_operation_starts_is_not_lost() {
+        cancel("early-op");
+        let (token, registration) = register("early-op");
+        assert!(token.is_cancelled());
+        drop(registration);
+        // Used up: the next operation with that id starts normally.
+        let (again, _r) = register("early-op");
+        assert!(!again.is_cancelled());
+        // A cancel for a running operation still reaches it.
+        let (running, _r2) = register("running-op");
+        cancel("running-op");
+        assert!(running.is_cancelled());
+    }
 
     #[test]
     fn redacts_credentials_in_urls() {

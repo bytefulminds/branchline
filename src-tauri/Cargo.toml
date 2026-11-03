@@ -29,6 +29,20 @@ tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
 tauri-plugin-opener = "2"
 
+# Tokens for GitLab (and later other services) live in the system's credential store:
+# macOS Keychain, Windows Credential Manager, the Secret Service on Linux (pure Rust).
+[target.'cfg(target_os = "macos")'.dependencies.keyring]
+version = "3"
+features = ["apple-native"]
+
+[target.'cfg(windows)'.dependencies.keyring]
+version = "3"
+features = ["windows-native"]
+
+[target.'cfg(all(unix, not(target_os = "macos")))'.dependencies.keyring]
+version = "3"
+features = ["async-secret-service", "async-io", "crypto-rust"]
+
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
 

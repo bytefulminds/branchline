@@ -66,6 +66,10 @@ describe("AI helpers", () => {
     expect(preferredModel(["llama3.2", "qwen2.5-coder:7b"])).toBe("qwen2.5-coder:7b");
     expect(preferredModel(["llama3.2"])).toBe("llama3.2");
     expect(preferredModel([])).toBe("");
+    expect(preferredModel(["claude-opus-x", "claude-sonnet-x"], "anthropic")).toBe(
+      "claude-sonnet-x",
+    );
+    expect(preferredModel(["gpt-4.1", "gpt-4.1-mini"], "openai")).toBe("gpt-4.1-mini");
   });
 });
 
@@ -77,14 +81,19 @@ describe("AI settings", () => {
     await screen.findByRole("button", { name: "Clone…" });
     await user.keyboard("{Control>},{/Control}");
     const panel = await screen.findByRole("dialog", { name: "Settings" });
-    await user.click(within(panel).getByRole("button", { name: "AI commit messages" }));
+    await user.click(within(panel).getByRole("button", { name: "AI" }));
     expect(calls.some((c) => c.cmd === "ai_server_info")).toBe(false);
 
-    await user.click(within(panel).getByRole("switch", { name: /Suggest commit messages/ }));
+    await user.click(within(panel).getByRole("switch", { name: /Use AI/ }));
     expect(await within(panel).findByText(/Connected to Ollama 0\.6\.2/)).toHaveTextContent(
       "2 models",
     );
-    expect(calls.find((c) => c.cmd === "ai_server_info")?.args.url).toBe("http://localhost:11434");
+    expect(calls.find((c) => c.cmd === "ai_server_info")?.args).toEqual({
+      provider: "ollama",
+      url: "http://localhost:11434",
+    });
+    // Ollama has no key, so the password store is not asked.
+    expect(calls.some((c) => c.cmd === "ai_key_exists")).toBe(false);
     // A coding model is chosen when none was set.
     await waitFor(() => expect(saved(calls)?.ai.model).toBe("qwen2.5-coder:7b"));
     expect(saved(calls)?.ai.enabled).toBe(true);
@@ -110,20 +119,106 @@ describe("AI settings", () => {
     await screen.findByRole("button", { name: "Clone…" });
     await user.keyboard("{Control>},{/Control}");
     const panel = await screen.findByRole("dialog", { name: "Settings" });
-    await user.click(within(panel).getByRole("button", { name: "AI commit messages" }));
+    await user.click(within(panel).getByRole("button", { name: "AI" }));
     expect(within(panel).getByText(/sent to this server/)).toHaveTextContent("not encrypted");
     expect(await within(panel).findByText(/Could not reach Ollama/)).toBeInTheDocument();
     // The chosen model stays visible even though the list could not load.
     expect(within(panel).getByLabelText("Model")).toHaveValue("qwen2.5-coder:7b");
   });
+
+  it("stores a cloud provider's key, then lists its models", async () => {
+    let stored = false;
+    const { user, calls } = start(ENABLED, (cmd, args) => {
+      if (cmd === "ai_key_exists") return stored;
+      if (cmd === "save_ai_key") {
+        stored = args.key !== "";
+        return null;
+      }
+      if (cmd === "ai_server_info")
+        return {
+          version: null,
+          models: [
+            {
+              name: "claude-opus-x",
+              displayName: "Claude Opus X",
+              size: null,
+              parameterSize: null,
+            },
+            {
+              name: "claude-sonnet-x",
+              displayName: "Claude Sonnet X",
+              size: null,
+              parameterSize: null,
+            },
+          ],
+        };
+    });
+    await screen.findByRole("button", { name: "Clone…" });
+    await user.keyboard("{Control>},{/Control}");
+    const panel = await screen.findByRole("dialog", { name: "Settings" });
+    await user.click(within(panel).getByRole("button", { name: "AI" }));
+    await user.selectOptions(within(panel).getByLabelText("Provider"), "anthropic");
+    await waitFor(() => expect(saved(calls)?.ai.provider).toBe("anthropic"));
+    expect(within(panel).getByText(/does not include the API/)).toBeInTheDocument();
+    expect(within(panel).getByText(/sent to Anthropic/)).toBeInTheDocument();
+    expect(await within(panel).findByText(/Save your Anthropic API key first/)).toBeInTheDocument();
+    expect(within(panel).getByRole("button", { name: "Test" })).toBeDisabled();
+    expect(within(panel).queryByLabelText("Server address")).not.toBeInTheDocument();
+    const before = calls.filter((c) => c.cmd === "ai_server_info").length;
+
+    await user.type(within(panel).getByLabelText("API key"), "sk-ant-secret");
+    await user.click(within(panel).getByRole("button", { name: "Save" }));
+    expect(calls.find((c) => c.cmd === "save_ai_key")?.args).toEqual({
+      provider: "anthropic",
+      key: "sk-ant-secret",
+    });
+    expect(await within(panel).findByText(/Connected to Anthropic/)).toHaveTextContent("2 models");
+    const tests = calls.filter((c) => c.cmd === "ai_server_info");
+    expect(tests.length).toBe(before + 1);
+    expect(tests.at(-1)?.args.provider).toBe("anthropic");
+    // A Sonnet model is chosen, and the Ollama model is kept for later.
+    await waitFor(() => expect(saved(calls)?.ai.anthropicModel).toBe("claude-sonnet-x"));
+    expect(saved(calls)?.ai.model).toBe("qwen2.5-coder:7b");
+    expect(within(panel).getByRole("option", { name: "Claude Sonnet X" })).toBeInTheDocument();
+    // The key never comes back to the window.
+    expect(within(panel).getByLabelText("API key")).toHaveValue("");
+    expect(within(panel).getByText(/Saved in your system's password store/)).toBeInTheDocument();
+
+    await user.click(within(panel).getByRole("button", { name: "Remove" }));
+    expect(calls.filter((c) => c.cmd === "save_ai_key").at(-1)?.args.key).toBe("");
+    expect(await within(panel).findByText(/Save your Anthropic API key first/)).toBeInTheDocument();
+  });
 });
 
 describe("suggesting a commit message", () => {
-  it("is hidden while the feature is off", async () => {
+  it("is hidden while AI is off", async () => {
     const { user } = start(DEFAULT_SETTINGS);
     await user.click(openButton());
     await screen.findByRole("heading", { name: "Changes" });
     expect(screen.queryByRole("button", { name: /Suggest message/ })).not.toBeInTheDocument();
+  });
+
+  it("is hidden when commit suggestions are off", async () => {
+    const { user } = start({ ...ENABLED, ai: { ...ENABLED.ai, commitSuggestions: false } });
+    await user.click(openButton());
+    await screen.findByRole("heading", { name: "Changes" });
+    expect(screen.queryByRole("button", { name: /Suggest message/ })).not.toBeInTheDocument();
+  });
+
+  it("names the cloud model it writes with", async () => {
+    const { user } = start(
+      {
+        ...ENABLED,
+        ai: { ...ENABLED.ai, provider: "anthropic", anthropicModel: "claude-sonnet-x" },
+      },
+      (cmd) => {
+        if (cmd === "suggest_commit_message") return new Promise(() => {});
+      },
+    );
+    await user.click(openButton());
+    await screen.findByRole("heading", { name: "Changes" });
+    await user.click(screen.getByRole("button", { name: /Suggest message/ }));
+    expect(await screen.findByText("Writing with claude-sonnet-x…")).toBeInTheDocument();
   });
 
   it("streams the suggestion into the message and offers undo", async () => {

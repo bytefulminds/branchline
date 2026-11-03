@@ -8,6 +8,10 @@
 //! Limits keep it small: the newest [`MAX_ENTRIES`] commands, and per command the first
 //! [`MAX_STDOUT`] bytes of standard output and [`MAX_STDERR`] bytes of error output.
 //! Credentials in URLs are removed from arguments and output before they are stored.
+//!
+//! Requests to hosting services (the GitLab API) are recorded the same way, with the server
+//! as folder, the method and address as arguments, the HTTP status as exit code and the
+//! response as output. Tokens are sent in a header and never recorded.
 
 use std::path::Path;
 use std::sync::Mutex;
@@ -34,7 +38,9 @@ pub struct CommandEntry {
     pub started_at: u64,
     /// `None` while the command runs.
     pub duration_ms: Option<u64>,
-    /// Folder the command ran in.
+    /// `git`, or the service for an API request (`GitLab`).
+    pub program: String,
+    /// Folder the command ran in; for an API request, the server.
     pub cwd: String,
     /// Arguments after `git`, without the safety options Branchline adds to every call.
     pub args: Vec<String>,
@@ -150,6 +156,7 @@ pub fn start(cwd: &Path, args: &[&str], stdin_bytes: Option<usize>) -> Running {
         seq: log.seq,
         started_at: now_ms(),
         duration_ms: None,
+        program: "git".into(),
         cwd: cwd.display().to_string(),
         args: args.iter().map(|a| redact(a)).collect(),
         read_only: is_read_only(args),
@@ -201,6 +208,73 @@ pub fn finish(running: Running, result: &Result<GitOutput, GitError>, ok: impl F
                 entry.stderr_bytes = detail.len();
                 entry.stderr = redact(&clip(detail, MAX_STDERR));
             }
+        }
+    }
+}
+
+/// Record that an API request started: `program` names the service, `server` its address,
+/// `path` the request after the address. `routine` hides it with routine reads (extra
+/// details fetched for every row of a list).
+pub fn start_request(
+    program: &str,
+    server: &str,
+    method: &str,
+    path: &str,
+    routine: bool,
+) -> Running {
+    let mut log = lock();
+    let id = log.next_id;
+    log.next_id += 1;
+    log.seq += 1;
+    let entry = CommandEntry {
+        id,
+        seq: log.seq,
+        started_at: now_ms(),
+        duration_ms: None,
+        program: program.into(),
+        cwd: redact(server),
+        args: vec![method.into(), redact(path)],
+        read_only: routine,
+        exit_code: None,
+        ok: None,
+        error: None,
+        stdout: String::new(),
+        stdout_bytes: 0,
+        stderr: String::new(),
+        stderr_bytes: 0,
+        stdin_bytes: None,
+    };
+    log.entries.push_back(entry);
+    while log.entries.len() > MAX_ENTRIES {
+        log.entries.pop_front();
+    }
+    Running {
+        id,
+        started: Instant::now(),
+    }
+}
+
+/// Record how an API request ended: its HTTP status and response body, or why it failed.
+pub fn finish_request(running: Running, result: Result<(u16, &str), String>) {
+    let duration = running.started.elapsed().as_millis() as u64;
+    let mut log = lock();
+    log.seq += 1;
+    let seq = log.seq;
+    let Some(entry) = log.entries.iter_mut().rev().find(|e| e.id == running.id) else {
+        return;
+    };
+    entry.seq = seq;
+    entry.duration_ms = Some(duration);
+    match result {
+        Ok((status, body)) => {
+            entry.exit_code = Some(i32::from(status));
+            entry.ok = Some((200..300).contains(&status));
+            entry.stdout_bytes = body.len();
+            entry.stdout = redact(&clip(body, MAX_STDOUT));
+        }
+        Err(e) => {
+            entry.ok = Some(false);
+            entry.error = Some(e);
         }
     }
 }

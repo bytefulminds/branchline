@@ -4,7 +4,7 @@ import { Button, IconButton } from "../../components/Button";
 import { Spinner } from "../../components/Spinner";
 import { Splitter } from "../../components/Splitter";
 import { usePersistentNumber } from "../../lib/usePersistentNumber";
-import { formatCommand, gitLogService, type GitLogEntry } from "../../services/gitLog";
+import { formatCommand, gitLogService, isRequest, type GitLogEntry } from "../../services/gitLog";
 import { readJson, writeJson } from "../../services/storage";
 import { SHORTCUTS } from "../commands/shortcuts";
 import { useGitConsole } from "./GitConsoleProvider";
@@ -31,7 +31,7 @@ export function visibleEntries(entries: GitLogEntry[], f: ConsoleFilter): GitLog
     if (f.hideReads && e.readOnly && !failed) return false;
     if (!q) return true;
     return (
-      formatCommand(e.args).toLowerCase().includes(q) ||
+      formatCommand(e.args, e.program).toLowerCase().includes(q) ||
       e.stderr.toLowerCase().includes(q) ||
       e.cwd.toLowerCase().includes(q)
     );
@@ -100,7 +100,8 @@ function Entry({
   onToggle: () => void;
 }) {
   const detailId = useId();
-  const command = formatCommand(entry.args);
+  const command = formatCommand(entry.args, entry.program);
+  const request = isRequest(entry);
   const status =
     entry.ok === null ? (
       <Spinner size={12} label="Running" />
@@ -128,13 +129,15 @@ function Entry({
           {time(entry.startedAt)}
         </time>
         <span className="bl-console__command mono truncate">{command}</span>
-        <span className="bl-console__repo text-muted truncate">{folderName(entry.cwd)}</span>
+        <span className="bl-console__repo text-muted truncate">
+          {request ? entry.cwd.replace(/^https?:\/\//, "") : folderName(entry.cwd)}
+        </span>
         <span className="bl-console__duration text-muted mono">{duration(entry.durationMs)}</span>
       </button>
       {expanded && (
         <div id={detailId} className="bl-console__detail">
           <dl className="bl-console__facts">
-            <dt>Folder</dt>
+            <dt>{request ? "Server" : "Folder"}</dt>
             <dd className="mono selectable">{entry.cwd}</dd>
             <dt>Result</dt>
             <dd>
@@ -142,7 +145,9 @@ function Entry({
                 ? "Running…"
                 : entry.error
                   ? entry.error
-                  : `Exit code ${entry.exitCode}${entry.ok ? "" : " (failed)"}`}
+                  : request
+                    ? `HTTP ${entry.exitCode}${entry.ok ? "" : " (failed)"}`
+                    : `Exit code ${entry.exitCode}${entry.ok ? "" : " (failed)"}`}
               {entry.durationMs !== null && ` · ${duration(entry.durationMs)}`}
             </dd>
             {entry.stdinBytes !== null && (
@@ -158,13 +163,20 @@ function Entry({
             bytes={entry.stderrBytes}
             limitNote
           />
-          <Output title="Output (stdout)" text={entry.stdout} bytes={entry.stdoutBytes} limitNote />
+          <Output
+            title={request ? "Response" : "Output (stdout)"}
+            text={entry.stdout}
+            bytes={entry.stdoutBytes}
+            limitNote
+          />
           {!entry.stderr && !entry.stdout && entry.ok !== null && (
-            <p className="text-muted text-small">Git printed nothing.</p>
+            <p className="text-muted text-small">
+              {request ? "The server sent nothing." : "Git printed nothing."}
+            </p>
           )}
           <div className="bl-console__actions">
             <Button size="sm" icon={<Copy size={14} aria-hidden />} onClick={() => copy(command)}>
-              Copy command
+              {request ? "Copy request" : "Copy command"}
             </Button>
             {(entry.stderr || entry.stdout) && (
               <Button

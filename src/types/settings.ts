@@ -3,6 +3,9 @@ import type { PullMode } from "./git";
 /** Unified: one column. Split: old version left, new version right. */
 export type DiffLayout = "unified" | "split";
 
+/** Mirrors `AiProvider` in `src-tauri/src/settings.rs`. */
+export type AiProvider = "ollama" | "openaiCompatible" | "anthropic" | "openai";
+
 /** Mirrors `src-tauri/src/settings.rs`. */
 export interface Settings {
   general: {
@@ -34,9 +37,17 @@ export interface Settings {
     confirmDeleteBranch: boolean;
   };
   ai: {
+    /** The general "Use AI" switch. */
     enabled: boolean;
+    provider: AiProvider;
+    /** Ollama server and model. */
     url: string;
     model: string;
+    compatibleUrl: string;
+    compatibleModel: string;
+    anthropicModel: string;
+    openaiModel: string;
+    commitSuggestions: boolean;
     style: "conventional" | "plain";
     language: string;
     instructions: string;
@@ -69,8 +80,14 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   ai: {
     enabled: false,
+    provider: "ollama",
     url: "http://localhost:11434",
     model: "",
+    compatibleUrl: "http://localhost:1234/v1",
+    compatibleModel: "",
+    anthropicModel: "",
+    openaiModel: "",
+    commitSuggestions: true,
     style: "conventional",
     language: "English",
     instructions: "",

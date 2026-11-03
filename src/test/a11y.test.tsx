@@ -10,12 +10,29 @@ import userEvent from "@testing-library/user-event";
 import { describe, it } from "vitest";
 import App from "../App";
 import { audit } from "./axe";
-import { installTauriTestEnvironment, makeHistory, openButton, REPO, setup } from "./harness";
+import {
+  diffFor,
+  installTauriTestEnvironment,
+  makeHistory,
+  openButton,
+  REPO,
+  setup,
+} from "./harness";
+import type { Account } from "../types/forge";
 import type { RepositoryInfo } from "../types/git";
 
 installTauriTestEnvironment();
 
 const COMMITS = makeHistory(30);
+const ACCOUNT: Account = {
+  kind: "gitlab",
+  url: "https://gitlab.com",
+  host: "gitlab.com",
+  id: 7,
+  username: "ada",
+  name: "Ada Lovelace",
+  access: "write",
+};
 const REPO_AT_HEAD: RepositoryInfo = {
   ...REPO,
   head: { kind: "branch", name: "main", oid: COMMITS[0]!.oid },
@@ -92,6 +109,93 @@ async function start() {
     if (cmd === "list_tags") return [];
     if (cmd === "list_remotes")
       return [{ name: "origin", url: "https://example.com/repo.git", pushUrl: null }];
+    if (cmd === "forge_accounts") return [ACCOUNT];
+    if (cmd === "review_source")
+      return { remote: "origin", host: "gitlab.com", project: "acme/demo", account: ACCOUNT };
+    if (cmd === "open_merge_request")
+      return {
+        request: {
+          projectId: 1,
+          projectPath: "acme/demo",
+          iid: 4,
+          title: "Add the forecast cache",
+          webUrl: "https://gitlab.com/acme/demo/-/merge_requests/4",
+          author: { name: "Tom Jansen", username: "tom" },
+          reviewers: [{ name: "Ada Lovelace", username: "ada" }],
+          sourceBranch: "feature/cache",
+          targetBranch: "main",
+          draft: false,
+          createdAt: "2026-10-30T09:00:00Z",
+          updatedAt: "2026-11-01T09:00:00Z",
+          comments: 2,
+          pipeline: "success",
+          approvedByYou: false,
+          hasConflicts: false,
+        },
+        description: "Caches forecasts.",
+        base: "b".repeat(40),
+        head: "c".repeat(40),
+        commits: [
+          { oid: "c".repeat(40), title: "Add the cache", authorName: "Tom", createdAt: "" },
+        ],
+        threads: [
+          {
+            id: "t1",
+            position: {
+              path: "src/app.ts",
+              oldPath: null,
+              oldLine: null,
+              newLine: 1,
+              outdated: true,
+            },
+            resolved: true,
+            notes: [{ author: { name: "Ada", username: "ada" }, body: "Why?", createdAt: "" }],
+          },
+          {
+            id: "t2",
+            position: null,
+            resolved: null,
+            notes: [{ author: { name: "Tom", username: "tom" }, body: "Ready", createdAt: "" }],
+          },
+        ],
+        files: [
+          {
+            path: "src/app.ts",
+            originalPath: null,
+            status: "M",
+            additions: 2,
+            deletions: 1,
+            binary: false,
+          },
+        ],
+      };
+    if (cmd === "range_file_diff") return diffFor({ path: args.path as string, area: "commit" });
+    if (cmd === "review_requests")
+      return {
+        account: ACCOUNT,
+        project: "acme/demo",
+        truncated: false,
+        items: [
+          {
+            projectId: 1,
+            projectPath: "acme/demo",
+            iid: 4,
+            title: "Add the forecast cache",
+            webUrl: "https://gitlab.com/acme/demo/-/merge_requests/4",
+            author: { name: "Tom Jansen", username: "tom" },
+            reviewers: [{ name: "Ada Lovelace", username: "ada" }],
+            sourceBranch: "feature/cache",
+            targetBranch: "main",
+            draft: true,
+            createdAt: "2026-10-30T09:00:00Z",
+            updatedAt: "2026-11-01T09:00:00Z",
+            comments: 2,
+            pipeline: "success",
+            approvedByYou: true,
+            hasConflicts: true,
+          },
+        ],
+      };
     if (cmd === "get_identity") return { global: identity, repository: null };
     if (cmd === "plugin:app|version") return "0.1.0";
     if (cmd === "git_command_log")
@@ -103,6 +207,7 @@ async function start() {
               seq: 1,
               startedAt: 1_700_000_000_000,
               durationMs: 40,
+              program: "git",
               cwd: REPO.path,
               args: ["commit", "-F", "-"],
               readOnly: false,
@@ -147,12 +252,21 @@ describe("accessibility (axe)", () => {
       ["4", "Stashes"],
       ["5", "Tags"],
       ["6", "Worktrees"],
+      ["7", "Reviews"],
     ];
     for (const [key, name] of views) {
       await user.keyboard(`{Control>}${key}{/Control}`);
       await screen.findByRole("heading", { name, level: 1 });
       await audit(name);
     }
+
+    const mrList = await screen.findByRole("list", { name: "Merge requests to review" });
+    await user.click(within(mrList).getByRole("button", { name: "Open" }));
+    await screen.findByRole("region", { name: "Overview" });
+    await audit("merge request overview");
+    await user.click(screen.getByRole("button", { name: /app\.ts/ }));
+    await screen.findByRole("region", { name: "Comments on app.ts" });
+    await audit("merge request file");
 
     await user.keyboard("{Control>}2{/Control}");
     await user.click(await screen.findByRole("button", { name: /^Filters/ }));
@@ -195,9 +309,10 @@ describe("accessibility (axe)", () => {
       "General",
       "Git",
       "Identity & signing",
+      "Accounts",
       "Editor & diff",
       "Confirmations",
-      "AI commit messages",
+      "AI",
     ]) {
       await user.click(within(settings).getByRole("button", { name: section }));
       await audit(`settings: ${section}`);
