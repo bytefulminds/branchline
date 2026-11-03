@@ -347,8 +347,7 @@ export function InteractiveRebaseDialog({
             <div className="bl-irebase__ai">
               {suggesting ? (
                 <Button
-                  size="sm"
-                  variant="ghost"
+                  variant="secondary"
                   icon={<Square size={12} aria-hidden />}
                   onClick={stopSuggesting}
                 >
@@ -356,9 +355,9 @@ export function InteractiveRebaseDialog({
                 </Button>
               ) : (
                 <Button
-                  size="sm"
-                  variant="ghost"
-                  icon={<Sparkles size={14} aria-hidden />}
+                  variant="secondary"
+                  className="bl-irebase__ai-button"
+                  icon={<Sparkles size={15} aria-hidden />}
                   disabled={busy}
                   onClick={() => void suggest()}
                 >
@@ -366,10 +365,11 @@ export function InteractiveRebaseDialog({
                 </Button>
               )}
               <span
-                className={`text-small ${aiNote?.tone === "error" ? "bl-field-group__error" : "text-secondary"}`}
+                className={`bl-irebase__ai-text text-small ${aiNote?.tone === "error" ? "bl-field-group__error" : "text-secondary"}`}
                 role="status"
                 aria-live="polite"
               >
+                {suggesting && <Spinner size={14} />}
                 {suggesting
                   ? "Looking at the commits…"
                   : (aiNote?.text ??

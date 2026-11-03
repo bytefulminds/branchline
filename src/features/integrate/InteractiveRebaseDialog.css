@@ -101,11 +101,30 @@
   align-items: center;
   gap: 4px;
 }
+/* The AI suggestion stands out from the description text: a tinted panel with an accent
+   button. */
 .bl-irebase__ai {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-3);
   margin-top: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid rgb(0 209 160 / 35%);
+  border-radius: var(--radius-md);
+  background: rgb(0 209 160 / 8%);
+}
+.bl-irebase__ai .bl-irebase__ai-button {
+  flex: none;
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+.bl-irebase__ai .bl-irebase__ai-button:hover:not(:disabled) {
+  background: rgb(0 209 160 / 14%);
+}
+.bl-irebase__ai-text {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
 }
 .bl-irebase__notes {
   display: flex;
