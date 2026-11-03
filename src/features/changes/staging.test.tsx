@@ -53,7 +53,15 @@ describe("staging", () => {
       repo: REPO.path,
       paths: ["src/app.ts"],
     });
-    await screen.findByText("1 unstaged · 2 staged");
+    await screen.findByText("2 staged · 1 unstaged");
+  });
+
+  it("lists staged changes above unstaged ones", async () => {
+    const { list } = await openRepo();
+    const groups = within(list)
+      .getAllByRole("group")
+      .map((g) => g.getAttribute("aria-label")?.replace(/ \(\d+\)$/, ""));
+    expect(groups).toEqual(["Staged changes", "Unstaged changes"]);
   });
 
   it("stages and unstages the selected file with Space", async () => {
@@ -62,10 +70,11 @@ describe("staging", () => {
       if (cmd === "unstage_files") return REPO;
     });
     act(() => list.focus());
-    await user.keyboard("{ArrowDown}");
+    // Staged files come first, so the unstaged ones start one row lower.
+    await user.keyboard("{ArrowDown}{ArrowDown}");
     expect(option(list, "app.ts")).toHaveAttribute("aria-selected", "true");
     await user.keyboard(" ");
-    await screen.findByText("1 unstaged · 2 staged");
+    await screen.findByText("2 staged · 1 unstaged");
     // The selection moved to the next unstaged file.
     expect(option(list, "new file.md")).toHaveAttribute("aria-selected", "true");
     expect(calls.filter((c) => c.cmd === "stage_files")).toHaveLength(1);
@@ -106,7 +115,7 @@ describe("staging", () => {
   it("deleting an untracked file says so", async () => {
     const { user, list } = await openRepo();
     act(() => list.focus());
-    await user.keyboard("{ArrowDown}{ArrowDown}{Delete}");
+    await user.keyboard("{ArrowDown}{ArrowDown}{ArrowDown}{Delete}");
     expect(
       await screen.findByRole("alertdialog", { name: "Delete new file.md?" }),
     ).toHaveTextContent("deleted from disk");

@@ -48,6 +48,8 @@ Branchline, and choose your AI: Ollama, any OpenAI-compatible server, Claude or 
 
 ### Changed
 
+- Changes lists staged files above unstaged ones, so what goes into the next commit is on
+  top.
 - In a narrow window, History gives the description room first: Commit, Date and Author make
   way, and the commit details panel shrinks.
 - Reviews is shown whenever a GitLab account is connected. In a repository without a remote
