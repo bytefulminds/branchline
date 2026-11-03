@@ -523,6 +523,34 @@ pub fn commit_diff(
     }
 }
 
+/// Load the diff of `path` between two commits (a merge request's base and head).
+pub fn range_diff(
+    root: &Path,
+    base: &str,
+    head: &str,
+    path: &str,
+    original_path: Option<&str>,
+    force: bool,
+    opts: &DiffOptions,
+) -> Result<FileDiff, GitError> {
+    let limit = if force {
+        HARD_LIMIT_BYTES
+    } else {
+        SOFT_LIMIT_BYTES
+    };
+    match super::log::range_file_diff_raw(root, base, head, path, original_path, limit, opts) {
+        Ok(raw) => diff_from_raw(raw, path, original_path, DiffArea::Commit, force),
+        Err(GitError::OutputTooLarge { .. }) if !force => Ok(empty_diff(
+            path,
+            original_path,
+            DiffArea::Commit,
+            true,
+            limit as u64,
+        )),
+        Err(e) => Err(e),
+    }
+}
+
 /// Turn raw `git diff` output for one file into a [`FileDiff`].
 fn diff_from_raw(
     raw: Vec<u8>,

@@ -228,7 +228,7 @@ function Workspace() {
             onShowChanges={() => setView("changes")}
           />
         ) : shownView === "reviews" && reviewsAvailable ? (
-          <ReviewsView />
+          <ReviewsView key={state.repo.path} repoPath={state.repo.path} />
         ) : shownView === "branches" ? (
           <BranchesView key={state.repo.path} repo={state.repo} />
         ) : shownView === "worktrees" ? (

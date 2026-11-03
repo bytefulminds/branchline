@@ -1,4 +1,4 @@
-import type { ForgeKind } from "../../types/forge";
+import type { ForgeKind, MergeRequest } from "../../types/forge";
 
 export interface ForgeInfo {
   name: string;
@@ -25,3 +25,11 @@ export const FORGES: Record<ForgeKind, ForgeInfo> = {
 export const PLANNED_FORGES = ["GitHub", "Bitbucket"];
 
 export const forgeInfo = (kind: ForgeKind | undefined): ForgeInfo => FORGES[kind ?? "gitlab"];
+
+/** The title without GitLab's draft prefix ("Draft:", "[Draft]", "(Draft)", "WIP:"), which
+ * the Draft badge already shows. */
+export function displayTitle(mr: Pick<MergeRequest, "title" | "draft">): string {
+  if (!mr.draft) return mr.title;
+  const t = mr.title.replace(/^\s*(\[draft\]|\(draft\)|draft:|draft\s*-|wip:|\[wip\])\s*/i, "");
+  return t ? t[0]!.toUpperCase() + t.slice(1) : mr.title;
+}

@@ -69,7 +69,7 @@ export async function call<T>(cmd: string, args?: Record<string, unknown>): Prom
   }
 }
 
-function progressChannel(onProgress: (p: RemoteProgress) => void): Channel<RemoteProgress> {
+export function progressChannel(onProgress: (p: RemoteProgress) => void): Channel<RemoteProgress> {
   const channel = new Channel<RemoteProgress>();
   channel.onmessage = onProgress;
   return channel;

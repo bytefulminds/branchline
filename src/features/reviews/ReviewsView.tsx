@@ -13,10 +13,14 @@ import { Button, IconButton } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
 import { Spinner } from "../../components/Spinner";
 import { plural, relativeTime } from "../../lib/format";
+import { useState } from "react";
 import { forgeService } from "../../services/forge";
 import type { MergeRequest, RequestFilter, ReviewList } from "../../types/forge";
 import { Avatar } from "../history/Avatar";
-import { forgeInfo, type ForgeInfo } from "./forges";
+import { displayTitle, forgeInfo, type ForgeInfo } from "./forges";
+
+export { displayTitle };
+import { MergeRequestView } from "./MergeRequestView";
 import { useReviews } from "./ReviewsProvider";
 import "../branches/BranchesView.css";
 import "./ReviewsView.css";
@@ -55,18 +59,19 @@ function open(url: string) {
   void forgeService.openPage(url).catch(() => {});
 }
 
-/** The title without GitLab's draft prefix ("Draft:", "[Draft]", "(Draft)", "WIP:"), which
- * the Draft badge already shows. */
-export function displayTitle(mr: Pick<MergeRequest, "title" | "draft">): string {
-  if (!mr.draft) return mr.title;
-  const t = mr.title.replace(/^\s*(\[draft\]|\(draft\)|draft:|draft\s*-|wip:|\[wip\])\s*/i, "");
-  return t ? t[0]!.toUpperCase() + t.slice(1) : mr.title;
-}
-
-function Row({ mr, showProject }: { mr: MergeRequest; showProject: boolean }) {
+function Row({
+  mr,
+  showProject,
+  onOpen,
+}: {
+  mr: MergeRequest;
+  showProject: boolean;
+  /** Read it in Branchline; null when it belongs to another project than the repository. */
+  onOpen: (() => void) | null;
+}) {
   const updated = Date.parse(mr.updatedAt);
   return (
-    <li className="bl-branch bl-review" onDoubleClick={() => open(mr.webUrl)}>
+    <li className="bl-branch bl-review" onDoubleClick={onOpen ?? (() => open(mr.webUrl))}>
       <span className="bl-branch__icon" aria-hidden>
         <GitPullRequest size={15} />
       </span>
@@ -122,14 +127,28 @@ function Row({ mr, showProject }: { mr: MergeRequest; showProject: boolean }) {
         {Number.isNaN(updated) ? "" : relativeTime(updated)}
       </time>
       <span className="bl-branch__actions">
-        <Button
+        {onOpen ? (
+          <Button size="sm" variant="secondary" onClick={onOpen}>
+            Open
+          </Button>
+        ) : (
+          <Button
+            size="sm"
+            variant="secondary"
+            icon={<ExternalLink size={13} aria-hidden />}
+            title="In another project: opens on the website"
+            onClick={() => open(mr.webUrl)}
+          >
+            Open
+          </Button>
+        )}
+        <IconButton
           size="sm"
-          variant="secondary"
+          label="Open on the website"
           icon={<ExternalLink size={13} aria-hidden />}
           onClick={() => open(mr.webUrl)}
-        >
-          Open
-        </Button>
+          data-tooltip-align="end"
+        />
       </span>
     </li>
   );
@@ -172,8 +191,11 @@ function emptyText(filter: RequestFilter, data: ReviewList, f: ForgeInfo): strin
 
 /** Open merge requests on the repository's hosting service: those waiting for your review,
  * those you created, or all open ones; for this project or all projects. */
-export function ReviewsView() {
+export function ReviewsView({ repoPath }: { repoPath: string }) {
   const { source, list, allProjects, setAllProjects, filter, setFilter, refresh } = useReviews();
+  const [opened, setOpened] = useState<MergeRequest | null>(null);
+  const inProject = (mr: MergeRequest) =>
+    !!source && mr.projectPath.toLowerCase() === source.project.toLowerCase();
   const data = list.status === "ready" ? list.list : list.status === "idle" ? null : list.previous;
   const loading = list.status === "loading";
   const items = data?.items ?? [];
@@ -184,6 +206,20 @@ export function ReviewsView() {
       : filter === "createdByYou"
         ? `Your ${f.nouns}`
         : `Open ${f.nouns}`;
+
+  if (opened) {
+    return (
+      <MergeRequestView
+        key={`${opened.projectId}!${opened.iid}`}
+        repoPath={repoPath}
+        request={opened}
+        onBack={() => {
+          setOpened(null);
+          refresh();
+        }}
+      />
+    );
+  }
 
   return (
     <section className="bl-branches" aria-label="Reviews">
@@ -251,15 +287,20 @@ export function ReviewsView() {
           data && (
             <ul className="bl-branch-list bl-reviews__list" aria-label={listLabel}>
               {items.map((mr) => (
-                <Row key={`${mr.projectId}!${mr.iid}`} mr={mr} showProject={allProjects} />
+                <Row
+                  key={`${mr.projectId}!${mr.iid}`}
+                  mr={mr}
+                  showProject={allProjects}
+                  onOpen={inProject(mr) ? () => setOpened(mr) : null}
+                />
               ))}
             </ul>
           )
         )}
         {data && (
           <p className="bl-reviews__note text-small text-muted">
-            Signed in as {data.account.name} (@{data.account.username}) on {data.account.host}.
-            Double-click a {f.noun} to open it on {f.name}; reviewing it in Branchline comes next.
+            Signed in as {data.account.name} (@{data.account.username}) on {data.account.host}. Open
+            (or double-click) a {f.noun} of this project to read it here; others open on {f.name}.
             The requests Branchline makes are listed in the Git console.
           </p>
         )}

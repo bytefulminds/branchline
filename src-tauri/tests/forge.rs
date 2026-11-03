@@ -1,5 +1,6 @@
 //! GitLab accounts and the Reviews list, against a small fake GitLab server on localhost.
 
+use std::fs;
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpListener;
 use std::path::Path;
@@ -8,7 +9,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 
 use branchline_lib::forge::accounts::{self, Access, ForgeKind};
 use branchline_lib::forge::{
-    gitlab, is_account_page, review_requests, review_source, RequestFilter,
+    gitlab, is_account_page, open_request, review_requests, review_source, RequestFilter,
 };
 use branchline_lib::git::command_log;
 use branchline_lib::secrets;
@@ -159,7 +160,12 @@ fn gitlab_route(path: &str, token: Option<&str>) -> (u16, String, &'static str) 
         p if p.starts_with("/api/v4/merge_requests?") => {
             serde_json::json!([mr(11, 1, "group/sub/app!1"), mr(12, 9, "other/lib!9")]).to_string()
         }
-        "/api/v4/projects/11/merge_requests/1" => r#"{"head_pipeline":{"status":"failed"}}"#.into(),
+        "/api/v4/projects/11/merge_requests/1" => {
+            // A full merge request (as GitLab sends it), still without diff_refs.
+            let mut m = mr(11, 1, "group/sub/app!1");
+            m["head_pipeline"] = serde_json::json!({ "status": "failed" });
+            m.to_string()
+        }
         "/api/v4/projects/11/merge_requests/1/approvals" => {
             r#"{"approved_by":[{"user":{"username":"ada","name":"Ada"}}]}"#.into()
         }
@@ -431,4 +437,233 @@ fn opens_only_pages_of_connected_servers() {
     assert!(!is_account_page(&format!("{url}.evil.test/x")));
     assert!(!is_account_page("https://gitlab.com/group/app"));
     assert!(!is_account_page(&format!("{url}/a b")));
+}
+
+/// Commit ids for the merge request test's fake server: (base, head).
+static MR_SHAS: std::sync::OnceLock<Mutex<(String, String)>> = std::sync::OnceLock::new();
+
+fn detail_route(path: &str, token: Option<&str>) -> (u16, String, &'static str) {
+    if token != Some(TOKEN) {
+        return (401, "{}".into(), "");
+    }
+    let (base, head) = MR_SHAS.get().unwrap().lock().unwrap().clone();
+    let body = match path {
+        "/api/v4/user" => USER.to_string(),
+        "/api/v4/personal_access_tokens/self" => r#"{"scopes":["api"]}"#.into(),
+        "/api/v4/projects/11/merge_requests/3" => {
+            let mut m = mr_by(11, 3, "group/sub/app!3", (3, "tom"), &[(7, "ada")]);
+            m["description"] = "Adds the greeting.\n\n- one\n- two".into();
+            m["diff_refs"] = serde_json::json!({ "base_sha": base, "head_sha": head, "start_sha": base });
+            m["head_pipeline"] = serde_json::json!({ "status": "success" });
+            m.to_string()
+        }
+        "/api/v4/projects/11/merge_requests/3/commits?per_page=100" => serde_json::json!([
+            { "id": head, "title": "Add greeting", "author_name": "Tom", "created_at": "2026-11-01T10:00:00Z" }
+        ])
+        .to_string(),
+        "/api/v4/projects/11/merge_requests/3/discussions?per_page=100" => serde_json::json!([
+            { "id": "d1", "notes": [
+                { "body": "Should this be translated?", "author": { "username": "ada", "name": "Ada" },
+                  "created_at": "2026-11-01T11:00:00Z", "resolvable": true, "resolved": false,
+                  "position": { "position_type": "text", "head_sha": head, "new_path": "greet.txt",
+                                "old_path": "greet.txt", "new_line": 2, "old_line": null } },
+                { "body": "Later, yes.", "author": { "username": "tom", "name": "Tom" },
+                  "created_at": "2026-11-01T12:00:00Z", "resolvable": true, "resolved": false }
+            ]},
+            { "id": "d2", "notes": [
+                { "body": "added 1 commit", "author": { "username": "tom", "name": "Tom" },
+                  "created_at": "2026-11-01T10:00:00Z", "system": true }
+            ]},
+            { "id": "d3", "notes": [
+                { "body": "Old remark", "author": { "username": "ada", "name": "Ada" },
+                  "created_at": "2026-10-30T10:00:00Z", "resolvable": true, "resolved": true,
+                  "position": { "position_type": "text", "head_sha": "0000000000000000000000000000000000000000",
+                                "new_path": "greet.txt", "new_line": 1 } }
+            ]},
+            { "id": "d4", "notes": [
+                { "body": "Looks good overall", "author": { "username": "ada", "name": "Ada" },
+                  "created_at": "2026-11-01T13:00:00Z" }
+            ]}
+        ])
+        .to_string(),
+        "/api/v4/projects/11/merge_requests/3/approvals" => r#"{"approved_by":[]}"#.into(),
+        _ => return (404, "{}".into(), ""),
+    };
+    (200, body, "")
+}
+
+fn out(dir: &Path, args: &[&str]) -> String {
+    let o = Command::new("git")
+        .args(args)
+        .current_dir(dir)
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .output()
+        .unwrap();
+    assert!(o.status.success(), "git {args:?}");
+    String::from_utf8_lossy(&o.stdout).trim().to_string()
+}
+
+#[test]
+fn opens_a_merge_request_with_its_commits_files_and_threads() {
+    let _g = serial();
+    let _ = branchline_lib::shell_env::init_with(None);
+    let (url, _) = fake_gitlab(detail_route);
+
+    // The "server": a bare repository with main and, like GitLab, the merge request's
+    // commits only under refs/merge-requests/3/head.
+    let t = TempDir::new().unwrap();
+    let seed = t.path().join("seed");
+    fs::create_dir(&seed).unwrap();
+    git(&seed, &["init", "-q", "-b", "main"]);
+    git(&seed, &["config", "user.name", "T"]);
+    git(&seed, &["config", "user.email", "t@example.com"]);
+    git(&seed, &["config", "commit.gpgsign", "false"]);
+    fs::write(seed.join("greet.txt"), "hi\n").unwrap();
+    git(&seed, &["add", "."]);
+    git(&seed, &["commit", "-qm", "Initial"]);
+    let base = out(&seed, &["rev-parse", "HEAD"]);
+    let bare = t.path().join("server.git");
+    git(
+        t.path(),
+        &[
+            "clone",
+            "-q",
+            "--bare",
+            seed.to_str().unwrap(),
+            bare.to_str().unwrap(),
+        ],
+    );
+    // The reviewer's clone: origin looks like the GitLab project; Git fetches from the bare.
+    let work = t.path().join("work");
+    git(
+        t.path(),
+        &[
+            "clone",
+            "-q",
+            bare.to_str().unwrap(),
+            work.to_str().unwrap(),
+        ],
+    );
+    let remote_url = format!("{url}/group/sub/app.git");
+    git(&seed, &["switch", "-q", "-c", "feature"]);
+    fs::write(seed.join("greet.txt"), "hi\nhello there\n").unwrap();
+    git(&seed, &["commit", "-qam", "Add greeting"]);
+    let head = out(&seed, &["rev-parse", "HEAD"]);
+    git(
+        &seed,
+        &[
+            "push",
+            "-q",
+            bare.to_str().unwrap(),
+            "feature:refs/merge-requests/3/head",
+        ],
+    );
+    *MR_SHAS.get_or_init(Default::default).lock().unwrap() = (base.clone(), head.clone());
+
+    git(&work, &["remote", "set-url", "origin", &remote_url]);
+    git(
+        &work,
+        &[
+            "config",
+            &format!("url.{}.insteadOf", bare.display()),
+            &remote_url,
+        ],
+    );
+    assert!(Command::new("git")
+        .args(["cat-file", "-e", &format!("{head}^{{commit}}")])
+        .current_dir(&work)
+        .status()
+        .map(|s| !s.success())
+        .unwrap());
+
+    gitlab::connect(&url, TOKEN).unwrap();
+    let repo_path = work.to_str().unwrap();
+    let detail = open_request(repo_path, 11, 3, "mr-op", &mut |_| {}).unwrap();
+    assert_eq!(detail.base, base);
+    assert_eq!(detail.head, head);
+    assert_eq!(detail.request.iid, 3);
+    assert_eq!(detail.request.pipeline.as_deref(), Some("success"));
+    assert_eq!(detail.request.approved_by_you, Some(false));
+    assert!(detail.description.starts_with("Adds the greeting."));
+    assert_eq!(detail.commits.len(), 1);
+    assert_eq!(detail.commits[0].title, "Add greeting");
+
+    // Files and diff come from the local repository, after fetching the merge request ref.
+    assert_eq!(detail.files.len(), 1);
+    assert_eq!(detail.files[0].path, "greet.txt");
+    assert_eq!(detail.files[0].additions, Some(1));
+    assert_eq!(
+        out(&work, &["rev-parse", "refs/branchline/merge-requests/3"]),
+        head
+    );
+    // Not a branch, so not in Branches or History.
+    assert!(!out(&work, &["branch", "-a"]).contains("merge-requests"));
+    let root = branchline_lib::git::repository::resolve_root(repo_path).unwrap();
+    let diff = branchline_lib::git::diff::range_diff(
+        &root,
+        &base,
+        &head,
+        "greet.txt",
+        None,
+        false,
+        &Default::default(),
+    )
+    .unwrap();
+    assert!(diff
+        .hunks
+        .iter()
+        .flat_map(|h| &h.lines)
+        .any(|l| l.content == "hello there" && l.new_line == Some(2)));
+
+    // Threads: system notes left out; line threads placed; older versions marked outdated.
+    assert_eq!(detail.threads.len(), 3);
+    let line = &detail.threads[0];
+    assert_eq!(line.notes.len(), 2);
+    assert_eq!(line.resolved, Some(false));
+    let pos = line.position.as_ref().unwrap();
+    assert_eq!(
+        (pos.path.as_str(), pos.new_line, pos.outdated),
+        ("greet.txt", Some(2), false)
+    );
+    assert!(detail.threads[1].position.as_ref().unwrap().outdated);
+    assert_eq!(detail.threads[1].resolved, Some(true));
+    assert!(detail.threads[2].position.is_none());
+    assert_eq!(detail.threads[2].resolved, None);
+
+    // Opening again does not fetch: the commits are here.
+    let before = command_log::since(0)
+        .iter()
+        .filter(|e| e.args.first().map(String::as_str) == Some("fetch"))
+        .count();
+    open_request(repo_path, 11, 3, "mr-op-2", &mut |_| {}).unwrap();
+    let after = command_log::since(0)
+        .iter()
+        .filter(|e| e.args.first().map(String::as_str) == Some("fetch"))
+        .count();
+    assert_eq!(before, after);
+}
+
+#[test]
+fn refuses_unprepared_merge_requests_and_other_projects() {
+    let _g = serial();
+    let (url, _) = fake_gitlab(gitlab_route);
+    gitlab::connect(&url, TOKEN).unwrap();
+    let t = repo(&[("origin", format!("{url}/group/sub/app.git"))]);
+    // GitLab sends no diff_refs while it still computes the changes.
+    let err = open_request(&path(&t), 11, 1, "op", &mut |_| {})
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("not prepared"), "{err}");
+
+    // Both fakes run on 127.0.0.1, and accounts are matched by host: use one at a time.
+    accounts::remove(ForgeKind::Gitlab, &url).unwrap();
+    let (url, _) = fake_gitlab(detail_route);
+    MR_SHAS.get_or_init(Default::default);
+    gitlab::connect(&url, TOKEN).unwrap();
+    // Merge request 3 belongs to group/sub/app; this repository is another project.
+    let other = repo(&[("origin", format!("{url}/other/lib.git"))]);
+    let err = open_request(&path(&other), 11, 3, "op", &mut |_| {})
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("belongs to group/sub/app"), "{err}");
 }

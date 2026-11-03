@@ -200,8 +200,19 @@ Updates are signed with Branchline's own update key, so only genuine releases ar
 - Every request Branchline sends to GitLab is listed in the Git console (`Ctrl+J` / `⌘J`):
   the address, the HTTP status, how long it took and the response, never the token. The
   details fetched per row (pipeline, approvals) count as routine reads.
-- Open (or double-click) opens a merge request on GitLab. Reviewing it in Branchline, with an
-  optional AI review game, is planned; see [the plan](docs/plans/merge-request-reviews.md).
+- **Open** (or double-click) reads a merge request of the repository's project in Branchline.
+  Its commits are fetched from the remote with your usual Git credentials (with progress and
+  Stop), into `refs/branchline/merge-requests/<number>`, so they never show up as a branch or
+  in History. The diff is computed locally between the merge request's base and its newest
+  commit; GitLab only provides the details and the comments.
+- The left side shows the overview (description, discussion and commits) and the changed
+  files with their line counts and how many comment threads each has. Choosing a file shows
+  its diff, in one column or side by side, with that file's comment threads above it: their
+  line, whether they are resolved, and whether they were made on an older version. System
+  notes such as "added 1 commit" are left out.
+- Merge requests of other projects (in All projects) open on GitLab, as does the button next
+  to Open. Commenting and approving from Branchline, and an optional AI review game, are
+  planned; see [the plan](docs/plans/merge-request-reviews.md).
 
 ## AI commit messages
 
@@ -366,6 +377,10 @@ by page. Method and all numbers per platform: [docs/performance.md](docs/perform
 - Reviews work with GitLab only for now (GitHub and Bitbucket are planned) and list at most
   50 merge requests. On Linux, keeping a token needs a running Secret Service (GNOME Keyring,
   KWallet); without one, Settings says so.
+- Reading a merge request shows its comments above the file's diff, not between the lines,
+  and shows descriptions and comments as plain text (Markdown is not formatted yet). It
+  lists the first 100 commits and comment threads. The fetched `refs/branchline/...` refs stay
+  in the repository; `git update-ref -d` removes one.
 - Runs on macOS and Linux; Windows has not been run yet. Automated tests and measurements so far
   ran on Linux.
 

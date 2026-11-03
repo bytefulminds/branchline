@@ -61,6 +61,65 @@ pub struct MergeRequest {
     pub has_conflicts: bool,
 }
 
+/// A commit in a merge request, newest first.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RequestCommit {
+    pub oid: String,
+    pub title: String,
+    pub author_name: String,
+    /// ISO 8601.
+    pub created_at: String,
+}
+
+/// Where a comment thread sits in the diff: a line on the new side (`new_line`), or for a
+/// removed line only on the old side (`old_line`).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NotePosition {
+    pub path: String,
+    pub old_path: Option<String>,
+    pub old_line: Option<u32>,
+    pub new_line: Option<u32>,
+    /// The comment was made on an older version of the merge request, so its line numbers
+    /// may not match the diff shown.
+    pub outdated: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Note {
+    pub author: Person,
+    /// Markdown as written.
+    pub body: String,
+    pub created_at: String,
+}
+
+/// A comment thread: on a line of the diff, or on the merge request as a whole.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Thread {
+    pub id: String,
+    pub position: Option<NotePosition>,
+    pub resolved: Option<bool>,
+    pub notes: Vec<Note>,
+}
+
+/// Everything needed to read a merge request in Branchline.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RequestDetail {
+    pub request: MergeRequest,
+    pub description: String,
+    /// The diff is `base` (merge base with the target branch) to `head` (newest commit).
+    pub base: String,
+    pub head: String,
+    pub commits: Vec<RequestCommit>,
+    pub threads: Vec<Thread>,
+    /// Files changed from `base` to `head`, computed from the local repository.
+    pub files: Vec<crate::git::log::CommitFile>,
+}
+
 /// The project on a hosting service that an open repository belongs to.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -162,6 +221,52 @@ pub fn review_requests(
         project: project.map(str::to_string),
         items,
     })
+}
+
+/// Open a merge request of the repository's own project for reading: its details and
+/// threads from the service, and its commits fetched into the repository (with the remote's
+/// own credentials) so the diff is computed locally.
+pub fn open_request(
+    repo: &str,
+    project_id: u64,
+    iid: u64,
+    op_id: &str,
+    on_progress: &mut dyn FnMut(crate::git::remote::Progress),
+) -> Result<RequestDetail, GitError> {
+    let source = review_source(repo)?.ok_or_else(|| {
+        GitError::Forge("This repository has no remote on a supported hosting service.".into())
+    })?;
+    let account = source.account.clone().ok_or_else(|| {
+        GitError::Forge(format!(
+            "Connect your account on {} in Settings > Accounts first.",
+            source.host
+        ))
+    })?;
+    let mut detail = match account.kind {
+        ForgeKind::Gitlab => gitlab::detail(&account, project_id, iid)?,
+    };
+    if !detail
+        .request
+        .project_path
+        .eq_ignore_ascii_case(&source.project)
+    {
+        return Err(GitError::Forge(format!(
+            "This merge request belongs to {}, not to the open repository ({}). Open it on the \
+             website, or open that project's repository in Branchline.",
+            detail.request.project_path, source.project
+        )));
+    }
+    crate::git::remote::fetch_merge_request(
+        repo,
+        &source.remote,
+        iid,
+        &detail.head,
+        op_id,
+        on_progress,
+    )?;
+    let root = crate::git::repository::resolve_root(repo)?;
+    detail.files = crate::git::log::range_files(&root, &detail.base, &detail.head)?;
+    Ok(detail)
 }
 
 /// Whether a web page belongs to a connected account's server (so Branchline may open it

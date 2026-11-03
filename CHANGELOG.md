@@ -16,6 +16,9 @@ description on GitLab.
   the system's password store. Three lists: to review (your own merge requests too, when you
   are their reviewer), created by you, and all open in the project, each with its reviewers.
   The lists refresh when Branchline gets focus.
+- Read a merge request in Branchline: Open in Reviews fetches its commits with your Git
+  credentials and shows the description, discussion, commits and changed files, and each
+  file's diff (one column or side by side) with its comment threads.
 - The Git console also lists every request Branchline sends to GitLab, with its status and
   response (never the token).
 - The branch menu in the title bar also lists remote branches without a local branch, to

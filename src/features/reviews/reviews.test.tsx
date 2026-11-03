@@ -2,8 +2,8 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import App from "../../App";
-import { installTauriTestEnvironment, openButton, REPO, setup } from "../../test/harness";
-import type { Account, MergeRequest, ReviewList } from "../../types/forge";
+import { diffFor, installTauriTestEnvironment, openButton, REPO, setup } from "../../test/harness";
+import type { Account, MergeRequest, RequestDetail, ReviewList } from "../../types/forge";
 import { displayTitle } from "./ReviewsView";
 
 installTauriTestEnvironment();
@@ -158,7 +158,7 @@ describe("reviews", () => {
     expect(screen.getByText("2 merge requests waiting for your review")).toBeInTheDocument();
     expect(rows[0]).toHaveTextContent("Reviewers: Ada Lovelace");
 
-    await user.click(within(rows[0]!).getByRole("button", { name: "Open" }));
+    await user.click(within(rows[0]!).getByRole("button", { name: "Open on the website" }));
     await waitFor(() =>
       expect(calls.find((c) => c.cmd === "open_forge_page")?.args.url).toBe(MR(1).webUrl),
     );
@@ -239,5 +239,141 @@ describe("reviews", () => {
     );
     await user.keyboard("{Escape}");
     await waitFor(() => expect(screen.queryByRole("button", { name: /^Reviews/ })).toBeNull());
+  });
+});
+
+describe("reading a merge request", () => {
+  const DETAIL: RequestDetail = {
+    request: MR(1, { pipeline: "success" }),
+    description: "Caches forecasts for ten minutes.\n\nCloses #12.",
+    base: "b".repeat(40),
+    head: "c".repeat(40),
+    commits: [
+      { oid: "c".repeat(40), title: "Add the cache", authorName: "Tom Jansen", createdAt: "" },
+    ],
+    threads: [
+      {
+        id: "t1",
+        position: null,
+        resolved: null,
+        notes: [
+          { author: { name: "Priya Raman", username: "priya" }, body: "Nice!", createdAt: "" },
+        ],
+      },
+      {
+        id: "t2",
+        position: { path: "src/app.ts", oldPath: null, oldLine: null, newLine: 3, outdated: false },
+        resolved: false,
+        notes: [
+          {
+            author: { name: "Ada Lovelace", username: "ada" },
+            body: "Why ten minutes?",
+            createdAt: "",
+          },
+        ],
+      },
+    ],
+    files: [
+      {
+        path: "src/app.ts",
+        originalPath: null,
+        status: "M",
+        additions: 2,
+        deletions: 1,
+        binary: false,
+      },
+      {
+        path: "README.md",
+        originalPath: null,
+        status: "M",
+        additions: 1,
+        deletions: 0,
+        binary: false,
+      },
+    ],
+  };
+
+  it("opens a merge request of the project, with its files, threads and diff", async () => {
+    const { user, calls } = await start(true, (cmd, args) => {
+      if (cmd === "open_merge_request") return DETAIL;
+      if (cmd === "range_file_diff") return diffFor({ path: args.path as string, area: "commit" });
+    });
+    await user.click(await screen.findByRole("button", { name: /^Reviews/ }));
+    const list = await screen.findByRole("list", { name: "Merge requests to review" });
+    await user.click(
+      within(within(list).getAllByRole("listitem")[0]!).getByRole("button", { name: "Open" }),
+    );
+
+    const view = await screen.findByRole("region", { name: "Merge request !1" });
+    await waitFor(() =>
+      expect(calls.find((c) => c.cmd === "open_merge_request")?.args).toMatchObject({
+        repo: REPO.path,
+        projectId: 11,
+        iid: 1,
+      }),
+    );
+    const overview = await within(view).findByRole("region", { name: "Overview" });
+    expect(overview).toHaveTextContent("Caches forecasts for ten minutes.");
+    expect(overview).toHaveTextContent("Nice!");
+    expect(within(overview).getByRole("list", { name: "Commits" })).toHaveTextContent(
+      "Add the cache",
+    );
+
+    const files = within(view).getByRole("list", { name: "Changed files" });
+    const app = within(files).getByRole("button", { name: /app\.ts/ });
+    expect(app).toHaveTextContent("Comment threads: 1");
+    await user.click(app);
+    await waitFor(() =>
+      expect(calls.find((c) => c.cmd === "range_file_diff")?.args).toMatchObject({
+        repo: REPO.path,
+        base: DETAIL.base,
+        head: DETAIL.head,
+        path: "src/app.ts",
+      }),
+    );
+    const comments = await within(view).findByRole("region", { name: "Comments on app.ts" });
+    expect(comments).toHaveTextContent("Line 3");
+    expect(comments).toHaveTextContent("Why ten minutes?");
+
+    await user.click(within(view).getByRole("button", { name: "Reviews" }));
+    expect(await screen.findByRole("heading", { name: "Reviews", level: 1 })).toBeInTheDocument();
+  });
+
+  it("explains a failure and offers to try again", async () => {
+    let fail = true;
+    const { user } = await start(true, (cmd) => {
+      if (cmd === "open_merge_request") {
+        if (fail) {
+          fail = false;
+          throw {
+            kind: "authFailed",
+            message: "Git could not sign in to the remote.",
+            detail: null,
+          };
+        }
+        return DETAIL;
+      }
+    });
+    await user.click(await screen.findByRole("button", { name: /^Reviews/ }));
+    const list = await screen.findByRole("list", { name: "Merge requests to review" });
+    await user.click(
+      within(within(list).getAllByRole("listitem")[0]!).getByRole("button", { name: "Open" }),
+    );
+    expect(await screen.findByRole("alert")).toHaveTextContent("Git could not sign in");
+    await user.click(screen.getByRole("button", { name: "Try again" }));
+    expect(await screen.findByRole("region", { name: "Overview" })).toBeInTheDocument();
+  });
+
+  it("opens merge requests of other projects on the website", async () => {
+    const { user, calls } = await start(true);
+    await user.click(await screen.findByRole("button", { name: /^Reviews/ }));
+    await screen.findByRole("list", { name: "Merge requests to review" });
+    await user.selectOptions(screen.getByLabelText("Show merge requests from"), "all");
+    const other = (await screen.findByText("other/lib!9")).closest("li")!;
+    await user.click(within(other as HTMLElement).getByRole("button", { name: "Open" }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.cmd === "open_forge_page")?.args.url).toBe(MR(9).webUrl),
+    );
+    expect(calls.some((c) => c.cmd === "open_merge_request")).toBe(false);
   });
 });

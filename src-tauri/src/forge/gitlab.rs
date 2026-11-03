@@ -8,7 +8,9 @@ use std::time::Duration;
 use serde::Deserialize;
 
 use super::accounts::{self, Access, Account, ForgeKind};
-use super::{MergeRequest, Person, RequestFilter};
+use super::{
+    MergeRequest, Note, NotePosition, Person, RequestCommit, RequestDetail, RequestFilter, Thread,
+};
 use crate::ai::{agent, is_loopback};
 use crate::error::GitError;
 use crate::git::command_log;
@@ -304,6 +306,76 @@ struct Details {
     head_pipeline: Option<Pipeline>,
 }
 
+/// The single merge request endpoint: the list fields plus these.
+#[derive(Deserialize)]
+struct ApiDetail {
+    #[serde(flatten)]
+    request: ApiMergeRequest,
+    #[serde(default)]
+    description: Option<String>,
+    #[serde(default)]
+    diff_refs: Option<DiffRefs>,
+    #[serde(default)]
+    head_pipeline: Option<Pipeline>,
+}
+
+#[derive(Deserialize)]
+struct DiffRefs {
+    base_sha: Option<String>,
+    head_sha: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct ApiCommit {
+    id: String,
+    #[serde(default)]
+    title: String,
+    #[serde(default)]
+    author_name: String,
+    #[serde(default)]
+    created_at: String,
+}
+
+#[derive(Deserialize)]
+struct ApiDiscussion {
+    id: String,
+    #[serde(default)]
+    notes: Vec<ApiNote>,
+}
+
+#[derive(Deserialize)]
+struct ApiNote {
+    #[serde(default)]
+    body: String,
+    author: ApiPerson,
+    #[serde(default)]
+    created_at: String,
+    #[serde(default)]
+    system: bool,
+    #[serde(default)]
+    resolvable: bool,
+    #[serde(default)]
+    resolved: bool,
+    #[serde(default)]
+    position: Option<ApiPosition>,
+}
+
+#[derive(Deserialize)]
+struct ApiPosition {
+    #[serde(default)]
+    position_type: Option<String>,
+    #[serde(default)]
+    head_sha: Option<String>,
+    #[serde(default)]
+    new_path: Option<String>,
+    #[serde(default)]
+    old_path: Option<String>,
+    #[serde(default)]
+    new_line: Option<u32>,
+    #[serde(default)]
+    old_line: Option<u32>,
+}
+
 #[derive(Deserialize)]
 struct Pipeline {
     status: String,
@@ -318,6 +390,165 @@ struct Approvals {
 #[derive(Deserialize)]
 struct ApprovedBy {
     user: ApiPerson,
+}
+
+fn person(p: ApiPerson) -> Person {
+    Person {
+        name: if p.name.is_empty() {
+            p.username.clone()
+        } else {
+            p.name
+        },
+        username: p.username,
+    }
+}
+
+/// GitLab's merge request as Branchline shows it; pipeline and approval are filled in later.
+fn to_request(m: ApiMergeRequest, project: Option<&str>) -> MergeRequest {
+    let project_path = m
+        .references
+        .as_ref()
+        .and_then(|r| r.full.rsplit_once('!').map(|(p, _)| p.to_string()))
+        .filter(|p| !p.is_empty())
+        .or_else(|| project.map(str::to_string))
+        .unwrap_or_default();
+    MergeRequest {
+        project_id: m.project_id,
+        project_path,
+        iid: m.iid,
+        title: m.title,
+        web_url: m.web_url,
+        author: person(m.author),
+        reviewers: m.reviewers.into_iter().map(person).collect(),
+        source_branch: m.source_branch,
+        target_branch: m.target_branch,
+        draft: m.draft || m.work_in_progress,
+        created_at: m.created_at,
+        updated_at: m.updated_at,
+        comments: m.user_notes_count,
+        pipeline: None,
+        approved_by_you: None,
+        has_conflicts: m.has_conflicts,
+    }
+}
+
+/// One merge request with its description, diff range, commits and comment threads (system
+/// notes such as "added 1 commit" are left out). Commits and threads: the first 100 each.
+pub fn detail(account: &Account, project_id: u64, iid: u64) -> Result<RequestDetail, GitError> {
+    let token = account.token()?;
+    let base = format!("/projects/{project_id}/merge_requests/{iid}");
+    let what = format!("merge request !{iid}");
+    let res = get(&account.url, &token, &base)?;
+    if res.status != 200 {
+        return Err(status_error(&res, &what));
+    }
+    let d: ApiDetail = json(&res)?;
+    let refs = d.diff_refs.ok_or_else(|| {
+        forge("GitLab has not prepared this merge request's changes yet. Try again in a moment.")
+    })?;
+    let (Some(base_sha), Some(head_sha)) = (refs.base_sha, refs.head_sha) else {
+        return Err(forge(
+            "GitLab has not prepared this merge request's changes yet. Try again in a moment.",
+        ));
+    };
+    let mut request = to_request(d.request, None);
+    request.pipeline = d.head_pipeline.map(|p| p.status);
+
+    let commits = match get(
+        &account.url,
+        &token,
+        &format!("{base}/commits?per_page=100"),
+    ) {
+        Ok(r) if r.status == 200 => json::<Vec<ApiCommit>>(&r)?
+            .into_iter()
+            .map(|c| RequestCommit {
+                oid: c.id,
+                title: c.title,
+                author_name: c.author_name,
+                created_at: c.created_at,
+            })
+            .collect(),
+        Ok(r) => return Err(status_error(&r, &what)),
+        Err(e) => return Err(e),
+    };
+
+    let threads = match get(
+        &account.url,
+        &token,
+        &format!("{base}/discussions?per_page=100"),
+    ) {
+        Ok(r) if r.status == 200 => json::<Vec<ApiDiscussion>>(&r)?
+            .into_iter()
+            .filter_map(|t| to_thread(t, &head_sha))
+            .collect(),
+        Ok(r) => return Err(status_error(&r, &what)),
+        Err(e) => return Err(e),
+    };
+
+    if let Ok(r) = get_routine(&account.url, &token, &format!("{base}/approvals")) {
+        if r.status == 200 {
+            if let Ok(a) = json::<Approvals>(&r) {
+                request.approved_by_you = Some(
+                    a.approved_by
+                        .iter()
+                        .any(|x| x.user.username.eq_ignore_ascii_case(&account.username)),
+                );
+            }
+        }
+    }
+
+    Ok(RequestDetail {
+        request,
+        description: d.description.unwrap_or_default(),
+        base: base_sha,
+        head: head_sha,
+        commits,
+        threads,
+        files: Vec::new(),
+    })
+}
+
+/// A discussion as a thread; `None` when it holds only system notes.
+fn to_thread(t: ApiDiscussion, head_sha: &str) -> Option<Thread> {
+    let notes: Vec<&ApiNote> = t.notes.iter().filter(|n| !n.system).collect();
+    let first = notes.first()?;
+    let position = first.position.as_ref().and_then(|p| {
+        if p.position_type.as_deref().is_some_and(|t| t != "text") {
+            return None; // Comments on images are not placed on lines.
+        }
+        let path = p.new_path.clone().or_else(|| p.old_path.clone())?;
+        Some(NotePosition {
+            old_path: p.old_path.clone().filter(|o| *o != path),
+            path,
+            old_line: p.old_line,
+            new_line: p.new_line,
+            outdated: p.head_sha.as_deref().is_some_and(|h| h != head_sha),
+        })
+    });
+    let resolved = notes
+        .iter()
+        .any(|n| n.resolvable)
+        .then(|| notes.iter().filter(|n| n.resolvable).all(|n| n.resolved));
+    Some(Thread {
+        id: t.id,
+        position,
+        resolved,
+        notes: notes
+            .into_iter()
+            .map(|n| Note {
+                author: Person {
+                    name: if n.author.name.is_empty() {
+                        n.author.username.clone()
+                    } else {
+                        n.author.name.clone()
+                    },
+                    username: n.author.username.clone(),
+                },
+                body: n.body.clone(),
+                created_at: n.created_at.clone(),
+            })
+            .collect(),
+    })
 }
 
 /// Percent-encode a project path for `/projects/:id` (`group/sub` becomes `group%2Fsub`).
@@ -381,14 +612,6 @@ pub fn requests(
         return Err(status_error(&res, &what));
     }
     let list: Vec<ApiMergeRequest> = json(&res)?;
-    let person = |p: ApiPerson| Person {
-        name: if p.name.is_empty() {
-            p.username.clone()
-        } else {
-            p.name
-        },
-        username: p.username,
-    };
     let mut items: Vec<MergeRequest> = list
         .into_iter()
         // GitLab already filtered the list for all projects.
@@ -401,33 +624,7 @@ pub fn requests(
                 }
         })
         .take(MAX_REVIEWS)
-        .map(|m| {
-            let project_path = m
-                .references
-                .as_ref()
-                .and_then(|r| r.full.rsplit_once('!').map(|(p, _)| p.to_string()))
-                .filter(|p| !p.is_empty())
-                .or_else(|| project.map(str::to_string))
-                .unwrap_or_default();
-            MergeRequest {
-                project_id: m.project_id,
-                project_path,
-                iid: m.iid,
-                title: m.title,
-                web_url: m.web_url,
-                author: person(m.author),
-                reviewers: m.reviewers.into_iter().map(person).collect(),
-                source_branch: m.source_branch,
-                target_branch: m.target_branch,
-                draft: m.draft || m.work_in_progress,
-                created_at: m.created_at,
-                updated_at: m.updated_at,
-                comments: m.user_notes_count,
-                pipeline: None,
-                approved_by_you: None,
-                has_conflicts: m.has_conflicts,
-            }
-        })
+        .map(|m| to_request(m, project))
         .collect();
 
     // Pipeline and approvals need a call each; failures leave them unknown.

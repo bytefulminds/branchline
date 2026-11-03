@@ -742,6 +742,50 @@ pub async fn review_requests(
     blocking(move || crate::forge::review_requests(&repo, all_projects, filter)).await
 }
 
+/// Open a merge request of the repository's project for reading in Branchline: details and
+/// threads from the service, its commits fetched into the repository (progress on
+/// `on_progress`, cancel with `cancel_remote_operation(op_id)`), and its changed files.
+#[tauri::command]
+pub async fn open_merge_request(
+    repo: String,
+    project_id: u64,
+    iid: u64,
+    op_id: String,
+    on_progress: Channel<Progress>,
+) -> Result<crate::forge::RequestDetail, GitError> {
+    blocking(move || {
+        crate::forge::open_request(&repo, project_id, iid, &op_id, &mut |p| {
+            let _ = on_progress.send(p);
+        })
+    })
+    .await
+}
+
+/// Diff of one file between two commits (a merge request's base and head).
+#[tauri::command]
+pub async fn range_file_diff(
+    repo: String,
+    base: String,
+    head: String,
+    path: String,
+    original_path: Option<String>,
+    force: Option<bool>,
+) -> Result<FileDiff, GitError> {
+    blocking(move || {
+        let root = repository::resolve_root(&repo)?;
+        diff::range_diff(
+            &root,
+            &base,
+            &head,
+            &path,
+            original_path.as_deref(),
+            force.unwrap_or(false),
+            &diff_options(),
+        )
+    })
+    .await
+}
+
 /// Open a page of a connected account's server (a merge request) in the browser.
 #[tauri::command]
 pub fn open_forge_page(app: tauri::AppHandle, url: String) -> Result<(), GitError> {

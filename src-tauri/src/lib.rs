@@ -74,6 +74,8 @@ pub fn run() {
             commands::review_source,
             commands::review_requests,
             commands::open_forge_page,
+            commands::open_merge_request,
+            commands::range_file_diff,
             commands::open_token_page,
             commands::ai_server_info,
             commands::git_command_log,

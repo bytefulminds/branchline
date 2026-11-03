@@ -634,6 +634,60 @@ pub fn commit_details(root: &Path, oid: &str) -> Result<CommitDetails, GitError>
     })
 }
 
+/// Files changed between two commits (`base` to `head`), with line counts. Used for a
+/// merge request: its base (the merge base with the target branch) and its newest commit.
+pub fn range_files(root: &Path, base: &str, head: &str) -> Result<Vec<CommitFile>, GitError> {
+    validate_oid(base)?;
+    validate_oid(head)?;
+    let common = ["diff-tree", "-r", "-z", "-M", "--no-commit-id"];
+    let mut ns: Vec<&str> = common.to_vec();
+    ns.insert(1, "--name-status");
+    ns.extend([base, head, "--"]);
+    let mut num: Vec<&str> = common.to_vec();
+    num.insert(1, "--numstat");
+    num.extend([base, head, "--"]);
+    let mut files = parse_name_status(&run_git(root, &ns, DEFAULT_TIMEOUT)?.stdout);
+    apply_numstat(&mut files, &run_git(root, &num, DEFAULT_TIMEOUT)?.stdout);
+    Ok(files)
+}
+
+/// Raw unified diff of one file between two commits.
+pub fn range_file_diff_raw(
+    root: &Path,
+    base: &str,
+    head: &str,
+    path: &str,
+    original_path: Option<&str>,
+    max_output: usize,
+    opts: &super::diff::DiffOptions,
+) -> Result<Vec<u8>, GitError> {
+    validate_oid(base)?;
+    validate_oid(head)?;
+    validate_relative(path)?;
+    if let Some(o) = original_path {
+        validate_relative(o)?;
+    }
+    let mut args: Vec<&str> = vec!["diff", base, head];
+    let flags = opts.flags();
+    args.extend(flags.iter().map(String::as_str));
+    args.push("-M");
+    args.push("--");
+    if let Some(o) = original_path {
+        args.push(o);
+    }
+    args.push(path);
+    Ok(run_git_with(
+        root,
+        &args,
+        &RunOptions {
+            timeout: DEFAULT_TIMEOUT,
+            max_output: Some(max_output),
+            ..RunOptions::default()
+        },
+    )?
+    .stdout)
+}
+
 /// Raw unified diff of one file in a commit, relative to its first parent.
 pub fn commit_file_diff_raw(
     root: &Path,

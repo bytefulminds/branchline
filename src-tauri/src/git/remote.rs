@@ -629,6 +629,46 @@ pub fn fetch(
     fetch_with(repo, remote, true, op_id, on_progress)
 }
 
+/// Make sure the commits of GitLab merge request `iid` are in the repository, up to
+/// `head`: if that commit is not here yet, fetch `refs/merge-requests/<iid>/head` from
+/// `remote` into `refs/branchline/merge-requests/<iid>`. That namespace keeps the commits
+/// reachable without showing up as a branch or in History. Uses the remote's own
+/// credentials, like any fetch, and can be cancelled with `op_id`.
+pub fn fetch_merge_request(
+    repo: &str,
+    remote: &str,
+    iid: u64,
+    head: &str,
+    op_id: &str,
+    on_progress: &mut dyn FnMut(Progress),
+) -> Result<(), GitError> {
+    super::log::validate_oid(head)?;
+    let root = resolve_root(repo)?;
+    require_remote(&root, remote)?;
+    let have = run_git(
+        &root,
+        &["cat-file", "-e", &format!("{head}^{{commit}}")],
+        DEFAULT_TIMEOUT,
+    )
+    .map(|o| o.code == 0)
+    .unwrap_or(false);
+    if have {
+        return Ok(());
+    }
+    let _net = network_lock(&root)?;
+    let refspec = format!("+refs/merge-requests/{iid}/head:refs/branchline/merge-requests/{iid}");
+    let out = run_network(
+        &root,
+        &["fetch", "--no-tags", "--progress", "--", remote, &refspec],
+        op_id,
+        on_progress,
+    )?;
+    if out.code != 0 {
+        return Err(classify_remote_failure(out.code, &out.stderr));
+    }
+    Ok(())
+}
+
 /// [`fetch`], choosing whether branches deleted on the remote are pruned.
 pub fn fetch_with(
     repo: &str,
