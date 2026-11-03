@@ -1,7 +1,7 @@
 {
   "name": "branchline",
   "private": true,
-  "version": "0.2.1",
+  "version": "0.2.5",
   "description": "Branchline: a fast, local-first, open-source Git desktop client.",
   "license": "MIT",
   "type": "module",

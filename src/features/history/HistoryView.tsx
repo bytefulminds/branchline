@@ -10,6 +10,8 @@ import {
   GitPullRequestArrow,
   ListOrdered,
   LogIn,
+  PanelRightClose,
+  PanelRightOpen,
   Tag,
   SearchX,
   Undo2,
@@ -19,7 +21,7 @@ import { useContextMenu } from "../../components/ContextMenu";
 import type { MenuEntry } from "../../components/Menu";
 import { useBranchActions } from "../branches/BranchActions";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Button } from "../../components/Button";
+import { Button, IconButton } from "../../components/Button";
 import { useDebouncedValue } from "../../lib/useDebouncedValue";
 import { isPrimaryModifier } from "../../services/platform";
 import type { LogFilter } from "../../types/git";
@@ -27,6 +29,7 @@ import { activeFilterCount, HistoryFilterBar, HistorySearch } from "./HistoryFil
 import { EmptyState } from "../../components/EmptyState";
 import { Spinner } from "../../components/Spinner";
 import { Splitter } from "../../components/Splitter";
+import { usePersistentFlag } from "../../lib/usePersistentFlag";
 import { usePersistentNumber } from "../../lib/usePersistentNumber";
 import type { CommitFile, RepositoryInfo } from "../../types/git";
 import { CommitDetailsPanel } from "./CommitDetailsPanel";
@@ -61,6 +64,100 @@ export function showFileHistory(repoPath: string, path: string) {
 /** Test helper: forget searches. */
 export function resetHistoryFilters() {
   savedFilters.clear();
+}
+
+/** The columns after Description, which can be resized and hidden. */
+const COLUMNS = [
+  { id: "author", label: "Author", initial: 160, min: 80, max: 360 },
+  { id: "date", label: "Date", initial: 110, min: 64, max: 220 },
+  { id: "sha", label: "Commit", initial: 72, min: 60, max: 160 },
+] as const;
+type ColumnId = (typeof COLUMNS)[number]["id"];
+
+/** Room the description keeps before other columns make way in a narrow window. */
+const MIN_DESCRIPTION = 180;
+/** Gaps and padding of a row: 4 column gaps of 12px and 20px padding. */
+const ROW_CHROME = 68;
+
+/**
+ * Widths and visibility of the History columns, remembered per device. In a list narrower
+ * than `listWidth` needs, Commit, then Date, then Author make way for the description
+ * (without changing what was chosen).
+ */
+/** Narrowest graph column: the width of its "Graph" label, about three lanes. */
+export const GRAPH_MIN = 48;
+
+function useHistoryColumns(listWidth: number | null, graphFit: number) {
+  // 0 means "fit all lanes"; a set width never exceeds what the lanes need.
+  const [graphSet, setGraphSet] = usePersistentNumber("branchline.history.graphWidth", 0);
+  const graphMax = Math.max(graphFit, GRAPH_MIN);
+  const graphWidth = graphSet > 0 ? Math.min(Math.max(graphSet, GRAPH_MIN), graphMax) : graphMax;
+  const setGraphWidth = (v: number) => setGraphSet(v >= graphMax ? 0 : Math.max(v, GRAPH_MIN));
+  const [author, setAuthor] = usePersistentNumber("branchline.history.authorWidth", 160);
+  const [date, setDate] = usePersistentNumber("branchline.history.dateWidth", 110);
+  const [sha, setSha] = usePersistentNumber("branchline.history.shaWidth", 72);
+  const [hideAuthor, setHideAuthor] = usePersistentFlag("branchline.history.hideAuthor", false);
+  const [hideDate, setHideDate] = usePersistentFlag("branchline.history.hideDate", false);
+  const [hideSha, setHideSha] = usePersistentFlag("branchline.history.hideSha", false);
+  const width: Record<ColumnId, number> = { author, date, sha };
+  const chosen: Record<ColumnId, boolean> = { author: hideAuthor, date: hideDate, sha: hideSha };
+  const hidden = { ...chosen };
+  if (listWidth !== null) {
+    const used = () =>
+      graphWidth + ROW_CHROME + COLUMNS.reduce((n, c) => n + (hidden[c.id] ? 0 : width[c.id]), 0);
+    for (const id of ["sha", "date", "author"] as const) {
+      if (listWidth - used() >= MIN_DESCRIPTION) break;
+      hidden[id] = true;
+    }
+  }
+  const setWidth = (id: ColumnId, v: number) =>
+    ({ author: setAuthor, date: setDate, sha: setSha })[id](v);
+  const setHidden = (id: ColumnId, v: boolean) =>
+    ({ author: setHideAuthor, date: setHideDate, sha: setHideSha })[id](v);
+  const template = [
+    "var(--graph-width, 34px)",
+    "minmax(0, 1fr)",
+    ...COLUMNS.filter((c) => !hidden[c.id]).map((c) => `${width[c.id]}px`),
+  ].join(" ");
+  const menu: MenuEntry[] = [
+    { type: "header", id: "columns", label: "Columns" },
+    ...COLUMNS.map<MenuEntry>((c) => ({
+      id: `column-${c.id}`,
+      label: c.label,
+      checked: !chosen[c.id],
+      toggle: true,
+      description:
+        hidden[c.id] && !chosen[c.id] ? "Hidden for now: the window is too narrow" : undefined,
+      onSelect: () => setHidden(c.id, !chosen[c.id]),
+    })),
+    { type: "separator", id: "sep-columns" },
+    {
+      id: "column-reset",
+      label: "Reset columns",
+      onSelect: () => {
+        setGraphSet(0);
+        COLUMNS.forEach((c) => {
+          setWidth(c.id, c.initial);
+          setHidden(c.id, false);
+        });
+      },
+    },
+  ];
+  return {
+    graph: {
+      width: graphWidth,
+      max: graphMax,
+      clipped: graphWidth < graphFit,
+      set: setGraphWidth,
+      fit: () => setGraphSet(0),
+    },
+    width,
+    hidden,
+    setWidth,
+    template,
+    menu,
+    classes: COLUMNS.filter((c) => hidden[c.id]).map((c) => `bl-history--no-${c.id}`),
+  };
 }
 
 export function HistoryView({
@@ -114,6 +211,21 @@ export function HistoryView({
     "branchline.layout.commitDetailsWidth",
     400,
   );
+  const [detailsOpen, setDetailsOpen] = usePersistentFlag(
+    "branchline.layout.commitDetailsOpen",
+    true,
+  );
+  const mainRef = useRef<HTMLDivElement>(null);
+  const [listWidth, setListWidth] = useState<number | null>(null);
+  useEffect(() => {
+    const el = mainRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry) setListWidth(Math.round(entry.contentRect.width));
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
   const { data, loadMore } = history;
   // A new search starts with nothing selected (the first result is shown).
   const appliedKey = JSON.stringify(applied);
@@ -367,11 +479,25 @@ export function HistoryView({
     );
   }
 
+  const columns = useHistoryColumns(listWidth, parseInt(graphColumnWidth(data), 10));
+
   return (
     <div className="bl-history">
       <div
-        className="bl-history__main"
-        style={{ "--graph-width": graphColumnWidth(data) } as React.CSSProperties}
+        ref={mainRef}
+        className={[
+          "bl-history__main",
+          ...columns.classes,
+          columns.graph.clipped ? "bl-history--graph-clipped" : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+        style={
+          {
+            "--graph-width": `${columns.graph.width}px`,
+            "--history-columns": columns.template,
+          } as React.CSSProperties
+        }
       >
         {openFile ? (
           <CommitDiffView
@@ -406,6 +532,19 @@ export function HistoryView({
                 filterCount={activeFilterCount(filter)}
                 onToggleFilters={() => setFiltersOpen((o) => !o)}
               />
+              <IconButton
+                label={detailsOpen ? "Hide commit details" : "Show commit details"}
+                icon={
+                  detailsOpen ? (
+                    <PanelRightClose size={16} aria-hidden />
+                  ) : (
+                    <PanelRightOpen size={16} aria-hidden />
+                  )
+                }
+                aria-pressed={detailsOpen}
+                onClick={() => setDetailsOpen(!detailsOpen)}
+                data-tooltip-align="end"
+              />
             </div>
             {filtersOpen && (
               <HistoryFilterBar
@@ -423,26 +562,67 @@ export function HistoryView({
             {repo.totalChanges > 0 && (
               <WorkInProgressRow count={repo.totalChanges} onOpen={onShowChanges} />
             )}
-            <div className="bl-history__columns text-small" aria-hidden>
-              <span className="bl-history__col-graph">Graph</span>
-              <span className="bl-history__col-message">Description</span>
-              <span className="bl-history__col-author">Author</span>
-              <span className="bl-history__col-date">Date</span>
-              <span className="bl-history__col-sha">Commit</span>
+            <div
+              className="bl-history__columns text-small"
+              onContextMenu={(e) => {
+                e.preventDefault();
+                showMenu({ x: e.clientX, y: e.clientY }, columns.menu, "Columns");
+              }}
+            >
+              <span className="bl-history__col bl-history__col-graph">
+                <span className="truncate" aria-hidden>
+                  Graph
+                </span>
+                {columns.graph.max > GRAPH_MIN && (
+                  <span className="bl-history__col-resize bl-history__col-resize--end">
+                    <Splitter
+                      label="Resize the Graph column"
+                      value={columns.graph.width}
+                      min={GRAPH_MIN}
+                      max={columns.graph.max}
+                      side="left"
+                      onChange={columns.graph.set}
+                      onReset={columns.graph.fit}
+                    />
+                  </span>
+                )}
+              </span>
+              <span className="bl-history__col-message" aria-hidden>
+                Description
+              </span>
+              {COLUMNS.filter((c) => !columns.hidden[c.id]).map((c) => (
+                <span key={c.id} className={`bl-history__col bl-history__col-${c.id}`}>
+                  <span className="bl-history__col-resize">
+                    <Splitter
+                      label={`Resize the ${c.label} column`}
+                      value={columns.width[c.id]}
+                      min={c.min}
+                      max={c.max}
+                      side="right"
+                      onChange={(v) => columns.setWidth(c.id, v)}
+                      onReset={() => columns.setWidth(c.id, c.initial)}
+                    />
+                  </span>
+                  <span className="truncate" aria-hidden>
+                    {c.label}
+                  </span>
+                </span>
+              ))}
             </div>
             {list}
           </>
         )}
       </div>
-      {selected && data && (
+      {selected && data && detailsOpen && (
         <>
           <Splitter
             label="Resize commit details"
             value={detailsWidth}
-            min={300}
+            min={260}
             max={640}
             side="right"
             onChange={setDetailsWidth}
+            onReset={() => setDetailsWidth(400)}
           />
           <aside className="bl-history__details" style={{ width: detailsWidth }}>
             {picked.length > 1 ? (

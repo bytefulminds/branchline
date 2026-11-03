@@ -30,7 +30,9 @@
 }
 .bl-history__details {
   flex: none;
-  min-width: 0;
+  /* In a narrow window the panel gives way, so the list keeps at least 360px. */
+  min-width: min(220px, 40%);
+  max-width: calc(100% - 361px);
   overflow-y: auto;
   background: var(--color-surface-subtle);
 }
@@ -39,7 +41,10 @@
 .bl-history__columns,
 .bl-commit-row {
   display: grid;
-  grid-template-columns: var(--graph-width, 34px) minmax(0, 1fr) 160px 110px 72px;
+  grid-template-columns: var(
+    --history-columns,
+    var(--graph-width, 34px) minmax(0, 1fr) 160px 110px 72px
+  );
   align-items: center;
   column-gap: var(--space-3);
 }
@@ -510,4 +515,46 @@
   border-radius: 2px;
   background: var(--color-accent-subtle-strong);
   color: var(--color-text-primary);
+}
+
+/* Resizable, hideable columns: the handle sits on the column's left edge, in the gap. */
+.bl-history__col {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  height: 100%;
+}
+.bl-history__col-resize {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: calc(var(--space-3) / -2 - 1px);
+  display: flex;
+}
+.bl-history__col-resize .bl-splitter {
+  height: 100%;
+  background: transparent;
+}
+.bl-history__columns:hover .bl-history__col-resize .bl-splitter {
+  background: var(--color-border-strong);
+}
+.bl-history__col-resize .bl-splitter:hover,
+.bl-history__col-resize .bl-splitter:focus-visible {
+  background: var(--color-accent);
+}
+.bl-history--no-author .bl-commit-row__author,
+.bl-history--no-date .bl-commit-row__date,
+.bl-history--no-sha .bl-commit-row__sha {
+  display: none;
+}
+/* The graph column's handle is on its right edge. */
+.bl-history__col-resize--end {
+  left: auto;
+  right: calc(var(--space-3) / -2 - 1px);
+}
+/* A graph narrower than its lanes is cut off with a fade, so it is clear there is more. */
+.bl-history--graph-clipped .bl-commit-row__graph {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 14px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 14px), transparent);
 }

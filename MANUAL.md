@@ -94,6 +94,15 @@ Updates are signed with Branchline's own update key, so only genuine releases ar
   or folder, date range and the current branch only. Results load page by page like the full
   history, and matches are marked.
 - "Show file history" on a diff opens the commits that changed that file.
+- Make room in a small window: drag the left edge of the Author, Date and Commit column
+  headings to resize them (double-click resets one), and right-click the headings to hide or
+  show columns or reset them. The Graph column narrows down to about three lanes (drag its
+  right edge); lanes that do not fit are cut off with a fade, and a double-click fits all
+  lanes again. When the list gets too narrow for the description, Commit, then
+  Date, then Author make way until there is room again. Hover a description to read it in
+  full. The commit details panel can be hidden with the button next to Filters, and the
+  sidebar collapses to icons (`Ctrl+B` / `⌘B`, or the button at its bottom). Branchline
+  remembers all of this.
 - Right-click (or `Shift+F10`) on a commit to create a branch, tag or worktree there, check it
   out, merge, rebase, cherry-pick or revert it, or copy its id.
 
@@ -310,6 +319,7 @@ keyboard shortcut in the app.
 | `Ctrl+F` | `⌘F` | Search commits in History |
 | `Ctrl+Enter` | `⌘↵` | Commit |
 | `Ctrl+J` | `⌘J` | Git console |
+| `Ctrl+B` | `⌘B` | Collapse or expand the sidebar |
 | `Ctrl+,` | `⌘,` | Settings |
 | `Ctrl+/` or `?` | `⌘/` or `?` | All keyboard shortcuts |
 | `Space` / `Enter` | `Space` / `Enter` | Stage or unstage the selected file |

@@ -82,6 +82,8 @@ Milestones are only marked complete when the behavior works against real Git and
 
 Review merge requests in Branchline, with an AI that turns the review into a game of
 questions. Plan: [docs/plans/merge-request-reviews.md](docs/plans/merge-request-reviews.md).
+Reading merge requests and the AI providers are in 0.2.5; the review quest is planned for
+0.3.0.
 
 - [x] GitLab account and a Reviews view with the merge requests waiting for you
 - [x] Read a merge request in Branchline (commits, diff, existing comments)

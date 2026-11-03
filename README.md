@@ -7,7 +7,7 @@
 **See the flow of your code: a fast, friendly Git desktop client that shows what Git is
 doing and lets you do it with a click.**
 
-**Version 0.2.1** · [download](https://gitlab.com/bytefulminds/branchline/-/releases) for Windows, macOS and Linux
+**Version 0.2.5** · [download](https://gitlab.com/bytefulminds/branchline/-/releases) for Windows, macOS and Linux
 
 [![pipeline](https://gitlab.com/bytefulminds/branchline/badges/main/pipeline.svg)](https://gitlab.com/bytefulminds/branchline/-/pipelines)
 ![license: MIT](https://img.shields.io/badge/license-MIT-00D1A0)
@@ -87,6 +87,20 @@ start Branchline from the Dock.
 
 <p align="center">
   <img src="docs/screenshots/git-console.png" alt="A commit stopped by a pre-commit hook, and the Git console showing the failed command with the linter's messages" width="900">
+</p>
+
+### Merge requests to review, right in Branchline
+
+Connect your GitLab account (GitLab.com or your own server) and Reviews shows the merge
+requests waiting for you, with their pipeline, comments, conflicts and whether you already
+approved. Open one to read its description, discussion, commits and every changed file in
+Branchline's own diff viewer, with the comment threads next to the code. Your token stays in
+your system's password store. GitHub and Bitbucket come later, and so does reviewing with an
+AI as a game master.
+
+<p align="center">
+  <img src="docs/screenshots/reviews.png" alt="The Reviews view with five merge requests waiting for review, showing their pipeline, comments, conflicts and approval" width="49%">
+  <img src="docs/screenshots/merge-request.png" alt="A merge request opened in Branchline: its changed files, two comment threads and the diff of api.py" width="49%">
 </p>
 
 ### Commit messages from the AI you choose

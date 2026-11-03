@@ -162,7 +162,7 @@ export function CommitList({
               <span className="bl-commit-row__graph">
                 <GraphCell row={row} height={HISTORY_ROW_HEIGHT} lanes={lanes} isHead={isHead} />
               </span>
-              <span className="bl-commit-row__message">
+              <span className="bl-commit-row__message" title={commit.summary}>
                 <RefBadges
                   refs={data.refsByOid.get(commit.oid)}
                   head={head}
@@ -172,7 +172,7 @@ export function CommitList({
                   <Highlight text={commit.summary} query={highlight} />
                 </span>
               </span>
-              <span className="bl-commit-row__author">
+              <span className="bl-commit-row__author" title={commit.authorName}>
                 <Avatar name={commit.authorName} email={commit.authorEmail} />
                 <span className="truncate">{commit.authorName}</span>
               </span>

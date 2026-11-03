@@ -1,10 +1,12 @@
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { Splitter } from "../components/Splitter";
 import { GitConsole } from "../features/console/GitConsole";
 import { useGitConsole } from "../features/console/GitConsoleProvider";
 import { useRemoteActions } from "../features/remote/RemoteActions";
 import type { RepositoryController } from "../features/repository/useRepository";
+import { usePersistentFlag } from "../lib/usePersistentFlag";
 import { usePersistentNumber } from "../lib/usePersistentNumber";
+import { isPrimaryModifier } from "../services/platform";
 import type { GitError, GitVersion } from "../types/git";
 import { Sidebar, type WorkspaceView } from "./Sidebar";
 import { StatusBar } from "./StatusBar";
@@ -41,6 +43,20 @@ export function AppShell({
     "branchline.layout.sidebarWidth",
     240,
   );
+  const [sidebarCollapsed, setSidebarCollapsed] = usePersistentFlag(
+    "branchline.layout.sidebarCollapsed",
+    false,
+  );
+  // Ctrl+B / Cmd+B collapses or expands the sidebar, as in most editors.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!isPrimaryModifier(e) || e.shiftKey || e.altKey || e.key.toLowerCase() !== "b") return;
+      e.preventDefault();
+      setSidebarCollapsed(!sidebarCollapsed);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [sidebarCollapsed, setSidebarCollapsed]);
   return (
     <div className="bl-app">
       <TitleBar
@@ -57,6 +73,8 @@ export function AppShell({
           controller={controller}
           onOpen={onOpen}
           width={sidebarWidth}
+          collapsed={sidebarCollapsed}
+          onToggleCollapsed={() => setSidebarCollapsed(!sidebarCollapsed)}
           view={view}
           onView={onView}
           resizer={
