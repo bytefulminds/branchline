@@ -98,6 +98,10 @@
 .bl-setting__intro {
   margin: var(--space-3) 0;
 }
+.bl-setting__note {
+  margin: var(--space-2) 0;
+}
+
 .bl-setting__control {
   display: flex;
   justify-content: flex-end;
@@ -203,7 +207,8 @@
   align-items: center;
   gap: var(--space-1);
 }
-.bl-setting__intro code {
+.bl-setting__intro code,
+.bl-setting__note code {
   padding: 0 4px;
   border-radius: var(--radius-sm);
   background: var(--color-surface-subtle);

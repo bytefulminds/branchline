@@ -1,7 +1,7 @@
 # Plan: review merge requests in Branchline, with an AI as a game master
 
-Status: phases 1 (GitLab account and Reviews view) and 2 (reading a merge request in
-Branchline) are built; the rest is planned. Work happens on the branch
+Status: phases 1 (GitLab account and Reviews view), 2 (reading a merge request in
+Branchline) and 3 (AI providers) are built; the rest is planned. Work happens on the branch
 `feature/review-with-ollama`.
 
 ## Goal
@@ -58,9 +58,8 @@ place to read a merge request and leave comments on lines.
 
 ### Visible only with AI turned on
 
-All AI parts of this feature follow one switch: AI turned on in Settings (today "Suggest
-commit messages", which becomes a general "Use AI" switch with the provider settings below
-it). When it is off:
+All AI parts of this feature follow one switch: "Use AI" in Settings > AI, with the provider
+settings below it. When it is off:
 
 - The merge request view shows no "Start review quest" button, no score and no AI comment
   suggestions; it is a plain merge request reader.

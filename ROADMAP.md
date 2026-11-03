@@ -83,7 +83,7 @@ questions. Plan: [docs/plans/merge-request-reviews.md](docs/plans/merge-request-
 
 - [x] GitLab account and a Reviews view with the merge requests waiting for you
 - [x] Read a merge request in Branchline (commits, diff, existing comments)
-- [ ] AI providers: Ollama, OpenAI-compatible servers, Anthropic and OpenAI
+- [x] AI providers: Ollama, OpenAI-compatible servers, Anthropic and OpenAI
 - [ ] Review quest: rounds of questions, scoring, draft comments, self-review of your own branch
 - [ ] Post the review: comments on lines, approve or request changes
 - [ ] Review notes remembered per project

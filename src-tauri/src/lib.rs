@@ -78,6 +78,8 @@ pub fn run() {
             commands::range_file_diff,
             commands::open_token_page,
             commands::ai_server_info,
+            commands::ai_key_exists,
+            commands::save_ai_key,
             commands::git_command_log,
             commands::clear_git_command_log,
             commands::suggest_commit_message,

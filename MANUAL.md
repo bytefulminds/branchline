@@ -13,7 +13,7 @@ Everything Branchline can do, and how. For a quick tour with screenshots, see th
 - [Merge, rebase, cherry-pick and revert](#merge-rebase-cherry-pick-and-revert)
 - [Conflicts and the merge editor](#conflicts-and-the-merge-editor)
 - [Merge requests (GitLab)](#merge-requests-gitlab)
-- [AI commit messages](#ai-commit-messages)
+- [AI](#ai)
 - [Git console and hooks](#git-console-and-hooks)
 - [Settings](#settings)
 - [Keyboard shortcuts](#keyboard-shortcuts)
@@ -214,12 +214,22 @@ Updates are signed with Branchline's own update key, so only genuine releases ar
   to Open. Commenting and approving from Branchline, and an optional AI review game, are
   planned; see [the plan](docs/plans/merge-request-reviews.md).
 
-## AI commit messages
+## AI
 
-- Connect your own [Ollama](https://ollama.com) server (local or on your network) in
-  Settings > AI commit messages: test the connection, pick a model, the style (Conventional
-  Commits or plain), the language and extra team instructions.
-- With AI commit messages on, "Suggest message" in the commit box writes a summary and
+- Turn on **Use AI** in Settings > AI and choose a provider:
+  - **Ollama** (private): a model on your own computer or network, from
+    [ollama.com](https://ollama.com).
+  - **OpenAI-compatible server**: LM Studio, vLLM, the llama.cpp server, OpenRouter and
+    others. Use the address that ends in `/v1`; an API key is optional.
+  - **Anthropic** (Claude) or **OpenAI** (GPT): cloud models with an API key. A Claude Pro
+    or Max plan, or a ChatGPT plan, does not include the API: make a key in the Claude
+    Console or on the OpenAI platform (Settings links to both). API use is billed per use,
+    separately from a subscription.
+- API keys go to the system's password store, never into Branchline's settings file, and
+  never come back to the window. Test lists the provider's models; pick one, then the
+  message style (Conventional Commits or plain), the language and extra team instructions.
+- With AI off, no AI feature appears anywhere in Branchline and nothing is sent.
+- With AI and "Suggest commit messages" on, "Suggest message" in the commit box writes a summary and
   description for the staged changes. The text streams in, `Esc` or Stop cancels it, and a
   message you had typed can be restored with Undo.
 - Only the staged diff (shortened), the list of changed files, the branch name and recent commit
@@ -258,7 +268,7 @@ Open Settings with `Ctrl+,` / `⌘,` or the gear in the title bar. Changes are s
   layout, syntax highlighting, context lines, ignoring whitespace, tab width and code font size.
 - **Confirmations:** turn off the questions before discarding, force pushing, rebasing a
   published branch or deleting a branch. Deleting unmerged work always asks.
-- **AI commit messages:** see [AI commit messages](#ai-commit-messages).
+- **AI:** see [AI](#ai).
 - **About Branchline** (also "About Branchline" in the command palette): version, update
   check, links, and every open-source package Branchline is built with, with its license and
   license text. The list shows ten packages at a time; search it, show more, or show all.
@@ -311,11 +321,16 @@ select lines), dialogs and panels. See [docs/accessibility.md](docs/accessibilit
   anything reaches the UI, including error messages.
 - Force push always uses `--force-with-lease`, so it cannot overwrite commits you have not
   fetched.
-- AI suggestions only contact the Ollama server you configured, only when you ask for a
-  suggestion (or test the connection), and only send the staged diff (shortened), the list of
-  changed files, the branch name and recent commit subjects. Unstaged files are never sent.
-  The address may not contain credentials, redirects are not followed, and system proxies
-  are skipped for `localhost`. Settings warn when the server is not on this computer.
+- AI suggestions only contact the provider you chose (your Ollama or OpenAI-compatible
+  server, or the API of Anthropic or OpenAI), only when you ask for a suggestion (or test
+  the connection), and only send the staged diff (shortened), the list of changed files, the
+  branch name and recent commit subjects. Unstaged files are never sent. Addresses may not
+  contain credentials, redirects are not followed, and system proxies are skipped for
+  `localhost`. Settings warn when the server is not on this computer, and say plainly that a
+  cloud provider gets your staged changes.
+- API keys are stored in the system's password store and never reach the app's web view.
+  Branchline reads them at most once per run, and never sends a key over plain `http://` to
+  another computer.
 - GitLab tokens are stored in the system's password store and never reach the app's web
   view; Branchline sends them only to the server they were made for, in a request header
   (never in an address). Addresses must use `https://` (plain `http://` only for a server on
@@ -323,8 +338,8 @@ select lines), dialogs and panels. See [docs/accessibility.md](docs/accessibilit
   pages open in the browser only when they belong to a connected server.
 - The webview has a strict CSP and only the Tauri permissions it needs (window controls, the
   folder picker, the app version, installing updates and restarting). Web links open in the
-  browser only for Branchline's own GitLab pages, ollama.com and package pages on npmjs.com
-  and crates.io.
+  browser only for Branchline's own GitLab pages, ollama.com, the API key pages of Anthropic
+  and OpenAI, and package pages on npmjs.com and crates.io.
 - Updates are only installed when their signature matches the update key built into
   Branchline, and only after you agree. The update check only contacts the release page on
   GitLab.
@@ -477,11 +492,12 @@ src-tauri/               Rust backend
   src/git/create.rs      Clone and init
   src/git/identity.rs    user.name, user.email and commit signing (global or per repository)
   src/settings.rs        Settings file (JSON in the app's configuration folder)
-  src/secrets.rs         Tokens in the system's password store
+  src/secrets.rs         Tokens and API keys in the system's password store
   src/forge/             GitLab accounts, remote parsing and the merge requests to review
   src/shell_env.rs       PATH from the login shell, for hooks
   src/open.rs            Open in editor or terminal, show in the file manager
-  src/ai.rs              Commit message suggestions from an Ollama server
+  src/ai/                AI providers (Ollama, OpenAI-compatible, Anthropic, OpenAI) and
+                         commit message suggestions
   src/measure.rs         Startup timing report
   src/commands.rs        Tauri IPC commands (async, off the UI thread)
   src/error.rs           Error model shared with the frontend

@@ -26,8 +26,7 @@ a click or a keystroke away.
 
 It is fast and local-first. Branchline runs the Git you already have, so it behaves exactly
 like Git in your terminal, stays quick on repositories with tens of thousands of commits, and
-your code only leaves your computer when you push it (or ask your own AI server for a commit
-message). It is free and open source, made by
+your code only leaves your computer when you push it (or ask an AI for a commit message). It is free and open source, made by
 Bytefulminds.
 
 ## What you can do with Branchline
@@ -88,15 +87,16 @@ start Branchline from the Dock.
   <img src="docs/screenshots/git-console.png" alt="A commit stopped by a pre-commit hook, and the Git console showing the failed command with the linter's messages" width="900">
 </p>
 
-### Commit messages from your own AI
+### Commit messages from the AI you choose
 
-Connect Branchline to [Ollama](https://ollama.com) on your own computer or network, and
-"Suggest message" writes a summary and description for your staged changes, in the style and
-language your team uses. Nothing is sent anywhere else, and only when you ask.
+Connect Branchline to [Ollama](https://ollama.com) on your own computer or network, any
+OpenAI-compatible server, or Claude or GPT with an API key, and "Suggest message" writes a
+summary and description for your staged changes, in the style and language your team uses.
+Only when you ask, and with AI turned off, no AI feature appears at all.
 
 <p align="center">
   <img src="docs/screenshots/ai-suggest.png" alt="A Conventional Commits message suggested for the staged changes, filled in the commit box" width="49%">
-  <img src="docs/screenshots/ai-settings.png" alt="The AI commit message settings, connected to an Ollama server with a coding model chosen" width="49%">
+  <img src="docs/screenshots/ai-settings.png" alt="The AI settings, connected to an Ollama server with a coding model chosen" width="49%">
 </p>
 
 ### Make it yours

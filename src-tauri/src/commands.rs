@@ -675,10 +675,26 @@ pub fn clear_git_command_log() {
     crate::git::command_log::clear();
 }
 
-/// Connect to an Ollama server and list its models (the Test connection button).
+/// Connect to an AI provider and list its models (the Test button). `url` is the address
+/// for Ollama and OpenAI-compatible servers; the cloud providers have a fixed address.
 #[tauri::command]
-pub async fn ai_server_info(url: String) -> Result<crate::ai::ServerInfo, GitError> {
-    blocking(move || crate::ai::server_info(&url)).await
+pub async fn ai_server_info(
+    provider: settings::AiProvider,
+    url: String,
+) -> Result<crate::ai::ServerInfo, GitError> {
+    blocking(move || crate::ai::provider::server_info(provider, &url)).await
+}
+
+/// Whether an API key is stored for the provider. The key itself is never returned.
+#[tauri::command]
+pub async fn ai_key_exists(provider: settings::AiProvider) -> Result<bool, GitError> {
+    blocking(move || crate::ai::provider::has_key(provider)).await
+}
+
+/// Store the provider's API key in the system's credential store; empty removes it.
+#[tauri::command]
+pub async fn save_ai_key(provider: settings::AiProvider, key: String) -> Result<(), GitError> {
+    blocking(move || crate::ai::provider::save_key(provider, &key)).await
 }
 
 /// Suggest a commit message for the staged changes with the model chosen in

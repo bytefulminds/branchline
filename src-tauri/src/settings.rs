@@ -147,13 +147,39 @@ pub enum CommitStyle {
     Plain,
 }
 
+/// Where AI answers come from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum AiProvider {
+    /// An Ollama server, usually on this computer.
+    #[default]
+    Ollama,
+    /// Any server with an OpenAI-compatible API (LM Studio, vLLM, llama.cpp, OpenRouter...).
+    OpenaiCompatible,
+    /// Claude models through the Anthropic API.
+    Anthropic,
+    /// The OpenAI API.
+    Openai,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct AiSettings {
+    /// The general "Use AI" switch. Off: no AI feature is shown and nothing is sent.
     pub enabled: bool,
+    #[serde(deserialize_with = "or_default")]
+    pub provider: AiProvider,
     /// Ollama server, for example `http://localhost:11434`.
     pub url: String,
+    /// Ollama model.
     pub model: String,
+    /// Base address of an OpenAI-compatible server, for example `http://localhost:1234/v1`.
+    pub compatible_url: String,
+    pub compatible_model: String,
+    pub anthropic_model: String,
+    pub openai_model: String,
+    /// Show "Suggest message" in the commit box (when AI is on).
+    pub commit_suggestions: bool,
     #[serde(deserialize_with = "or_default")]
     pub style: CommitStyle,
     /// Language of generated messages, for example "English".
@@ -166,8 +192,14 @@ impl Default for AiSettings {
     fn default() -> Self {
         Self {
             enabled: false,
+            provider: AiProvider::Ollama,
             url: "http://localhost:11434".into(),
             model: String::new(),
+            compatible_url: "http://localhost:1234/v1".into(),
+            compatible_model: String::new(),
+            anthropic_model: String::new(),
+            openai_model: String::new(),
+            commit_suggestions: true,
             style: CommitStyle::Conventional,
             language: "English".into(),
             instructions: String::new(),
@@ -196,6 +228,19 @@ impl Settings {
         self.editor.terminal = self.editor.terminal.trim().to_string();
         self.ai.url = self.ai.url.trim().trim_end_matches('/').to_string();
         self.ai.model = self.ai.model.trim().to_string();
+        self.ai.compatible_url = self
+            .ai
+            .compatible_url
+            .trim()
+            .trim_end_matches('/')
+            .to_string();
+        for model in [
+            &mut self.ai.compatible_model,
+            &mut self.ai.anthropic_model,
+            &mut self.ai.openai_model,
+        ] {
+            *model = model.trim().to_string();
+        }
         if self.ai.instructions.len() > 4000 {
             self.ai.instructions.truncate(4000);
         }
@@ -321,6 +366,8 @@ mod tests {
         assert_eq!(s.editor.tab_width, 2);
         assert_eq!(s.ai.style, CommitStyle::Conventional);
         assert_eq!(s.ai.model, "m");
+        assert_eq!(s.ai.provider, AiProvider::Ollama);
+        assert!(s.ai.commit_suggestions);
         assert!(s.editor.syntax_highlighting);
         let split: Settings = serde_json::from_str(r#"{"editor":{"diffLayout":"split"}}"#).unwrap();
         assert_eq!(split.editor.diff_layout, DiffLayout::Split);

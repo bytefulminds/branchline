@@ -18,6 +18,18 @@ enum Backend {
 
 static BACKEND: OnceLock<Backend> = OnceLock::new();
 
+/// Values already read from or written to the system store in this run. macOS asks for
+/// permission each time an app it does not recognize reads the Keychain (every new
+/// unsigned build), so Branchline reads each entry at most once per run.
+static CACHE: OnceLock<Mutex<HashMap<String, Option<String>>>> = OnceLock::new();
+
+fn cache() -> std::sync::MutexGuard<'static, HashMap<String, Option<String>>> {
+    CACHE
+        .get_or_init(|| Mutex::new(HashMap::new()))
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+}
+
 fn backend() -> &'static Backend {
     BACKEND.get_or_init(|| Backend::System)
 }
@@ -46,8 +58,17 @@ pub fn set(key: &str, value: &str) -> Result<(), GitError> {
                 .insert(key.to_string(), value.to_string());
             Ok(())
         }
-        Backend::System => system::set(key, value),
+        Backend::System => {
+            system::set(key, value)?;
+            cache().insert(key.to_string(), Some(value.to_string()));
+            Ok(())
+        }
     }
+}
+
+/// Whether a value is stored under `key`.
+pub fn exists(key: &str) -> Result<bool, GitError> {
+    Ok(get(key)?.is_some())
 }
 
 /// The value under `key`, or `None` when there is none.
@@ -58,7 +79,14 @@ pub fn get(key: &str) -> Result<Option<String>, GitError> {
             .unwrap_or_else(|e| e.into_inner())
             .get(key)
             .cloned()),
-        Backend::System => system::get(key),
+        Backend::System => {
+            if let Some(cached) = cache().get(key) {
+                return Ok(cached.clone());
+            }
+            let value = system::get(key)?;
+            cache().insert(key.to_string(), value.clone());
+            Ok(value)
+        }
     }
 }
 
@@ -69,7 +97,11 @@ pub fn delete(key: &str) -> Result<(), GitError> {
             m.lock().unwrap_or_else(|e| e.into_inner()).remove(key);
             Ok(())
         }
-        Backend::System => system::delete(key),
+        Backend::System => {
+            system::delete(key)?;
+            cache().insert(key.to_string(), None);
+            Ok(())
+        }
     }
 }
 

@@ -312,7 +312,7 @@ describe("accessibility (axe)", () => {
       "Accounts",
       "Editor & diff",
       "Confirmations",
-      "AI commit messages",
+      "AI",
     ]) {
       await user.click(within(settings).getByRole("button", { name: section }));
       await audit(`settings: ${section}`);

@@ -39,7 +39,7 @@ const SECTIONS: { id: SettingsSection; label: string; icon: LucideIcon }[] = [
   { id: "accounts", label: "Accounts", icon: KeyRound },
   { id: "editor", label: "Editor & diff", icon: Code2 },
   { id: "safety", label: "Confirmations", icon: ShieldCheck },
-  { id: "ai", label: "AI commit messages", icon: Sparkles },
+  { id: "ai", label: "AI", icon: Sparkles },
   { id: "about", label: "About Branchline", icon: Info },
 ];
 

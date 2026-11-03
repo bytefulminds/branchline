@@ -4,7 +4,7 @@ import { Button } from "../../components/Button";
 import { Splitter } from "../../components/Splitter";
 import { useToast } from "../../components/Toast";
 import { usePersistentNumber } from "../../lib/usePersistentNumber";
-import { aiService } from "../../services/ai";
+import { aiService, PROVIDERS, providerModel } from "../../services/ai";
 import { gitService } from "../../services/git";
 import { modKeyLabel, isPrimaryModifier } from "../../services/platform";
 import type { CommitDraft, GitError, RepositoryInfo } from "../../types/git";
@@ -332,6 +332,7 @@ export function CommitBox({
             <span>Amend last commit</span>
           </label>
           {settings.ai.enabled &&
+            settings.ai.commitSuggestions &&
             (suggesting ? (
               <Button
                 size="sm"
@@ -351,7 +352,7 @@ export function CommitBox({
                 title={
                   staged === 0
                     ? "Stage changes first"
-                    : `Write a message for the staged changes with ${settings.ai.model || "your Ollama model"}`
+                    : `Write a message for the staged changes with ${providerModel(settings.ai) || PROVIDERS[settings.ai.provider].name}`
                 }
                 onClick={() => void suggest()}
               >
@@ -399,7 +400,7 @@ export function CommitBox({
         </Button>
         <p className="bl-commit-box__hint text-small" aria-live="polite">
           {suggesting
-            ? `Writing with ${settings.ai.model || "Ollama"}…`
+            ? `Writing with ${providerModel(settings.ai) || PROVIDERS[settings.ai.provider].name}…`
             : (blocker ??
               (draft?.author
                 ? `As ${draft.author.name} <${draft.author.email}>`
