@@ -94,6 +94,15 @@ Updates are signed with Branchline's own update key, so only genuine releases ar
   or folder, date range and the current branch only. Results load page by page like the full
   history, and matches are marked.
 - "Show file history" on a diff opens the commits that changed that file.
+- Make room in a small window: drag the left edge of the Author, Date and Commit column
+  headings to resize them (double-click resets one), and right-click the headings to hide or
+  show columns or reset them. The Graph column narrows down to about three lanes (drag its
+  right edge); lanes that do not fit are cut off with a fade, and a double-click fits all
+  lanes again. When the list gets too narrow for the description, Commit, then
+  Date, then Author make way until there is room again. Hover a description to read it in
+  full. The commit details panel can be hidden with the button next to Filters, and the
+  sidebar collapses to icons (`Ctrl+B` / `⌘B`, or the button at its bottom). Branchline
+  remembers all of this.
 - Right-click (or `Shift+F10`) on a commit to create a branch, tag or worktree there, check it
   out, merge, rebase, cherry-pick or revert it, or copy its id.
 
@@ -151,6 +160,21 @@ Updates are signed with Branchline's own update key, so only genuine releases ar
 - Interactive rebase ("Rebase interactively from here…" on a commit in History): drag commits
   into a new order (or use `Alt+↑` / `Alt+↓`), and pick, reword, squash, fix up or drop each
   one. Branchline checks the plan before Git runs it.
+- Commits you squash or fix up are shown indented above the commit they go into, with a line
+  into it and a "+2 combined" badge on that commit. "Edit message" gives the combined commit a
+  message of its own, starting from the messages Git would keep.
+- Rewrite history ("Rewrite history of …" on the newest commit in History, on the current
+  branch in Branches, or in the command palette) shows only the branch's own commits: from
+  where the branch was created, or where it forked from the nearest other branch (so a branch
+  made from `develop` stops at the commit it was made from). On `main`, `master` or `trunk`
+  itself, it shows the commits that are not pushed yet. It stops after the newest
+  merge commit, and says how many of the commits are already pushed (those need a force push
+  afterwards).
+- With AI on, "Suggest with AI" in the rebase window asks your AI provider which neighbouring
+  commits belong together (work in progress, typo and review fixes) and for a message for each
+  resulting commit. It only fills in the plan: nothing runs until you choose Start rebase, and
+  Reset undoes the suggestion. Sent: the commit messages, their changed files and (for up to 40
+  commits) shortened diffs.
 - Select several commits in History (`Ctrl`/`⌘`+click to add one, `Shift`+click or
   `Shift+↑`/`↓` for a range, `Esc` to go back to one) and cherry-pick them in one go. They are
   applied oldest first; commits already on the branch are skipped, and a conflict stops the
@@ -183,10 +207,13 @@ Updates are signed with Branchline's own update key, so only genuine releases ar
 - The token is kept in your system's password store (macOS Keychain, Windows Credential
   Manager, or the Secret Service on Linux, such as GNOME Keyring or KWallet), never in a
   settings file. Disconnect deletes it there; revoke it on GitLab to make it stop working.
-- When the open repository has a remote on a connected server, the sidebar shows **Reviews**
-  (`Ctrl+7` / `⌘7`) with the number of open merge requests where you are a reviewer, your own
-  included when you set yourself as reviewer. In a fork, the `upstream` remote's project is
-  used, otherwise `origin`.
+- With an account connected, the sidebar shows **Reviews** (`Ctrl+7` / `⌘7`) with the number
+  of open merge requests where you are a reviewer, your own included when you set yourself as
+  reviewer. When the open repository has a remote on that server, its project is used (in a
+  fork the `upstream` remote's project, otherwise `origin`), and its merge requests open in
+  Branchline. Otherwise Reviews lists your merge requests in all projects on the server (the
+  first connected account), and they open on the website. Without an account, Reviews is not
+  shown at all.
 - Three lists: **To review** (you are a reviewer), **Created by you** and **All open**. For
   the repository's project, Branchline reads all of its open merge requests and picks the
   ones for you itself, by your user id. **All projects** on the server asks GitLab to filter
@@ -292,6 +319,7 @@ keyboard shortcut in the app.
 | `Ctrl+F` | `⌘F` | Search commits in History |
 | `Ctrl+Enter` | `⌘↵` | Commit |
 | `Ctrl+J` | `⌘J` | Git console |
+| `Ctrl+B` | `⌘B` | Collapse or expand the sidebar |
 | `Ctrl+,` | `⌘,` | Settings |
 | `Ctrl+/` or `?` | `⌘/` or `?` | All keyboard shortcuts |
 | `Space` / `Enter` | `Space` / `Enter` | Stage or unstage the selected file |

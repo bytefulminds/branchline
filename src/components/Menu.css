@@ -61,8 +61,11 @@
   outline: 2px solid var(--focus-ring-color);
   outline-offset: -2px;
 }
-.bl-menu__item[aria-checked="true"] {
+.bl-menu__item[role="menuitemradio"][aria-checked="true"] {
   background: var(--color-selected);
+}
+.bl-menu__item[role="menuitemcheckbox"][aria-checked="true"] .bl-menu__icon {
+  color: var(--color-accent);
 }
 .bl-menu__item:disabled {
   opacity: 0.45;

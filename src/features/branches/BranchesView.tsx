@@ -13,6 +13,7 @@ import {
   GitBranchPlus,
   GitMerge,
   GitPullRequestArrow,
+  ListOrdered,
   MoreHorizontal,
   Pencil,
   Plus,
@@ -146,6 +147,18 @@ export function BranchesView({ repo }: { repo: RepositoryInfo }) {
       disabled: b.isCurrent || !current || repo.operation !== null,
       onSelect: () => integrate.rebase({ kind: "branch", name: b.name }, b.name),
     },
+    ...(b.isCurrent && !b.remote
+      ? [
+          {
+            id: "rewrite",
+            label: "Rewrite history…",
+            description: "Squash, reword, reorder or drop the commits of this branch",
+            icon: <ListOrdered size={16} />,
+            disabled: repo.operation !== null,
+            onSelect: () => integrate.rewriteHistory(),
+          },
+        ]
+      : []),
   ];
   const localMenu = (b: BranchInfo): MenuEntry[] => [
     b.worktreePath

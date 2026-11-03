@@ -15,6 +15,7 @@ import {
   GitPullRequest,
   KeyRound,
   History,
+  ListOrdered,
   Info,
   Keyboard,
   Minus,
@@ -268,6 +269,21 @@ export function AppCommandPalette({
       disabled: needsRepo,
       run: () =>
         branchActions.create({ kind: "head" }, head?.kind === "branch" ? head.name : "HEAD"),
+    });
+    add({
+      id: "rewrite-history",
+      title: head?.kind === "branch" ? `Rewrite history of ${head.name}…` : "Rewrite history…",
+      group: "Branch",
+      keywords: "interactive rebase squash fixup reword reorder",
+      icon: <ListOrdered size={16} />,
+      disabled:
+        blocked ??
+        (head?.kind !== "branch"
+          ? "Switch to a branch first"
+          : repo?.operation
+            ? "Finish the operation in progress first"
+            : undefined),
+      run: integrate.rewriteHistory,
     });
     for (const b of branches) {
       if (b.isCurrent) continue;

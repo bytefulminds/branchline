@@ -5,7 +5,9 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use branchline_lib::git::integrate::{step, Step};
-use branchline_lib::git::rebase_plan::{interactive_rebase, plan_commits, PlanAction, PlanStep};
+use branchline_lib::git::rebase_plan::{
+    interactive_rebase, plan_commits, rewrite_base, PlanAction, PlanStep, StartKind,
+};
 use branchline_lib::git::repository::{inspect, RepoOperation};
 use tempfile::TempDir;
 
@@ -247,4 +249,159 @@ fn local_changes_block_until_stashed() {
     interactive_rebase(&s(&d), &base, &steps, true).unwrap();
     assert_eq!(subjects(&d)[1..3], ["commit 2", "commit 1"]);
     assert_eq!(fs::read_to_string(d.join("file1.txt")).unwrap(), "edited\n");
+}
+
+#[test]
+fn a_reworded_commit_names_the_commits_squashed_into_it() {
+    let (_t, d, base, c) = repo_in("group");
+    let mut steps = plan(&[
+        (&c[0], PlanAction::Reword),
+        (&c[1], PlanAction::Squash),
+        (&c[2], PlanAction::Fixup),
+        (&c[3], PlanAction::Pick),
+    ]);
+    steps[0].message = Some("feat: files one to three\n\nIn one commit.".into());
+    let out = interactive_rebase(&s(&d), &base, &steps, false).unwrap();
+    assert!(!out.conflicts);
+    assert_eq!(
+        subjects(&d),
+        ["base", "feat: files one to three", "commit 4"]
+    );
+    assert_eq!(
+        git(&d, &["log", "-1", "--format=%B", "HEAD~1"]),
+        "feat: files one to three\n\nIn one commit."
+    );
+    // The combined commit has all three files.
+    assert_eq!(
+        git(&d, &["show", "--format=", "--name-only", "HEAD~1"]),
+        "file1.txt\nfile2.txt\nfile3.txt"
+    );
+    assert!(leftover_files(&d).is_empty());
+}
+
+#[test]
+fn rewrite_history_starts_where_the_branch_left_main() {
+    let (_t, d, _base, c) = repo_in("rewrite");
+    // main is at commit 2; the feature branch has commits 3 and 4 after it.
+    git(&d, &["branch", "-f", "feature", &c[3]]);
+    git(&d, &["reset", "-q", "--hard", &c[1]]);
+    git(&d, &["switch", "-q", "feature"]);
+    let found = rewrite_base(&s(&d)).unwrap();
+    assert_eq!(found.base, c[1]);
+    assert_eq!(found.from.as_deref(), Some("main"));
+    assert_eq!(found.commits, 2);
+    assert_eq!(found.published, 0);
+    assert!(!found.after_merge);
+
+    // Pushed commits are counted, because rewriting them needs a force push.
+    let remote = d.parent().unwrap().join("remote.git");
+    git(&d, &["init", "-q", "--bare", remote.to_str().unwrap()]);
+    git(&d, &["remote", "add", "origin", remote.to_str().unwrap()]);
+    git(
+        &d,
+        &[
+            "push",
+            "-q",
+            "origin",
+            &format!("{}:refs/heads/feature", c[2]),
+        ],
+    );
+    git(&d, &["branch", "-q", "--set-upstream-to=origin/feature"]);
+    let found = rewrite_base(&s(&d)).unwrap();
+    assert_eq!(found.commits, 2);
+    assert_eq!(found.published, 1);
+
+    // A merge commit on the branch: the history after it can be rewritten.
+    git(&d, &["switch", "-q", "-c", "side", &c[1]]);
+    fs::write(d.join("side.txt"), "side\n").unwrap();
+    git(&d, &["add", "-A"]);
+    git(&d, &["commit", "-q", "-m", "side"]);
+    git(&d, &["switch", "-q", "feature"]);
+    git(&d, &["merge", "-q", "--no-ff", "-m", "merge side", "side"]);
+    let merge = git(&d, &["rev-parse", "HEAD"]);
+    fs::write(d.join("after.txt"), "after\n").unwrap();
+    git(&d, &["add", "-A"]);
+    git(&d, &["commit", "-q", "-m", "after merge"]);
+    let found = rewrite_base(&s(&d)).unwrap();
+    assert_eq!(found.base, merge);
+    assert_eq!(found.commits, 1);
+    assert!(found.after_merge);
+}
+
+#[test]
+fn rewrite_history_on_main_uses_the_commits_not_pushed() {
+    let (_t, d, _base, c) = repo_in("main-only");
+    let err = rewrite_base(&s(&d)).unwrap_err();
+    assert!(
+        err.to_string()
+            .contains("could not tell where main started"),
+        "{err}"
+    );
+
+    let remote = d.parent().unwrap().join("remote.git");
+    git(&d, &["init", "-q", "--bare", remote.to_str().unwrap()]);
+    git(&d, &["remote", "add", "origin", remote.to_str().unwrap()]);
+    git(
+        &d,
+        &[
+            "push",
+            "-q",
+            "-u",
+            "origin",
+            &format!("{}:refs/heads/main", c[1]),
+        ],
+    );
+    git(&d, &["branch", "-q", "--set-upstream-to=origin/main"]);
+    let found = rewrite_base(&s(&d)).unwrap();
+    assert_eq!(found.base, c[1]);
+    assert_eq!(found.start, StartKind::Unpushed);
+    assert_eq!(found.from.as_deref(), Some("origin/main"));
+    assert_eq!(found.commits, 2);
+}
+
+#[test]
+fn rewrite_history_starts_where_the_branch_was_made_from_another_feature_branch() {
+    let (_t, d, _base, c) = repo_in("from-feature");
+    // main has commits 1 and 2; feature/cities adds 3 and 4; feature/darkmode is made
+    // from feature/cities and adds two commits of its own.
+    git(&d, &["switch", "-q", "-c", "feature/cities", &c[3]]);
+    git(&d, &["branch", "-q", "-f", "main", &c[1]]);
+    git(&d, &["switch", "-q", "-c", "feature/darkmode"]);
+    for name in ["dark.txt", "theme.txt"] {
+        fs::write(d.join(name), "x\n").unwrap();
+        git(&d, &["add", "-A"]);
+        git(&d, &["commit", "-q", "-m", name]);
+    }
+    let first = git(&d, &["rev-parse", "HEAD~1"]);
+    let found = rewrite_base(&s(&d)).unwrap();
+    assert_eq!(found.base, c[3], "the tip of feature/cities, not main");
+    assert_eq!(found.commits, 2);
+    assert_eq!(found.start, StartKind::Created);
+
+    // A branch made from feature/darkmode later does not cut its history short.
+    git(&d, &["branch", "-q", "feature/darkmode-v2", &first]);
+    let found = rewrite_base(&s(&d)).unwrap();
+    assert_eq!(found.base, c[3]);
+    assert_eq!(found.commits, 2);
+    git(&d, &["branch", "-q", "-D", "feature/darkmode-v2"]);
+
+    // Without a reflog (a fresh clone), the closest other branch still decides.
+    fs::remove_dir_all(d.join(".git/logs")).unwrap();
+    let found = rewrite_base(&s(&d)).unwrap();
+    assert_eq!(found.base, c[3]);
+    assert_eq!(found.from.as_deref(), Some("feature/cities"));
+    assert_eq!(found.start, StartKind::Branch);
+}
+
+#[test]
+fn rewrite_history_starts_where_the_branch_left_main_after_main_moved_on() {
+    let (_t, d, _base, c) = repo_in("moved-on");
+    // feature/x is made at commit 2, while main went on to commit 4.
+    git(&d, &["switch", "-q", "-c", "feature/x", &c[1]]);
+    fs::write(d.join("x.txt"), "x\n").unwrap();
+    git(&d, &["add", "-A"]);
+    git(&d, &["commit", "-q", "-m", "x"]);
+    let found = rewrite_base(&s(&d)).unwrap();
+    assert_eq!(found.base, c[1]);
+    assert_eq!(found.commits, 1);
 }

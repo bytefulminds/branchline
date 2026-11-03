@@ -7,8 +7,26 @@ description on GitLab.
 
 ## [Unreleased]
 
+## [0.2.5] - 2026-11-03
+
+Clean up a branch before you share it with Rewrite history, read merge requests to review in
+Branchline, and choose your AI: Ollama, any OpenAI-compatible server, Claude or GPT.
+
 ### Added
 
+- Rewrite history: on the newest commit of the current branch (in History, Branches or the
+  command palette), Branchline opens the interactive rebase for only that branch's own
+  commits: from where the branch was created, or where it forked from the nearest other
+  branch. It warns when some of them are already pushed.
+- Interactive rebase shows squashed and fixed-up commits indented above the commit they go
+  into, and the combined commit can get a message of its own.
+- With AI on, the interactive rebase can suggest which commits to combine, with a message for
+  each resulting commit, to review before it runs.
+- More room in small windows: the History columns Author, Date and Commit can be resized and
+  hidden (right-click the headings), the Graph column can be narrowed (lanes that do not fit
+  fade out), the commit details panel can be hidden, and the sidebar
+  collapses to icons (`Ctrl+B` / `⌘B`). A description that does not fit shows in full on
+  hover.
 - Reviews (`Ctrl+7` / `⌘7`): the open merge requests on GitLab where you are a reviewer, for
   the repository's project or all projects, with their pipeline, comments, drafts, conflicts
   and whether you already approved. Connect your GitLab account (GitLab.com or your own
@@ -30,6 +48,10 @@ description on GitLab.
 
 ### Changed
 
+- In a narrow window, History gives the description room first: Commit, Date and Author make
+  way, and the commit details panel shrinks.
+- Reviews is shown whenever a GitLab account is connected. In a repository without a remote
+  on that server, it lists your merge requests in all projects there.
 - Settings > AI commit messages is now Settings > AI, with a general "Use AI" switch. With AI
   off, no AI feature appears anywhere. "Suggest commit messages" is a separate switch below
   it.
@@ -129,7 +151,8 @@ drives the Git you already have installed.
 - The macOS and Windows builds are not signed yet. See the installation notes in the README.
 - See "Known limitations" in the README for the rest.
 
-[Unreleased]: https://gitlab.com/bytefulminds/branchline/-/compare/v0.2.1...main
+[Unreleased]: https://gitlab.com/bytefulminds/branchline/-/compare/v0.2.5...main
+[0.2.5]: https://gitlab.com/bytefulminds/branchline/-/releases/v0.2.5
 [0.2.1]: https://gitlab.com/bytefulminds/branchline/-/releases/v0.2.1
 [0.2.0]: https://gitlab.com/bytefulminds/branchline/-/releases/v0.2.0
 [0.1.0]: https://gitlab.com/bytefulminds/branchline/-/releases/v0.1.0

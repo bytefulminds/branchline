@@ -197,21 +197,27 @@ pub fn review_requests(
     all_projects: bool,
     filter: RequestFilter,
 ) -> Result<ReviewList, GitError> {
-    let source = review_source(repo)?.ok_or_else(|| {
-        GitError::Forge("This repository has no remote on a supported hosting service.".into())
-    })?;
-    let account = source.account.clone().ok_or_else(|| {
-        GitError::Forge(format!(
-            "Connect your account on {} in Settings > Accounts to see its merge requests.",
-            source.host
-        ))
-    })?;
+    // The repository's own project when its host has a connected account; otherwise all
+    // projects of the first connected account.
+    let source = review_source(repo)?;
+    let (account, own_project) = match source.and_then(|s| s.account.map(|a| (a, s.project))) {
+        Some((account, project)) => (account, Some(project)),
+        None => {
+            let account = accounts::list().into_iter().next().ok_or_else(|| {
+                GitError::Forge(
+                    "Connect your account in Settings > Accounts to see merge requests.".into(),
+                )
+            })?;
+            (account, None)
+        }
+    };
+    let all_projects = all_projects || own_project.is_none();
     if all_projects && filter == RequestFilter::AllOpen {
         return Err(GitError::Forge(
             "Choose one project to see all of its open merge requests.".into(),
         ));
     }
-    let project = (!all_projects).then_some(source.project.as_str());
+    let project = own_project.as_deref().filter(|_| !all_projects);
     let items = match account.kind {
         ForgeKind::Gitlab => gitlab::requests(&account, project, filter)?,
     };

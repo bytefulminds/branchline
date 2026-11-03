@@ -10,7 +10,9 @@
 //!   faithfully without `--rebase-merges`).
 //! * Rewording is `pick` followed by `exec git commit --amend -F <file>`: the
 //!   message is written to a file in the Git directory and its path is quoted
-//!   for the shell. The files are removed when the rebase ends.
+//!   for the shell. The files are removed when the rebase ends. When later
+//!   commits are squashed or fixed up into a reworded commit, the `exec` comes
+//!   after them, so the message is the one of the combined commit.
 //! * Squash keeps both messages, fixup keeps the earlier one; no editor opens.
 
 use std::path::{Path, PathBuf};
@@ -129,6 +131,235 @@ fn range(root: &Path, base: &str) -> Result<Vec<PlanCommit>, GitError> {
     Ok(commits)
 }
 
+/// How "Rewrite history" found its start.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum StartKind {
+    /// Where the branch was created (from its reflog).
+    Created,
+    /// Where it forked from another branch.
+    Branch,
+    /// The last commit it shares with its upstream branch (the commits not pushed yet).
+    Unpushed,
+}
+
+/// Where "Rewrite history" starts for the current branch.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RewriteBase {
+    /// The commits after this one are rewritten.
+    pub base: String,
+    pub start: StartKind,
+    /// The branch it started from (`develop`, `origin/feature/x`), or for `Unpushed` the
+    /// upstream branch, when known.
+    pub from: Option<String>,
+    /// Commits after `base`.
+    pub commits: usize,
+    /// How many of them are already on the upstream branch (rewriting them needs a force push).
+    pub published: usize,
+    /// The range stops at the newest merge commit, which cannot be rewritten.
+    pub after_merge: bool,
+    /// The range was cut to the newest `MAX_PLAN` commits.
+    pub limited: bool,
+}
+
+fn text(root: &Path, args: &[&str]) -> Result<Option<String>, GitError> {
+    let out = git(root, args)?;
+    Ok((out.code == 0)
+        .then(|| out.stdout_string().trim().to_string())
+        .filter(|s| !s.is_empty()))
+}
+
+fn count(root: &Path, range: &str) -> Result<usize, GitError> {
+    Ok(text(root, &["rev-list", "--count", range, "--"])?
+        .and_then(|n| n.parse().ok())
+        .unwrap_or(0))
+}
+
+/// Find where the current branch's own commits start: where it was created (from the
+/// branch's reflog) or the closest fork point with another branch, leaving out branches
+/// made from this one later. On `main`, `master` and `trunk`, and when nothing else fits:
+/// the commits not pushed yet.
+pub fn rewrite_base(repo: &str) -> Result<RewriteBase, GitError> {
+    let (root, _) = resolve_paths(repo)?;
+    let info = inspect(repo)?;
+    let HeadState::Branch { name: branch, .. } = info.head else {
+        return Err(GitError::Unsupported(
+            "Switch to a branch first; a detached HEAD has no history to rewrite.".into(),
+        ));
+    };
+    let upstream = text(
+        &root,
+        &[
+            "rev-parse",
+            "--abbrev-ref",
+            "--symbolic-full-name",
+            "@{upstream}",
+        ],
+    )?;
+
+    // What the branch's reflog says: where it was created, and every commit it pointed at
+    // here. A fork point that is one of the branch's own commits belongs to a branch made
+    // from this one later, not to the branch it came from.
+    let reflog = text(
+        &root,
+        &[
+            "reflog",
+            "show",
+            "--format=%H%x00%gs",
+            &format!("refs/heads/{branch}"),
+            "--",
+        ],
+    )?
+    .unwrap_or_default();
+    let own: std::collections::HashSet<&str> = reflog
+        .lines()
+        .filter_map(|l| l.split('\0').next())
+        .collect();
+    let remotes: Vec<String> = text(&root, &["remote"])?
+        .unwrap_or_default()
+        .lines()
+        .map(str::to_string)
+        .collect();
+    let is_remote_ref = |name: &str| {
+        name.starts_with("refs/remotes/")
+            || remotes.iter().any(|r| name.starts_with(&format!("{r}/")))
+    };
+    // The oldest entry: "branch: Created from develop" (or "from HEAD"). A branch made from
+    // its own copy on a remote says nothing about where the work started.
+    let created = reflog.lines().last().and_then(|l| {
+        let (oid, message) = l.split_once('\0')?;
+        let source = message.strip_prefix("branch: Created from ")?.trim();
+        (!is_remote_ref(source)).then(|| (oid.to_string(), source.to_string()))
+    });
+    let is_branch = |name: &str| {
+        git(
+            &root,
+            &[
+                "show-ref",
+                "--verify",
+                "--quiet",
+                &format!("refs/heads/{name}"),
+            ],
+        )
+        .is_ok_and(|o| o.code == 0)
+    };
+
+    // Trunk branches have no start of their own: only their commits not pushed yet.
+    const TRUNKS: [&str; 3] = ["main", "master", "trunk"];
+    let mut options: Vec<(String, StartKind, Option<String>)> = Vec::new();
+    if !TRUNKS.contains(&branch.as_str()) {
+        if let Some((oid, source)) = &created {
+            // "develop" names a branch; "HEAD", "develop~12" or a commit id do not.
+            let named = is_branch(source).then(|| source.clone());
+            options.push((oid.clone(), StartKind::Created, named));
+        }
+        let refs = text(
+            &root,
+            &[
+                "for-each-ref",
+                "--format=%(refname:short)%00%(symref)",
+                "refs/heads",
+                "refs/remotes",
+            ],
+        )?
+        .unwrap_or_default();
+        for line in refs.lines() {
+            let (name, symref) = line.split_once('\0').unwrap_or((line, ""));
+            // Leave out the branch itself, its copies on remotes and `origin/HEAD`.
+            let same = name == branch
+                || remotes
+                    .iter()
+                    .any(|r| name == format!("{r}/{branch}") || name == r)
+                || Some(name) == upstream.as_deref();
+            if same || !symref.is_empty() {
+                continue;
+            }
+            let Some(fork) = text(&root, &["merge-base", "HEAD", name])? else {
+                continue;
+            };
+            let first = created.as_ref().map(|(oid, _)| oid.as_str());
+            if own.contains(fork.as_str()) && Some(fork.as_str()) != first {
+                continue;
+            }
+            options.push((fork, StartKind::Branch, Some(name.to_string())));
+        }
+    }
+
+    let mut best: Option<(String, StartKind, Option<String>, usize)> = None;
+    for (oid, kind, from) in options {
+        if git(&root, &["merge-base", "--is-ancestor", &oid, "HEAD"])?.code != 0 {
+            continue;
+        }
+        let n = count(&root, &format!("{oid}..HEAD"))?;
+        // Ties go to the first found: the reflog, then local branches before remote ones.
+        if n > 0 && best.as_ref().map_or(true, |(_, _, _, m)| n < *m) {
+            best = Some((oid, kind, from, n));
+        }
+    }
+    let (mut base, start, from) = match best {
+        Some((base, kind, from, _)) => (base, kind, from),
+        None => match upstream
+            .as_deref()
+            .map(|u| text(&root, &["merge-base", "HEAD", u]))
+            .transpose()?
+            .flatten()
+        {
+            Some(base) if count(&root, &format!("{base}..HEAD"))? > 0 => {
+                (base, StartKind::Unpushed, upstream.clone())
+            }
+            _ => {
+                return Err(GitError::Unsupported(format!(
+                    "Branchline could not tell where {branch} started: no other branch shares its history, and it has no commits that are not pushed. Use \"Rebase interactively from here\" on the commit to start after."
+                )))
+            }
+        },
+    };
+
+    // Merge commits cannot be replayed: start after the newest one.
+    let mut after_merge = false;
+    if let Some(merge) = text(
+        &root,
+        &[
+            "rev-list",
+            "--merges",
+            "--max-count=1",
+            &format!("{base}..HEAD"),
+            "--",
+        ],
+    )? {
+        base = merge;
+        after_merge = true;
+    }
+    let mut commits = count(&root, &format!("{base}..HEAD"))?;
+    if commits == 0 {
+        return Err(GitError::Unsupported(
+            "The newest commit is a merge commit, so there is no history Branchline can rewrite here.".into(),
+        ));
+    }
+    let mut limited = false;
+    if commits > MAX_PLAN {
+        if let Some(cut) = text(&root, &["rev-parse", &format!("HEAD~{MAX_PLAN}")])? {
+            base = cut;
+            commits = MAX_PLAN;
+            limited = true;
+        }
+    }
+    let published = match &upstream {
+        Some(u) => commits.saturating_sub(count(&root, &format!("{u}..HEAD"))?),
+        None => 0,
+    };
+    Ok(RewriteBase {
+        base,
+        start,
+        from,
+        commits,
+        published,
+        after_merge,
+        limited,
+    })
+}
+
 /// Quote a string for POSIX `sh` (used for paths in `exec` lines).
 pub fn shell_quote(s: &str) -> String {
     format!("'{}'", s.replace('\'', "'\"'\"'"))
@@ -169,8 +400,15 @@ pub fn build_todo(
 
     let mut todo = String::new();
     let mut messages = Vec::new();
+    // The message of a reworded commit is applied once the commits combined into it are in.
+    let mut pending: Option<String> = None;
     for step in plan {
         validate_oid(&step.oid)?;
+        if matches!(step.action, PlanAction::Pick | PlanAction::Reword) {
+            if let Some(exec) = pending.take() {
+                todo.push_str(&exec);
+            }
+        }
         match step.action {
             PlanAction::Pick => todo.push_str(&format!("pick {}\n", step.oid)),
             PlanAction::Squash => todo.push_str(&format!("squash {}\n", step.oid)),
@@ -183,13 +421,16 @@ pub fn build_todo(
                 }
                 let file = git_dir.join(format!("{MESSAGE_PREFIX}{}.txt", messages.len() + 1));
                 todo.push_str(&format!("pick {}\n", step.oid));
-                todo.push_str(&format!(
+                pending = Some(format!(
                     "exec git commit --amend --no-verify --cleanup=strip --file={}\n",
                     shell_quote(&file.to_string_lossy())
                 ));
                 messages.push((file, format!("{message}\n")));
             }
         }
+    }
+    if let Some(exec) = pending {
+        todo.push_str(&exec);
     }
     Ok((todo, messages))
 }
@@ -312,7 +553,7 @@ mod tests {
         assert_eq!(
             todo,
             format!(
-                "pick {C}\npick {A}\nexec git commit --amend --no-verify --cleanup=strip --file='/repo/.git/branchline-reword-1.txt'\nfixup {B}\n"
+                "pick {C}\npick {A}\nfixup {B}\nexec git commit --amend --no-verify --cleanup=strip --file='/repo/.git/branchline-reword-1.txt'\n"
             )
         );
         assert_eq!(messages.len(), 1);

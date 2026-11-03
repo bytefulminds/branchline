@@ -1,3 +1,4 @@
+import { Check } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import "./Menu.css";
 
@@ -10,6 +11,8 @@ export type MenuEntry =
       icon?: ReactNode;
       shortcut?: string;
       checked?: boolean;
+      /** With `checked`: an on/off choice (a checkbox) instead of one of several. */
+      toggle?: boolean;
       disabled?: boolean;
       /** Destructive action (shown in the error color). */
       danger?: boolean;
@@ -162,7 +165,13 @@ export function MenuItems({ entries, onClose }: { entries: MenuEntry[]; onClose:
           <button
             key={entry.id}
             type="button"
-            role={entry.checked === undefined ? "menuitem" : "menuitemradio"}
+            role={
+              entry.checked === undefined
+                ? "menuitem"
+                : entry.toggle
+                  ? "menuitemcheckbox"
+                  : "menuitemradio"
+            }
             aria-checked={entry.checked}
             disabled={entry.disabled}
             className={`bl-menu__item${entry.danger ? " bl-menu__item--danger" : ""}`}
@@ -171,7 +180,9 @@ export function MenuItems({ entries, onClose }: { entries: MenuEntry[]; onClose:
               entry.onSelect();
             }}
           >
-            <span className="bl-menu__icon">{entry.icon}</span>
+            <span className="bl-menu__icon">
+              {entry.toggle && entry.checked ? <Check size={16} aria-hidden /> : entry.icon}
+            </span>
             <span className="bl-menu__text">
               <span className="truncate">{entry.label}</span>
               {entry.description && (

@@ -7,6 +7,8 @@ import {
   GitCommitHorizontal,
   GitPullRequest,
   History,
+  PanelLeftClose,
+  PanelLeftOpen,
   Tag,
 } from "lucide-react";
 import type { ReactNode } from "react";
@@ -53,7 +55,7 @@ function NavItem({
         className="bl-nav-item"
         aria-current={active ? "page" : undefined}
         aria-disabled={disabled || undefined}
-        title={title}
+        title={title ?? label}
         onClick={disabled ? undefined : onClick}
       >
         <span className="bl-nav-item__icon">{icon}</span>
@@ -64,10 +66,15 @@ function NavItem({
   );
 }
 
+/** Width of the collapsed sidebar: icons only. */
+export const COLLAPSED_SIDEBAR_WIDTH = 52;
+
 export function Sidebar({
   controller,
   onOpen,
   width,
+  collapsed = false,
+  onToggleCollapsed,
   view,
   onView,
   resizer,
@@ -75,6 +82,9 @@ export function Sidebar({
   controller: RepositoryController;
   onOpen: () => void;
   width: number;
+  /** Icons only, to make room for the workspace. */
+  collapsed?: boolean;
+  onToggleCollapsed?: () => void;
   view: WorkspaceView;
   onView: (view: WorkspaceView) => void;
   /** The divider that resizes the sidebar, kept inside its landmark. */
@@ -91,7 +101,10 @@ export function Sidebar({
 
   return (
     <nav className="bl-sidebar-frame" aria-label="Repository navigation">
-      <div className="bl-sidebar" style={{ width }}>
+      <div
+        className={`bl-sidebar${collapsed ? " bl-sidebar--collapsed" : ""}`}
+        style={{ width: collapsed ? COLLAPSED_SIDEBAR_WIDTH : width }}
+      >
         <section className="bl-sidebar__section" aria-labelledby="sb-repos">
           <h2 id="sb-repos" className="bl-sidebar__heading">
             Repositories
@@ -103,7 +116,7 @@ export function Sidebar({
               title={`Open repository (${modKeyLabel}O)`}
               onClick={onOpen}
             />
-            {recent.slice(0, MAX_SIDEBAR_RECENT).map((r) => (
+            {(collapsed ? [] : recent.slice(0, MAX_SIDEBAR_RECENT)).map((r) => (
               <NavItem
                 key={r.path}
                 icon={<History size={16} />}
@@ -182,8 +195,26 @@ export function Sidebar({
             </ul>
           </section>
         )}
+        {onToggleCollapsed && (
+          <div className="bl-sidebar__footer">
+            <button
+              type="button"
+              className="bl-nav-item bl-sidebar__collapse"
+              title={`${collapsed ? "Expand" : "Collapse"} sidebar (${modKeyLabel}B)`}
+              aria-expanded={!collapsed}
+              onClick={onToggleCollapsed}
+            >
+              <span className="bl-nav-item__icon" aria-hidden>
+                {collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+              </span>
+              <span className="bl-nav-item__label truncate">
+                {collapsed ? "Expand sidebar" : "Collapse sidebar"}
+              </span>
+            </button>
+          </div>
+        )}
       </div>
-      {resizer}
+      {!collapsed && resizer}
     </nav>
   );
 }

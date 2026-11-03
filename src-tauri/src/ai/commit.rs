@@ -36,7 +36,7 @@ pub struct ChangeContext {
     pub shortened: bool,
 }
 
-fn git_text(root: &Path, args: &[&str], ok_codes: &[i32]) -> Result<String, GitError> {
+pub(crate) fn git_text(root: &Path, args: &[&str], ok_codes: &[i32]) -> Result<String, GitError> {
     Ok(run_git_with(
         root,
         args,
@@ -164,6 +164,15 @@ pub fn budget_diff(diff: &str, per_file: usize, total: usize) -> (String, bool) 
 
 /// Instructions for the model.
 pub fn system_prompt(cfg: &AiSettings) -> String {
+    format!(
+        "You write Git commit messages. Reply with the commit message only: no introduction, \
+no quotes, no Markdown and no code fences.\n\n{}",
+        message_rules(cfg)
+    )
+}
+
+/// How a commit message must look, from the settings (style, language, team guidelines).
+pub fn message_rules(cfg: &AiSettings) -> String {
     let first_line = match cfg.style {
         CommitStyle::Conventional => {
             "a Conventional Commits header: `type(scope): summary`, where type is one of feat, fix, docs, style, refactor, perf, test, build, ci, chore or revert, and the scope is optional"
@@ -175,10 +184,7 @@ pub fn system_prompt(cfg: &AiSettings) -> String {
         other => other,
     };
     let mut prompt = format!(
-        "You write Git commit messages. Reply with the commit message only: no introduction, \
-no quotes, no Markdown and no code fences.\n\
-\n\
-Rules:\n\
+        "Commit message rules:\n\
 - The first line is {first_line}. Keep it under 72 characters, use the imperative mood \
 (\"add\", not \"added\") and do not end it with a period.\n\
 - If the change needs explaining, add one blank line and then a short body, wrapped at 72 \
