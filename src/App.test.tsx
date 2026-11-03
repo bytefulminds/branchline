@@ -31,7 +31,7 @@ describe("App", () => {
     expect(within(list).getAllByRole("img", { name: "Modified" })).toHaveLength(1);
     expect(within(list).getAllByRole("img", { name: "Untracked" })).toHaveLength(1);
     expect(within(list).getAllByRole("img", { name: "Renamed" })).toHaveLength(1);
-    expect(screen.getByText("2 unstaged · 1 staged")).toBeInTheDocument();
+    expect(screen.getByText("1 staged · 2 unstaged")).toBeInTheDocument();
     // Branch is visible in the title bar and status bar.
     expect(screen.getAllByText("main").length).toBeGreaterThanOrEqual(2);
     // The opened repository is remembered.
@@ -55,12 +55,13 @@ describe("App", () => {
     expect(within(list).queryAllByRole("option", { selected: true })).toHaveLength(0);
     await user.keyboard("{ArrowDown}");
     expect(within(list).getAllByRole("option")[0]).toHaveAttribute("aria-selected", "true");
-    await screen.findByRole("region", { name: "Changes in src/app.ts" });
+    // Staged files come first.
+    await screen.findByRole("region", { name: "Changes in lib/b.rs" });
 
     await user.keyboard("{ArrowDown}{ArrowDown}");
     const options = within(list).getAllByRole("option");
     expect(options[2]).toHaveAttribute("aria-selected", "true");
-    await screen.findByRole("region", { name: "Changes in lib/b.rs" });
+    await screen.findByRole("region", { name: "Changes in notes/new file.md" });
   });
 
   it("shows a specific error for a folder that is not a repository", async () => {

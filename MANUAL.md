@@ -65,7 +65,8 @@ Updates are signed with Branchline's own update key, so only genuine releases ar
 ## Changes and commits
 
 - Changed files from `git status`: modified, added, deleted, renamed (with source path), copied,
-  type changes, untracked and conflicted files, split into conflicts, unstaged and staged.
+  type changes, untracked and conflicted files, split into conflicts, staged (what goes
+  into the next commit, on top) and unstaged.
 - Diff viewer for unstaged, staged and untracked files, with line numbers, hunk headers, CRLF and
   "no newline at end of file" handling, binary detection and a guard for very large diffs.
 - One column or side by side (toggle above every diff, remembered). Side by side pairs removed

@@ -169,8 +169,8 @@ export function ChangesView({
 
   const summary = [
     groups.conflicted.length && plural(groups.conflicted.length, "conflict"),
-    groups.unstaged.length && `${groups.unstaged.length.toLocaleString()} unstaged`,
     groups.staged.length && `${groups.staged.length.toLocaleString()} staged`,
+    groups.unstaged.length && `${groups.unstaged.length.toLocaleString()} unstaged`,
   ].filter(Boolean);
 
   return (

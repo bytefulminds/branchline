@@ -20,7 +20,8 @@ export interface GroupedChanges {
   staged: ChangeEntry[];
 }
 
-export const AREA_ORDER: ChangeArea[] = ["conflicted", "unstaged", "staged"];
+// Staged first, under conflicts: what goes into the next commit is on top.
+export const AREA_ORDER: ChangeArea[] = ["conflicted", "staged", "unstaged"];
 
 export const AREA_LABEL: Record<ChangeArea, string> = {
   conflicted: "Conflicts",
