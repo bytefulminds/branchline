@@ -105,6 +105,13 @@ describe("reviews", () => {
     await user.keyboard("{Control>}7{/Control}");
     expect(screen.getByRole("heading", { name: "Changes", level: 1 })).toBeInTheDocument();
     expect(calls.some((c) => c.cmd === "review_requests")).toBe(false);
+    // Nothing asks the password store for a token or key.
+    expect(calls.some((c) => c.cmd === "ai_key_exists")).toBe(false);
+    await user.keyboard("{Control>}k{/Control}");
+    await user.keyboard("History");
+    expect(await screen.findAllByRole("option", { name: /History/ })).not.toHaveLength(0);
+    await user.keyboard("{Control>}a{/Control}Reviews");
+    expect(screen.queryByRole("option", { name: /Reviews/ })).toBeNull();
   });
 
   it("connects an account in Settings and then shows the merge requests", async () => {
