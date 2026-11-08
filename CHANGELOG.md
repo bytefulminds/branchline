@@ -7,6 +7,17 @@ description on GitLab.
 
 ## [Unreleased]
 
+### Added
+
+- Review quest (with AI on): Start review quest on a merge request opened in Branchline. For
+  every changed file the AI asks one to three questions (quiz, true or false, find the line,
+  and open questions it responds to), and may suggest review comments. Click any changed
+  line to write a draft comment. Points, coverage and a summary with your draft comments,
+  saved per merge request. Binary, generated and lock files are left out, and above 40 files
+  the largest changes come first.
+- Review my branch: the same quest on your own branch's commits before you open a merge
+  request, from Changes, Branches, History or the command palette.
+
 ## [0.2.5] - 2026-11-03
 
 Clean up a branch before you share it with Rewrite history, read merge requests to review in

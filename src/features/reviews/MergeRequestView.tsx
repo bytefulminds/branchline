@@ -5,6 +5,7 @@ import {
   FileText,
   GitCommitHorizontal,
   MessageSquare,
+  Sparkles,
   TriangleAlert,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -24,6 +25,8 @@ import { diffRows } from "../changes/diffModel";
 import { Avatar } from "../history/Avatar";
 import { fileStatus } from "../history/CommitDetailsPanel";
 import { displayTitle } from "./forges";
+import { QuestView } from "../quest/QuestView";
+import { useSettings } from "../settings/SettingsProvider";
 import "../history/HistoryView.css";
 import "./MergeRequestView.css";
 
@@ -221,6 +224,8 @@ export function MergeRequestView({
   >(() => ({ s: "loading", progress: null, opId: `mr-${nextOpId++}` }));
   const [selected, setSelected] = useState<string | null>(null);
   const [width, setWidth] = usePersistentNumber("mergeRequestPanelWidth", 340);
+  const { settings } = useSettings();
+  const [questing, setQuesting] = useState(false);
   const opId = state.s === "loading" ? state.opId : null;
   const started = useRef<string | null>(null);
 
@@ -242,6 +247,31 @@ export function MergeRequestView({
     (t, f) => ({ add: t.add + (f.additions ?? 0), del: t.del + (f.deletions ?? 0) }),
     { add: 0, del: 0 },
   );
+
+  // The quest only exists while AI is on.
+  if (questing && detail && settings.ai.enabled) {
+    const discussion: Record<string, string> = {};
+    for (const f of detail.files)
+      discussion[f.path] = threadsFor(detail.threads, f)
+        .flatMap((t) => t.notes.map((n) => `${n.author.name}: ${n.body}`))
+        .join("\n");
+    return (
+      <QuestView
+        spec={{
+          repoPath,
+          base: detail.base,
+          head: detail.head,
+          title: displayTitle(detail.request),
+          description: detail.description,
+          ownBranch: false,
+          storageKey: `${detail.request.projectPath}!${detail.request.iid}`,
+          discussion,
+          backLabel: "Merge request",
+        }}
+        onExit={() => setQuesting(false)}
+      />
+    );
+  }
 
   return (
     <section
@@ -282,6 +312,17 @@ export function MergeRequestView({
           >
             Open on GitLab
           </Button>
+          {settings.ai.enabled && detail && (
+            <Button
+              size="sm"
+              variant="secondary"
+              className="bl-mr__quest"
+              icon={<Sparkles size={14} aria-hidden />}
+              onClick={() => setQuesting(true)}
+            >
+              Start review quest
+            </Button>
+          )}
         </div>
 
         {detail && (

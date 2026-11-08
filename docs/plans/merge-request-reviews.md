@@ -1,8 +1,8 @@
 # Plan: review merge requests in Branchline, with an AI as a game master
 
 Status: phases 1 (GitLab account and Reviews view), 2 (reading a merge request in
-Branchline) and 3 (AI providers) are built; the rest is planned. Work happens on the branch
-`feature/review-with-ollama`.
+Branchline), 3 (AI providers) and 4 (the review quest, with self-review) are built; the rest
+is planned. Phases 1 to 3 shipped in 0.2.5; the quest is on `feature/review-quest`.
 
 ## Goal
 

@@ -154,3 +154,8 @@
   align-items: center;
   gap: var(--space-2);
 }
+
+.bl-mr__quest {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}

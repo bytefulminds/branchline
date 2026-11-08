@@ -14,6 +14,7 @@ import {
   PanelRightOpen,
   Tag,
   SearchX,
+  Sparkles,
   Undo2,
   X,
 } from "lucide-react";
@@ -36,6 +37,7 @@ import { CommitDetailsPanel } from "./CommitDetailsPanel";
 import { CommitDiffView } from "./CommitDiffView";
 import { useTagActions } from "../tags/TagActions";
 import { useIntegrateActions } from "../integrate/IntegrateActions";
+import { useSelfReview } from "../quest/useSelfReview";
 import { useRefDrop } from "../integrate/refDrag";
 import { useWorktreeActions } from "../worktrees/WorktreeActions";
 import { CommitList, graphColumnWidth, WorkInProgressRow } from "./CommitList";
@@ -266,6 +268,7 @@ export function HistoryView({
 
   const tagActions = useTagActions();
   const integrate = useIntegrateActions();
+  const reviewBranch = useSelfReview(repo);
   const worktrees = useWorktreeActions();
   const drop = useRefDrop(repo);
   const current = repo.head.kind === "branch" ? repo.head.name : null;
@@ -357,6 +360,18 @@ export function HistoryView({
         disabled: !current || oid === headOid || busyOp,
         onSelect: () => integrate.rebase({ kind: "commit", oid }, `commit ${short}`),
       },
+      ...(oid === headOid && current && reviewBranch
+        ? [
+            {
+              id: "self-review",
+              label: `Review ${current} with AI…`,
+              description: "A review quest on this branch's own commits",
+              icon: <Sparkles size={16} />,
+              disabled: busyOp,
+              onSelect: reviewBranch,
+            },
+          ]
+        : []),
       ...(oid === headOid && current
         ? [
             {

@@ -25,6 +25,7 @@ import {
   Search,
   Settings,
   SkipForward,
+  Sparkles,
   SquareTerminal,
   Tag,
   Terminal,
@@ -37,6 +38,7 @@ import type { WorkspaceView } from "../../layouts/Sidebar";
 import { useBranchActions } from "../branches/BranchActions";
 import { requestHistorySearch } from "../history/HistoryView";
 import { useIntegrateActions } from "../integrate/IntegrateActions";
+import { useSelfReview } from "../quest/useSelfReview";
 import { useRemoteActions } from "../remote/RemoteActions";
 import { useReviews } from "../reviews/ReviewsProvider";
 import { FILE_MANAGER, useOpenIn } from "../repository/useOpenIn";
@@ -89,6 +91,7 @@ export function AppCommandPalette({
   const tags = useTagActions();
   const worktrees = useWorktreeActions();
   const integrate = useIntegrateActions();
+  const reviewBranch = useSelfReview(repo);
   const openIn = useOpenIn();
   const reviews = useReviews();
   const [branches, setBranches] = useState<BranchInfo[]>([]);
@@ -270,6 +273,16 @@ export function AppCommandPalette({
       run: () =>
         branchActions.create({ kind: "head" }, head?.kind === "branch" ? head.name : "HEAD"),
     });
+    if (reviewBranch)
+      add({
+        id: "self-review",
+        title: head?.kind === "branch" ? `Review ${head.name} with AI` : "Review my branch",
+        group: "Branch",
+        keywords: "quest self-review ai questions",
+        icon: <Sparkles size={16} />,
+        disabled: blocked,
+        run: reviewBranch,
+      });
     add({
       id: "rewrite-history",
       title: head?.kind === "branch" ? `Rewrite history of ${head.name}…` : "Rewrite history…",
@@ -453,6 +466,7 @@ export function AppCommandPalette({
     });
     return list;
   }, [
+    reviewBranch,
     repo,
     busy,
     branches,

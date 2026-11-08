@@ -239,8 +239,40 @@ Updates are signed with Branchline's own update key, so only genuine releases ar
   line, whether they are resolved, and whether they were made on an older version. System
   notes such as "added 1 commit" are left out.
 - Merge requests of other projects (in All projects) open on GitLab, as does the button next
-  to Open. Commenting and approving from Branchline, and an optional AI review game, are
-  planned; see [the plan](docs/plans/merge-request-reviews.md).
+  to Open. Posting comments and approving from Branchline are planned; see
+  [the plan](docs/plans/merge-request-reviews.md).
+
+## Review quest (AI)
+
+With AI on (Settings > AI), a merge request opened in Branchline has **Start review quest**.
+The AI is the game master, not the reviewer: it asks questions that make you look closely at
+the change, and you decide what is right.
+
+- One round per changed file, with one to three questions:
+  - **Quiz** (multiple choice) and **true or false**: answer once; the explanation says why,
+    and the lines that matter light up in the diff.
+  - **Find the line**: click the right line in the diff.
+  - **Your take**: an open question. The AI responds to your answer, never calls it wrong, and
+    may suggest a review comment you can edit and keep.
+- An answered question stays in view until **Next question**; **Skip question** and **Skip
+  file** are always there.
+- Click any added or removed line to write a draft comment on it.
+- Points: 10 per answer, 5 more for a quiz question right or an open answer with some
+  thought, 15 per draft comment and 5 per file finished. Coverage is the share of changed
+  lines in finished files. Points are for thought and findings, never for speed.
+- Binary, generated and lock files get no round. Above 40 files, the files with the most
+  changed lines get one. The summary lists everything that was left out.
+- The summary shows your points, coverage and draft comments: edit or remove them, or copy
+  them all. Posting them to GitLab from Branchline comes in a later version.
+- Progress is saved per merge request on this computer, so you can stop and continue later.
+  A new commit on the merge request starts a new quest.
+- **Review my branch** (the sparkle button in Changes, the current branch's menu in Branches,
+  the newest commit's menu in History, or the command palette) plays the same quest on your
+  own branch: its commits since it was created or forked, without uncommitted changes. The
+  questions are what a reviewer is likely to ask, and findings become notes for yourself.
+- Sent to your AI provider per round: the title and description, the file's diff with line
+  numbers (shortened to fit) and earlier comments on that file. Nothing is sent with AI off,
+  and with AI off none of this appears anywhere.
 
 ## AI
 

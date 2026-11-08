@@ -95,12 +95,23 @@ Connect your GitLab account (GitLab.com or your own server) and Reviews shows th
 requests waiting for you, with their pipeline, comments, conflicts and whether you already
 approved. Open one to read its description, discussion, commits and every changed file in
 Branchline's own diff viewer, with the comment threads next to the code. Your token stays in
-your system's password store. GitHub and Bitbucket come later, and so does reviewing with an
-AI as a game master.
+your system's password store. GitHub and Bitbucket come later.
 
 <p align="center">
   <img src="docs/screenshots/reviews.png" alt="The Reviews view with five merge requests waiting for review, showing their pipeline, comments, conflicts and approval" width="49%">
   <img src="docs/screenshots/merge-request.png" alt="A merge request opened in Branchline: its changed files, two comment threads and the diff of api.py" width="49%">
+</p>
+
+### Review as a game, with an AI as game master
+
+Turn on AI and start a review quest: for every changed file the AI asks a few questions, from
+a quick quiz to "click the line that decides whether the cache is still fresh" to "what
+happens to memory when people look up many cities?". It responds to your answers, suggests
+review comments you can keep, and you earn points for thought and findings, never for speed.
+Play the same quest on your own branch before you open a merge request.
+
+<p align="center">
+  <img src="docs/screenshots/quest.png" alt="A review quest: the AI responds to an open answer about the cache and suggests a review comment, above the diff of api.py, with 45 points earned" width="900">
 </p>
 
 ### Commit messages from the AI you choose

@@ -103,6 +103,9 @@ are in the way (`checkoutConflict`); nothing is changed.
 | `rebase_plan_commits(repo, base)` | `PlanCommit[]` | Commits after `base` on the current branch, oldest first |
 | `interactive_rebase(repo, base, plan, autostash)` | `IntegrateResult` | Plan: every commit once, oldest first |
 | `rewrite_base(repo)` | `RewriteBase` | Where "Rewrite history" starts for the current branch, with the number of commits and how many are pushed |
+| `quest_plan(repo, base, head)` | `QuestPlan` | The files of a review quest in round order, and the ones left out (binary, generated, over 40 files) |
+| `quest_round(repo, context, opId)` | `Round` | The AI's 1 to 3 questions about one file, checked against its diff |
+| `quest_reply(repo, context, opId)` | `Reply` | The AI's response to an open answer, with an optional comment and its line |
 | `suggest_rebase(repo, base, opId)` | `RebaseSuggestion` | AI groups of neighbouring commits, oldest first, each with a message; `cancel_remote_operation(opId)` stops it |
 
 Commit ids from the UI are accepted only as hexadecimal strings, so they can never be read as
@@ -478,3 +481,20 @@ checks that every line leaving a row enters the next one and that all lanes clos
   with lines over 2,000 characters are not highlighted. Conflict views stay plain.
 - The layout and highlighting are settings (`editor.diffLayout`, `editor.syntaxHighlighting`).
   Unknown values in a hand-edited settings file fall back to the default for that field only.
+
+## Review quest
+
+`ai/review.rs` sends one file per round. The diff goes to the model with a reference on every
+line (`[new 17] + code`, `[old 20] - code`), and the answer is JSON (with a schema for Ollama).
+Questions are checked against that diff: a reference that is not in it is dropped, a
+find-the-line question needs an added or removed line (the ones a reviewer can click), a quiz
+needs 2 to 5 choices and a valid answer, and at most three questions are kept. An answer
+without a usable question is asked for once more, then reported. Open answers get a reply in
+the same way, with an optional suggested comment and line.
+
+The frontend (`features/quest/`) keeps the quest state (questions, answers, points, draft
+comments) in local storage per merge request (`project!iid`) or branch, tied to the head
+commit. Scoring and coverage are in `questModel.ts`. The merge request view hosts the quest
+for a merge request, so going back keeps its place; "Review my branch" runs in the app shell
+and starts at the same point as Rewrite history (`rewrite_base`). With AI off, nothing of the
+quest is rendered.

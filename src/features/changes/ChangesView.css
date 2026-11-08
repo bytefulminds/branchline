@@ -122,10 +122,17 @@
   color: var(--color-error-text);
 }
 
-.bl-changes__stash {
+.bl-changes__stash,
+.bl-changes__review {
   margin-left: auto;
   align-self: center;
   flex: none;
+}
+.bl-changes__review {
+  color: var(--color-accent);
+}
+.bl-changes__review + .bl-changes__stash {
+  margin-left: 0;
 }
 
 .bl-operation {
