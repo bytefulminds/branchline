@@ -3,29 +3,25 @@ import { useId, useState } from "react";
 import { Button } from "../../components/Button";
 import { useConfirm } from "../../components/ConfirmDialog";
 import { forgeService } from "../../services/forge";
-import type { Access, Account, ForgeKind } from "../../types/forge";
+import type { Account, ForgeKind } from "../../types/forge";
 import type { GitError } from "../../types/git";
 import { Avatar } from "../history/Avatar";
 import { FORGES, forgeInfo, PLANNED_FORGES } from "../reviews/forges";
 import { useReviews } from "../reviews/ReviewsProvider";
 import { Field } from "./SettingControls";
 
-const ACCESS: Record<Access, string> = {
-  write: "Can read merge requests, comment and approve",
-  read: "Can read merge requests (read_api); commenting and approving need the api scope",
-  unknown: "Connected (this server version does not say what the token may do)",
-};
-
-/** Settings > Accounts: accounts on hosting services (GitLab now; GitHub and Bitbucket
+/** Settings > Accounts: accounts on hosting services (GitLab and Bitbucket Cloud; GitHub
  * later), with their tokens in the system's password store. */
 export function AccountsSection() {
   const { accounts, connect: connectAccount, disconnect } = useReviews();
   const confirm = useConfirm();
-  const ids = { kind: useId(), url: useId(), token: useId() };
+  const ids = { kind: useId(), url: useId(), email: useId(), token: useId() };
   const [kind, setKind] = useState<ForgeKind>("gitlab");
   const f = FORGES[kind];
   const [url, setUrl] = useState(f.defaultUrl);
   const [token, setToken] = useState("");
+  const [email, setEmail] = useState("");
+  const ready = !!token.trim() && !!url.trim() && (!f.needsEmail || !!email.trim());
   const [state, setState] = useState<
     | { s: "idle" }
     | { s: "connecting" }
@@ -36,8 +32,9 @@ export function AccountsSection() {
   const connect = async () => {
     setState({ s: "connecting" });
     try {
-      const account = await connectAccount(kind, url, token);
+      const account = await connectAccount(kind, url, token, f.needsEmail ? email : undefined);
       setToken("");
+      setEmail("");
       setState({ s: "done", who: `${account.name} (@${account.username}) on ${account.host}` });
     } catch (e) {
       setState({ s: "error", message: (e as GitError).message ?? String(e) });
@@ -57,11 +54,11 @@ export function AccountsSection() {
   return (
     <>
       <p className="bl-setting__help bl-setting__intro">
-        Connect your account on a hosting service to see its merge requests in the Reviews view: the
-        ones waiting for your review, the ones you created, and all open ones. Branchline uses a{" "}
-        <strong>personal access token</strong>, kept in this computer&apos;s password store
-        (Keychain, Credential Manager or the Secret Service), and only contacts the server you enter
-        here. GitLab works today; {PLANNED_FORGES.join(" and ")} are planned.
+        Connect your account on a hosting service to see its merge requests (pull requests) in the
+        Reviews view: the ones waiting for your review, the ones you created, and all open ones.
+        Branchline uses a <strong>token</strong>, kept in this computer&apos;s password store
+        (Keychain, Credential Manager or the Secret Service), and only contacts that service. GitLab
+        and Bitbucket Cloud work today; {PLANNED_FORGES.join(" and ")} is planned.
       </p>
 
       {accounts.length > 0 && (
@@ -74,7 +71,7 @@ export function AccountsSection() {
                   {a.name} <span className="text-secondary">@{a.username}</span>
                 </span>
                 <span className="text-small text-muted">
-                  {forgeInfo(a.kind).name} · {a.url} · {ACCESS[a.access]}
+                  {forgeInfo(a.kind).name} · {a.url} · {forgeInfo(a.kind).access[a.access]}
                 </span>
               </span>
               <Button
@@ -116,22 +113,49 @@ export function AccountsSection() {
           ))}
         </select>
       </Field>
+      {f.fixedUrl ? (
+        <Field
+          label={`${f.name} address`}
+          help="Bitbucket Cloud. Bitbucket Data Center is not supported yet."
+          htmlFor={ids.url}
+        >
+          <input id={ids.url} className="bl-input" value={f.defaultUrl} readOnly />
+        </Field>
+      ) : (
+        <Field
+          label={`${f.name} address`}
+          help={`${f.defaultUrl}, or the address of your company's ${f.name}.`}
+          htmlFor={ids.url}
+        >
+          <input
+            id={ids.url}
+            className="bl-input"
+            value={url}
+            spellCheck={false}
+            autoComplete="off"
+            onChange={(e) => setUrl(e.target.value)}
+          />
+        </Field>
+      )}
+      {f.needsEmail && (
+        <Field
+          label="Atlassian account email"
+          help="Bitbucket signs in with your Atlassian account's email address and the API token, not your Bitbucket user name."
+          htmlFor={ids.email}
+        >
+          <input
+            id={ids.email}
+            className="bl-input"
+            type="email"
+            value={email}
+            spellCheck={false}
+            autoComplete="off"
+            onChange={(e) => setEmail(e.target.value)}
+          />
+        </Field>
+      )}
       <Field
-        label={`${f.name} address`}
-        help={`${f.defaultUrl}, or the address of your company's ${f.name}.`}
-        htmlFor={ids.url}
-      >
-        <input
-          id={ids.url}
-          className="bl-input"
-          value={url}
-          spellCheck={false}
-          autoComplete="off"
-          onChange={(e) => setUrl(e.target.value)}
-        />
-      </Field>
-      <Field
-        label="Personal access token"
+        label={f.tokenName}
         help={
           <>
             Make {f.tokenHelp} under your own profile, so it acts as you.{" "}
@@ -153,15 +177,15 @@ export function AccountsSection() {
           value={token}
           spellCheck={false}
           autoComplete="off"
-          placeholder="glpat-…"
+          placeholder={f.tokenPlaceholder}
           onChange={(e) => setToken(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && token.trim() && void connect()}
+          onKeyDown={(e) => e.key === "Enter" && ready && void connect()}
         />
         <Button
           variant="primary"
           icon={<KeyRound size={14} aria-hidden />}
           loading={state.s === "connecting"}
-          disabled={!token.trim() || !url.trim()}
+          disabled={!ready}
           onClick={() => void connect()}
         >
           Connect

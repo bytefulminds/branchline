@@ -728,7 +728,7 @@ function Summary({
           </Button>
           {!spec.ownBranch && (
             <span className="text-small text-muted">
-              Posting comments to GitLab from Branchline comes next; for now, copy them.
+              Posting comments from Branchline comes next; for now, copy them.
             </span>
           )}
         </div>

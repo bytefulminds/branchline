@@ -9,11 +9,13 @@ import type {
 import type { FileDiff, RemoteProgress } from "../types/git";
 import { call, progressChannel } from "./git";
 
-/** Accounts on hosting services (GitLab now). Tokens stay in the Rust backend. */
+/** Accounts on hosting services (GitLab and Bitbucket Cloud). Tokens stay in the Rust
+ * backend. */
 export const forgeService = {
   accounts: () => call<Account[]>("forge_accounts"),
-  connect: (kind: ForgeKind, url: string, token: string) =>
-    call<Account>("connect_account", { kind, url, token }),
+  /** `login` is the email address Bitbucket signs in with; GitLab does not use it. */
+  connect: (kind: ForgeKind, url: string, token: string, login?: string) =>
+    call<Account>("connect_account", { kind, url, token, login: login ?? null }),
   disconnect: (kind: ForgeKind, url: string) => call<void>("disconnect_account", { kind, url }),
   reviewSource: (repo: string) => call<ReviewSource | null>("review_source", { repo }),
   reviewRequests: (repo: string, allProjects: boolean, filter: RequestFilter) =>

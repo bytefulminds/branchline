@@ -669,6 +669,135 @@ pub fn fetch_merge_request(
     Ok(())
 }
 
+/// A pull request whose service has no merge request refs (Bitbucket): which branches to
+/// fetch, and the commits the service reported for them.
+pub struct PullRequestFetch<'a> {
+    pub remote: &'a str,
+    /// The project the remote points at (`workspace/repo`).
+    pub project: &'a str,
+    /// The project the changes come from: the same one, or a fork.
+    pub source_project: &'a str,
+    pub source_branch: &'a str,
+    pub target_branch: &'a str,
+    pub id: u64,
+    /// Commit hashes as the service sent them (Bitbucket abbreviates them).
+    pub head: &'a str,
+    pub target: &'a str,
+}
+
+/// Fetch a pull request's source branch (from the fork when it comes from one) and target
+/// branch into `refs/branchline/pull-requests/<id>/`, unless both commits are already there.
+/// Returns the diff range: the merge base with the target, and the full head commit.
+pub fn fetch_pull_request(
+    repo: &str,
+    pr: &PullRequestFetch,
+    op_id: &str,
+    on_progress: &mut dyn FnMut(Progress),
+) -> Result<(String, String), GitError> {
+    super::log::validate_oid(pr.head)?;
+    super::log::validate_oid(pr.target)?;
+    let root = resolve_root(repo)?;
+    validate_branch_name(&root, pr.source_branch)?;
+    validate_branch_name(&root, pr.target_branch)?;
+    let remotes = remotes_at(&root)?;
+    let remote = remotes
+        .iter()
+        .find(|r| r.name == pr.remote)
+        .ok_or_else(|| {
+            GitError::Unsupported(format!("There is no remote named \"{}\".", pr.remote))
+        })?;
+    let commit = |oid: &str| -> Option<String> {
+        run_git(
+            &root,
+            &[
+                "rev-parse",
+                "--verify",
+                "--quiet",
+                &format!("{oid}^{{commit}}"),
+            ],
+            DEFAULT_TIMEOUT,
+        )
+        .ok()
+        .filter(|o| o.code == 0)
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .filter(|o| !o.is_empty())
+    };
+    if commit(pr.head).is_none() || commit(pr.target).is_none() {
+        let _net = network_lock(&root)?;
+        let refs = format!("refs/branchline/pull-requests/{}", pr.id);
+        let target = format!("+refs/heads/{}:{refs}/target", pr.target_branch);
+        let source = format!("+refs/heads/{}:{refs}/head", pr.source_branch);
+        let fork = !pr.source_project.eq_ignore_ascii_case(pr.project);
+        let fork_url = if fork {
+            Some(
+                fork_url(&remote.url, pr.project, pr.source_project).ok_or_else(|| {
+                    GitError::Unsupported(format!(
+                    "This pull request comes from the fork {}, and Branchline could not work out \
+                     its address from the remote {}.",
+                    pr.source_project, pr.remote
+                ))
+                })?,
+            )
+        } else {
+            None
+        };
+        let mut fetches: Vec<(&str, Vec<&str>)> = Vec::new();
+        match &fork_url {
+            Some(url) => {
+                fetches.push((pr.remote, vec![target.as_str()]));
+                fetches.push((url.as_str(), vec![source.as_str()]));
+            }
+            None => fetches.push((pr.remote, vec![target.as_str(), source.as_str()])),
+        }
+        for (from, refspecs) in fetches {
+            let mut args = vec!["fetch", "--no-tags", "--progress", "--", from];
+            args.extend(refspecs);
+            let out = run_network(&root, &args, op_id, on_progress)?;
+            if out.code != 0 {
+                return Err(classify_remote_failure(out.code, &out.stderr));
+            }
+        }
+    }
+    let missing = |what: &str| {
+        GitError::Unsupported(format!(
+            "The {what} commit of this pull request is not on the server any more; it may have \
+             been pushed again. Refresh the list and open it again."
+        ))
+    };
+    let head = commit(pr.head).ok_or_else(|| missing("newest"))?;
+    let target = commit(pr.target).ok_or_else(|| missing("target branch's"))?;
+    let base = run_git(&root, &["merge-base", &target, &head], DEFAULT_TIMEOUT)?;
+    let base = String::from_utf8_lossy(&base.stdout).trim().to_string();
+    if base.is_empty() {
+        return Err(GitError::Unsupported(
+            "The pull request's branch has no history in common with its target branch.".into(),
+        ));
+    }
+    Ok((base, head))
+}
+
+/// The address of a fork, from the remote's address with the project path swapped:
+/// `git@bitbucket.org:acme/app.git` and `me/app` give `git@bitbucket.org:me/app.git`.
+fn fork_url(remote_url: &str, project: &str, fork: &str) -> Option<String> {
+    let lower = remote_url.to_ascii_lowercase();
+    let at = lower.rfind(&project.to_ascii_lowercase())?;
+    let before = &remote_url[..at];
+    if !(before.ends_with('/') || before.ends_with(':')) {
+        return None;
+    }
+    let after = &remote_url[at + project.len()..];
+    if !(after.is_empty() || after == ".git" || after == "/" || after == ".git/") {
+        return None;
+    }
+    if fork.is_empty()
+        || fork.starts_with('-')
+        || fork.chars().any(|c| c.is_whitespace() || c.is_control())
+    {
+        return None;
+    }
+    Some(format!("{before}{fork}{after}"))
+}
+
 /// [`fetch`], choosing whether branches deleted on the remote are pruned.
 pub fn fetch_with(
     repo: &str,
@@ -1059,6 +1188,30 @@ pub fn push(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn works_out_fork_addresses() {
+        assert_eq!(
+            fork_url("git@bitbucket.org:acme/app.git", "acme/app", "me/app").as_deref(),
+            Some("git@bitbucket.org:me/app.git")
+        );
+        assert_eq!(
+            fork_url("https://bitbucket.org/Acme/App", "acme/app", "me/app-fork").as_deref(),
+            Some("https://bitbucket.org/me/app-fork")
+        );
+        assert_eq!(
+            fork_url("https://bitbucket.org/acme/app.git", "other/app", "me/app"),
+            None
+        );
+        assert_eq!(
+            fork_url("https://bitbucket.org/xacme/app", "acme/app", "me/app"),
+            None
+        );
+        assert_eq!(
+            fork_url("https://bitbucket.org/acme/app", "acme/app", "-x/app"),
+            None
+        );
+    }
 
     #[test]
     fn a_cancel_before_the_operation_starts_is_not_lost() {

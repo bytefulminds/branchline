@@ -1,5 +1,5 @@
 import { Archive, CircleCheck, Search, TriangleAlert, X, Sparkles } from "lucide-react";
-import { IconButton } from "../../components/Button";
+import { Button, IconButton } from "../../components/Button";
 import { useStashActions } from "../stash/StashActions";
 import { useCallback, useMemo, useState } from "react";
 import { useConfirm } from "../../components/ConfirmDialog";
@@ -186,14 +186,14 @@ export function ChangesView({
               {summary.length ? summary.join(" · ") : "Nothing to commit"}
             </span>
             {reviewBranch && (
-              <IconButton
-                label="Review my branch with AI"
-                icon={<Sparkles size={16} aria-hidden />}
+              <Button
                 size="sm"
+                icon={<Sparkles size={14} aria-hidden />}
                 className="bl-changes__review"
                 onClick={reviewBranch}
-                data-tooltip-align="end"
-              />
+              >
+                Review with AI
+              </Button>
             )}
             {repo.totalChanges > 0 && (
               <IconButton

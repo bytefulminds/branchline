@@ -349,7 +349,7 @@ describe("review quest entry points", () => {
 
   it("does not exist while AI is off", async () => {
     const { user } = await openChanges(DEFAULT_SETTINGS);
-    expect(screen.queryByRole("button", { name: "Review my branch with AI" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Review with AI" })).toBeNull();
     await user.keyboard("{Control>}k{/Control}");
     await user.keyboard("Review");
     expect(screen.queryByRole("option", { name: /Review main with AI/ })).toBeNull();
@@ -357,7 +357,7 @@ describe("review quest entry points", () => {
 
   it("reviews your own branch from where it started", async () => {
     const { user, calls } = await openChanges(AI_ON);
-    await user.click(screen.getByRole("button", { name: "Review my branch with AI" }));
+    await user.click(screen.getByRole("button", { name: "Review with AI" }));
     await screen.findByRole("heading", { name: "Review your branch: main" });
     await waitFor(() =>
       expect(calls.find((c) => c.cmd === "quest_plan")?.args).toEqual({

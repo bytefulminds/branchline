@@ -428,6 +428,18 @@ logs, lock files) and paths ignored by the root `.gitignore`, then debounces bur
 `repository-changed` event. Ignoring read-only events matters: otherwise the files `git status`
 reads would trigger the next refresh, forever. `tests/watcher.rs` guards against that.
 
+## Hosting services
+
+`forge/` keeps the service-neutral types (`MergeRequest`, `RequestDetail`, `Thread`) and
+dispatches on the account's `ForgeKind` to `gitlab.rs` or `bitbucket.rs`. Tokens live in the
+credential store under `<kind>:<url>`; for Bitbucket Cloud the stored secret is
+`email:token`, sent as HTTP Basic to api.bitbucket.org only. GitLab merge requests are
+fetched by their ref (`refs/merge-requests/<iid>/head`); Bitbucket has none, so
+`git::remote::fetch_pull_request` fetches the source branch (from the fork's address, made
+from the remote's address, when it comes from a fork) and the target branch into
+`refs/branchline/pull-requests/<id>/`, resolves Bitbucket's abbreviated hashes, and returns
+the merge base and head. Bitbucket `next` links are followed only on the same API.
+
 ## Extending later
 
 Coding-agent integration is out of scope for now. Because every Git operation already goes through

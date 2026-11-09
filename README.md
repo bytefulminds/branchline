@@ -91,11 +91,11 @@ start Branchline from the Dock.
 
 ### Merge requests to review, right in Branchline
 
-Connect your GitLab account (GitLab.com or your own server) and Reviews shows the merge
-requests waiting for you, with their pipeline, comments, conflicts and whether you already
+Connect your GitLab account (GitLab.com or your own server) or Bitbucket Cloud account and
+Reviews shows the merge requests (pull requests) waiting for you, with their pipeline, comments, conflicts and whether you already
 approved. Open one to read its description, discussion, commits and every changed file in
 Branchline's own diff viewer, with the comment threads next to the code. Your token stays in
-your system's password store. GitHub and Bitbucket come later.
+your system's password store. GitHub comes later.
 
 <p align="center">
   <img src="docs/screenshots/reviews.png" alt="The Reviews view with five merge requests waiting for review, showing their pipeline, comments, conflicts and approval" width="49%">

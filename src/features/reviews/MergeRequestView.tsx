@@ -24,7 +24,8 @@ import { DiffLayoutToggle } from "../changes/DiffLayoutToggle";
 import { diffRows } from "../changes/diffModel";
 import { Avatar } from "../history/Avatar";
 import { fileStatus } from "../history/CommitDetailsPanel";
-import { displayTitle } from "./forges";
+import { displayTitle, forgeInfo } from "./forges";
+import { useReviews } from "./ReviewsProvider";
 import { QuestView } from "../quest/QuestView";
 import { useSettings } from "../settings/SettingsProvider";
 import "../history/HistoryView.css";
@@ -189,7 +190,7 @@ function Overview({ detail }: { detail: RequestDetail }) {
       {general.length ? (
         general.map((t) => <ThreadCard key={t.id} thread={t} />)
       ) : (
-        <p className="text-small text-muted">No comments on the merge request as a whole.</p>
+        <p className="text-small text-muted">No general comments.</p>
       )}
       <h2 className="bl-section-label">{plural(detail.commits.length, "commit")}</h2>
       <ul className="bl-mr__commits" aria-label="Commits">
@@ -226,6 +227,8 @@ export function MergeRequestView({
   const [width, setWidth] = usePersistentNumber("mergeRequestPanelWidth", 340);
   const { settings } = useSettings();
   const [questing, setQuesting] = useState(false);
+  const f = forgeInfo(useReviews().source?.account?.kind);
+  const Noun = `${f.noun[0]!.toUpperCase()}${f.noun.slice(1)}`;
   const opId = state.s === "loading" ? state.opId : null;
   const started = useRef<string | null>(null);
 
@@ -264,9 +267,9 @@ export function MergeRequestView({
           title: displayTitle(detail.request),
           description: detail.description,
           ownBranch: false,
-          storageKey: `${detail.request.projectPath}!${detail.request.iid}`,
+          storageKey: `${detail.request.projectPath}${f.ref}${detail.request.iid}`,
           discussion,
-          backLabel: "Merge request",
+          backLabel: Noun,
         }}
         onExit={() => setQuesting(false)}
       />
@@ -276,7 +279,7 @@ export function MergeRequestView({
   return (
     <section
       className="bl-mr"
-      aria-label={`Merge request !${r.iid}`}
+      aria-label={`${Noun} ${f.ref}${r.iid}`}
       onKeyDown={(e) => e.key === "Escape" && e.target === e.currentTarget && onBack()}
     >
       <aside className="bl-mr__side" style={{ width }}>
@@ -292,7 +295,10 @@ export function MergeRequestView({
           </Button>
           <h1 className="text-h2 bl-mr__title selectable">{displayTitle(r)}</h1>
           <p className="text-small text-secondary bl-mr__meta">
-            <span className="mono">!{r.iid}</span>
+            <span className="mono">
+              {f.ref}
+              {r.iid}
+            </span>
             {r.draft && <span className="bl-tag-kind">Draft</span>}
             <span>
               <Avatar name={r.author.name} email={r.author.username} size={16} /> {r.author.name}
@@ -310,7 +316,7 @@ export function MergeRequestView({
             icon={<ExternalLink size={13} aria-hidden />}
             onClick={() => void forgeService.openPage(r.webUrl).catch(() => {})}
           >
-            Open on GitLab
+            Open on {f.name}
           </Button>
           {settings.ai.enabled && detail && (
             <Button
@@ -326,7 +332,7 @@ export function MergeRequestView({
         </div>
 
         {detail && (
-          <nav className="bl-mr__nav" aria-label="Merge request contents">
+          <nav className="bl-mr__nav" aria-label={`${Noun} contents`}>
             <button
               type="button"
               className="bl-commit-file"
@@ -394,7 +400,7 @@ export function MergeRequestView({
         )}
       </aside>
       <Splitter
-        label="Resize merge request panel"
+        label={`Resize ${f.noun} panel`}
         value={width}
         min={260}
         max={560}
@@ -408,7 +414,7 @@ export function MergeRequestView({
             <span>
               {state.progress
                 ? `${state.progress.phase}${state.progress.percent !== null ? ` ${state.progress.percent}%` : ""}`
-                : "Opening the merge request…"}
+                : `Opening the ${f.noun}…`}
             </span>
             <Button
               size="sm"

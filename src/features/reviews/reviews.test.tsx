@@ -135,6 +135,7 @@ describe("reviews", () => {
         kind: "gitlab",
         url: "https://gitlab.com",
         token: "glpat-secret",
+        login: null,
       }),
     );
     expect(await screen.findByText(/Connected as Ada Lovelace/)).toBeInTheDocument();
@@ -265,6 +266,94 @@ describe("reviews", () => {
     );
     await user.keyboard("{Escape}");
     await waitFor(() => expect(screen.queryByRole("button", { name: /^Reviews/ })).toBeNull());
+  });
+});
+
+describe("Bitbucket Cloud", () => {
+  const BB: Account = {
+    kind: "bitbucket",
+    url: "https://bitbucket.org",
+    host: "bitbucket.org",
+    id: 0,
+    uid: "{ada}",
+    username: "ada",
+    name: "Ada Lovelace",
+    access: "unknown",
+  };
+
+  it("connects with email and API token, then lists and opens pull requests", async () => {
+    const user = userEvent.setup();
+    const state = { accounts: [] as Account[] };
+    const pr = MR(4, { webUrl: "https://bitbucket.org/acme/demo/pull-requests/4", projectId: 0 });
+    const calls = setup((cmd) => {
+      if (cmd === "plugin:dialog|open") return REPO.path;
+      if (cmd === "inspect_repository") return REPO;
+      if (cmd === "forge_accounts") return state.accounts;
+      if (cmd === "review_source")
+        return {
+          remote: "origin",
+          host: "bitbucket.org",
+          project: "acme/demo",
+          account: state.accounts[0] ?? null,
+        };
+      if (cmd === "review_requests")
+        return { account: BB, project: "acme/demo", items: [pr], truncated: false };
+      if (cmd === "connect_account") {
+        state.accounts = [BB];
+        return BB;
+      }
+      if (cmd === "open_merge_request")
+        return {
+          request: pr,
+          description: "",
+          base: "a".repeat(40),
+          head: "b".repeat(40),
+          commits: [],
+          threads: [],
+          files: [],
+        } satisfies RequestDetail;
+    });
+    render(<App />);
+    await user.click(openButton());
+    await screen.findByRole("heading", { name: "Changes" });
+
+    await user.keyboard("{Control>},{/Control}");
+    await user.click(await screen.findByRole("button", { name: "Accounts" }));
+    await user.selectOptions(await screen.findByLabelText("Service"), "bitbucket");
+    // Bitbucket Cloud has one address, and signs in with the Atlassian email.
+    const address = screen.getByLabelText("Bitbucket address");
+    expect(address).toHaveValue("https://bitbucket.org");
+    expect(address).toHaveAttribute("readonly");
+    const token = screen.getByLabelText("API token");
+    await user.type(token, "ATATT-secret");
+    const connect = screen.getByRole("button", { name: "Connect" });
+    expect(connect).toBeDisabled();
+    await user.type(screen.getByLabelText("Atlassian account email"), "ada@example.com");
+    await user.click(connect);
+    await waitFor(() =>
+      expect(calls.find((c) => c.cmd === "connect_account")?.args).toEqual({
+        kind: "bitbucket",
+        url: "https://bitbucket.org",
+        token: "ATATT-secret",
+        login: "ada@example.com",
+      }),
+    );
+    const accounts = await screen.findByRole("list", { name: "Connected accounts" });
+    expect(accounts).toHaveTextContent("Bitbucket");
+    await user.keyboard("{Escape}");
+
+    await user.click(await screen.findByRole("button", { name: /^Reviews/ }));
+    const list = await screen.findByRole("list", { name: "Pull requests to review" });
+    const row = within(list).getAllByRole("listitem")[0]!;
+    expect(row).toHaveTextContent("#4");
+    expect(row).not.toHaveTextContent("!4");
+    await user.click(within(row).getByRole("button", { name: "Open" }));
+    expect(await screen.findByRole("region", { name: "Pull request #4" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open on Bitbucket" })).toBeInTheDocument();
+    expect(calls.find((c) => c.cmd === "open_merge_request")?.args).toMatchObject({
+      projectId: 0,
+      iid: 4,
+    });
   });
 });
 

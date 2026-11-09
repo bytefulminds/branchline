@@ -424,9 +424,9 @@ export function AppCommandPalette({
     });
     add({
       id: "accounts",
-      title: reviews.accounts.length ? "Accounts" : "Connect a GitLab account…",
+      title: reviews.accounts.length ? "Accounts" : "Connect a GitLab or Bitbucket account…",
       group: "Branchline",
-      keywords: "gitlab token sign in login merge requests reviews",
+      keywords: "gitlab bitbucket pull requests token sign in login merge requests reviews",
       icon: <KeyRound size={16} />,
       run: handlers.onAccounts,
     });

@@ -17,6 +17,13 @@ description on GitLab.
   the largest changes come first.
 - Review my branch: the same quest on your own branch's commits before you open a merge
   request, from Changes, Branches, History or the command palette.
+- Bitbucket Cloud: connect with your Atlassian email and an API token, see the pull requests
+  to review, yours and all open ones, read them in Branchline (also from forks) and play the
+  review quest on them.
+
+### Changed
+
+- Changes: the AI review button now says **Review with AI** instead of showing only an icon.
 
 ## [0.2.5] - 2026-11-03
 

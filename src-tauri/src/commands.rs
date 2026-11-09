@@ -786,9 +786,10 @@ pub fn forge_accounts() -> Vec<crate::forge::accounts::Account> {
 pub async fn connect_account(
     kind: crate::forge::accounts::ForgeKind,
     url: String,
+    login: Option<String>,
     token: String,
 ) -> Result<crate::forge::accounts::Account, GitError> {
-    blocking(move || crate::forge::connect(kind, &url, &token)).await
+    blocking(move || crate::forge::connect(kind, &url, login.as_deref(), &token)).await
 }
 
 /// Forget an account and delete its token.

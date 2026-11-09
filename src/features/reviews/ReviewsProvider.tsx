@@ -43,7 +43,7 @@ export interface ReviewsState {
   toReview: number | null;
   /** Load the lists again (the Refresh button). */
   refresh: () => void;
-  connect: (kind: ForgeKind, url: string, token: string) => Promise<Account>;
+  connect: (kind: ForgeKind, url: string, token: string, login?: string) => Promise<Account>;
   disconnect: (kind: ForgeKind, url: string) => Promise<void>;
 }
 
@@ -196,8 +196,8 @@ export function useReviewsState(repoPath: string | null): ReviewsState {
   }, []);
 
   const connect = useCallback(
-    async (kind: ForgeKind, url: string, token: string) => {
-      const account = await forgeService.connect(kind, url, token);
+    async (kind: ForgeKind, url: string, token: string, login?: string) => {
+      const account = await forgeService.connect(kind, url, token, login);
       reloadAccounts();
       return account;
     },

@@ -92,4 +92,4 @@ Reading merge requests and the AI providers are in 0.2.5; the review quest is pl
 - [ ] Post the review: comments on lines, approve or request changes
 - [ ] Review notes remembered per project
 - [ ] GitHub pull requests
-- [ ] Bitbucket pull requests
+- [x] Bitbucket Cloud pull requests (Data Center later)

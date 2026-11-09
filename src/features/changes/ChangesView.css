@@ -128,8 +128,14 @@
   align-self: center;
   flex: none;
 }
-.bl-changes__review {
+.bl-changes__review.bl-button {
+  border-color: var(--color-accent);
+  background: rgb(0 209 160 / 8%);
   color: var(--color-accent);
+  white-space: nowrap;
+}
+.bl-changes__review.bl-button:hover:not(:disabled) {
+  background: rgb(0 209 160 / 16%);
 }
 .bl-changes__review + .bl-changes__stash {
   margin-left: 0;

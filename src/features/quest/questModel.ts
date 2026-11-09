@@ -166,7 +166,7 @@ export function lineLabel(ref: LineRef | null): string {
   return ref.side === "old" ? `Removed line ${ref.line}` : `Line ${ref.line}`;
 }
 
-/** Draft comments as text, for copying them to GitLab until Branchline posts them itself. */
+/** Draft comments as text, for copying them to GitLab or Bitbucket until Branchline posts them itself. */
 export function commentsText(comments: DraftComment[]): string {
   return comments
     .map((c) => `${c.path} (${lineLabel(c.line).toLowerCase()}):\n${c.body.trim()}`)

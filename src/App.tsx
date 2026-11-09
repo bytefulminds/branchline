@@ -78,7 +78,7 @@ function Workspace() {
   const { state, open, refresh } = controller;
   const reviews = useReviewsState(state.status === "ready" ? state.repo.path : null);
   const reviewsAvailable = reviews.available;
-  // Reviews is only a view while the repository's GitLab account is connected.
+  // Reviews is only a view while the repository's GitLab or Bitbucket account is connected.
   const shownView: WorkspaceView = view === "reviews" && !reviewsAvailable ? "changes" : view;
 
   // `branchline <path>` opens that repository on startup; otherwise, when the

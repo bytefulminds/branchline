@@ -247,6 +247,7 @@ pub fn connect(raw_url: &str, token: &str) -> Result<Account, GitError> {
         url,
         host,
         id: user.id,
+        uid: None,
         name: if user.name.is_empty() {
             user.username.clone()
         } else {

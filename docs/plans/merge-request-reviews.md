@@ -1,8 +1,8 @@
 # Plan: review merge requests in Branchline, with an AI as a game master
 
 Status: phases 1 (GitLab account and Reviews view), 2 (reading a merge request in
-Branchline), 3 (AI providers) and 4 (the review quest, with self-review) are built; the rest
-is planned. Phases 1 to 3 shipped in 0.2.5; the quest is on `feature/review-quest`.
+Branchline), 3 (AI providers), 4 (the review quest, with self-review) and the reading part of
+8 (Bitbucket Cloud) are built; the rest is planned. Phases 1 to 3 shipped in 0.2.5.
 
 ## Goal
 
@@ -214,4 +214,7 @@ Each phase can be released on its own and is tested before the next starts.
 6. **Review notes.** Lessons per project, the optional team guide file.
 7. **GitHub.** Pull requests where your review is requested, `refs/pull/<n>/head`, review
    comments and reviews.
-8. **Bitbucket** (later). No merge request refs, so the source branch is fetched instead.
+8. **Bitbucket.** Cloud: built for reading (account with email and API token, lists, reading
+   pull requests, also from forks, and the quest). No merge request refs, so the source and
+   target branches are fetched instead and the diff starts at their merge base. Posting the
+   review comes with phase 5; Data Center later.

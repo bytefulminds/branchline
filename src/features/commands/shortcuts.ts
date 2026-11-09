@@ -45,7 +45,7 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
         keys: `${SHORTCUTS.changes} to ${mod("6")}`,
         action: "Changes, History, Branches, Stashes, Tags, Worktrees",
       },
-      { keys: SHORTCUTS.reviews, action: "Reviews (with a GitLab account connected)" },
+      { keys: SHORTCUTS.reviews, action: "Reviews (with a GitLab or Bitbucket account connected)" },
       { keys: `${shift}F10 or Menu key`, action: "Context menu of the selected row" },
       { keys: "Esc", action: "Close a dialog, menu or panel" },
     ],
