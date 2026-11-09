@@ -341,6 +341,9 @@ describe("Bitbucket Cloud", () => {
     );
     const accounts = await screen.findByRole("list", { name: "Connected accounts" });
     expect(accounts).toHaveTextContent("Bitbucket");
+    // New and only tried against a test server: marked as beta.
+    expect(within(accounts).getByText("Beta")).toBeInTheDocument();
+    expect(screen.getByText(/may need some tuning/)).toBeInTheDocument();
     await user.keyboard("{Escape}");
 
     await user.click(await screen.findByRole("button", { name: /^Reviews/ }));
@@ -356,7 +359,7 @@ describe("Bitbucket Cloud", () => {
       iid: 4,
     });
     // Bitbucket does not report conflicts; the trial merge on opening found one.
-    const note = await screen.findByRole("note");
+    const note = (await screen.findByText("Merge conflicts with main")).closest('[role="note"]')!;
     expect(note).toHaveTextContent("Merge conflicts with main");
     expect(note).toHaveTextContent("src/api.py");
     // Back in the list, the row shows what opening it found.

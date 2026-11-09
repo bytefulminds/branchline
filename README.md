@@ -7,7 +7,7 @@
 **See the flow of your code: a fast, friendly Git desktop client that shows what Git is
 doing and lets you do it with a click.**
 
-**Version 0.2.5** · [download](https://gitlab.com/bytefulminds/branchline/-/releases) for Windows, macOS and Linux
+**Version 0.3.0** · [download](https://gitlab.com/bytefulminds/branchline/-/releases) for Windows, macOS and Linux
 
 [![pipeline](https://gitlab.com/bytefulminds/branchline/badges/main/pipeline.svg)](https://gitlab.com/bytefulminds/branchline/-/pipelines)
 ![license: MIT](https://img.shields.io/badge/license-MIT-00D1A0)
@@ -91,9 +91,9 @@ start Branchline from the Dock.
 
 ### Merge requests to review, right in Branchline
 
-Connect your GitLab account (GitLab.com or your own server) or Bitbucket Cloud account and
-Reviews shows the merge requests (pull requests) waiting for you, with their pipeline, comments, conflicts and whether you already
-approved. Open one to read its description, discussion, commits and every changed file in
+Connect your GitLab account (GitLab.com or your own server) or Bitbucket Cloud account
+(beta) and Reviews shows the merge requests (pull requests) waiting for you, with their
+pipeline, comments, conflicts and whether you already approved. Open one to read its description, discussion, commits and every changed file in
 Branchline's own diff viewer, with the comment threads next to the code. Your token stays in
 your system's password store. GitHub comes later.
 

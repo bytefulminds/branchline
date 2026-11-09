@@ -3,6 +3,8 @@ import { useId, useState } from "react";
 import { Button } from "../../components/Button";
 import { useConfirm } from "../../components/ConfirmDialog";
 import { forgeService } from "../../services/forge";
+import { ISSUES_URL, openLink } from "../../services/links";
+import { modKeyLabel } from "../../services/platform";
 import type { Account, ForgeKind } from "../../types/forge";
 import type { GitError } from "../../types/git";
 import { Avatar } from "../history/Avatar";
@@ -69,6 +71,7 @@ export function AccountsSection() {
               <span className="bl-account__text">
                 <span className="bl-account__name">
                   {a.name} <span className="text-secondary">@{a.username}</span>
+                  {forgeInfo(a.kind).beta && <BetaTag />}
                 </span>
                 <span className="text-small text-muted">
                   {forgeInfo(a.kind).name} · {a.url} · {forgeInfo(a.kind).access[a.access]}
@@ -104,6 +107,7 @@ export function AccountsSection() {
           {(Object.keys(FORGES) as ForgeKind[]).map((k) => (
             <option key={k} value={k}>
               {FORGES[k].name}
+              {FORGES[k].beta ? " (beta)" : ""}
             </option>
           ))}
           {PLANNED_FORGES.map((name) => (
@@ -113,6 +117,17 @@ export function AccountsSection() {
           ))}
         </select>
       </Field>
+      {f.beta && (
+        <p className="bl-setting__help bl-accounts__beta" role="note">
+          <BetaTag /> {f.name} support is new in this version and has only been tried against a test
+          server, so it may need some tuning. If something does not work, the Git console (
+          {modKeyLabel}J) shows each request and the answer; please{" "}
+          <button type="button" className="bl-link-button" onClick={() => openLink(ISSUES_URL)}>
+            report it <ExternalLink size={12} aria-hidden />
+          </button>
+          .
+        </p>
+      )}
       {f.fixedUrl ? (
         <Field
           label={`${f.name} address`}
@@ -200,5 +215,14 @@ export function AccountsSection() {
         )}
       </div>
     </>
+  );
+}
+
+/** Marks a service that is new and may still need tuning. */
+function BetaTag() {
+  return (
+    <span className="bl-tag-kind bl-tag-beta" title="New: may need some tuning">
+      Beta
+    </span>
   );
 }

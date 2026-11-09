@@ -240,6 +240,18 @@
 .bl-account__name {
   font-weight: var(--weight-medium);
 }
+.bl-account__name .bl-tag-beta {
+  margin-left: var(--space-2);
+}
+.bl-tag-kind.bl-tag-beta {
+  display: inline-block;
+  border-color: rgb(0 209 160 / 50%);
+  color: var(--color-accent);
+  font-weight: var(--weight-medium);
+}
+.bl-accounts__beta {
+  margin: var(--space-2) 0;
+}
 .bl-settings__subhead {
   margin: var(--space-4) 0 0;
   font-size: var(--text-h3-size);

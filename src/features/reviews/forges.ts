@@ -19,6 +19,8 @@ export interface ForgeInfo {
   needsEmail: boolean;
   /** What the token may do, as shown with a connected account. */
   access: Record<Access, string>;
+  /** New and not yet tried widely: marked Beta in Settings. */
+  beta: boolean;
 }
 
 /** Services Branchline can connect to. */
@@ -39,6 +41,7 @@ export const FORGES: Record<ForgeKind, ForgeInfo> = {
       read: "Can read merge requests (read_api); commenting and approving need the api scope",
       unknown: "Connected (this server version does not say what the token may do)",
     },
+    beta: false,
   },
   bitbucket: {
     name: "Bitbucket",
@@ -57,6 +60,7 @@ export const FORGES: Record<ForgeKind, ForgeInfo> = {
       read: "Can read pull requests",
       unknown: "Connected",
     },
+    beta: true,
   },
 };
 

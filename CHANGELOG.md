@@ -7,6 +7,18 @@ description on GitLab.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-09
+
+Review with an AI as your game master: Branchline walks you through a merge request (or your
+own branch) file by file with questions, and turns what you find into review comments.
+Bitbucket Cloud joins GitLab in Reviews (beta), and Commit and push saves a step.
+
+**Linux:** this version is the first that does not install updates itself, because
+installing a package needs administrator rights. Version 0.2.5 still offers to install it
+the old way and asks for your password; you can also download 0.3.0 from the releases page
+and install it like before. From now on Branchline tells you about a new version and opens
+the releases page.
+
 ### Added
 
 - Review quest (with AI on): Start review quest on a merge request opened in Branchline. For
@@ -17,9 +29,9 @@ description on GitLab.
   the largest changes come first.
 - Review my branch: the same quest on your own branch's commits before you open a merge
   request, from Changes, Branches, History or the command palette.
-- Bitbucket Cloud: connect with your Atlassian email and an API token, see the pull requests
-  to review, yours and all open ones, read them in Branchline (also from forks) and play the
-  review quest on them. Opening one tries the merge on this computer and shows the files
+- Bitbucket Cloud (beta): connect with your Atlassian email and an API token, see the pull
+  requests to review, yours and all open ones, read them in Branchline (also from forks) and
+  play the review quest on them. Opening one tries the merge on this computer and shows the files
   that would conflict, since Bitbucket does not report conflicts.
 - Commit and push: next to Commit, and with `Ctrl+Shift+Enter` / `⌘⇧↵`. Publishes the
   branch when it has no upstream.
@@ -29,6 +41,15 @@ description on GitLab.
 - Changes: the AI review button now says **Review with AI** instead of showing only an icon.
 - Linux: Branchline no longer installs updates itself (installing a package needs
   administrator rights). It says when a new version is out and opens the releases page.
+
+### Coming next
+
+- **Post your review from Branchline:** the draft comments from the review quest go to
+  GitLab or Bitbucket as comments on their lines, and you approve or request changes
+  without opening the website.
+- **Review notes:** Branchline remembers what reviews in a project keep finding, so the
+  quest asks about it next time; optionally from a team guide in the repository.
+- **GitHub** pull requests, after that.
 
 ## [0.2.5] - 2026-11-03
 

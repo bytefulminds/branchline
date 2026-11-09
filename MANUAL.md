@@ -244,7 +244,8 @@ Updates are signed with Branchline's own update key, so only genuine releases ar
   its diff, in one column or side by side, with that file's comment threads above it: their
   line, whether they are resolved, and whether they were made on an older version. System
   notes such as "added 1 commit" are left out.
-- **Bitbucket Cloud** works the same way, with pull requests (`#4`) instead of merge
+- **Bitbucket Cloud** (beta: new in 0.3.0 and marked as such in Settings, as it may still
+  need some tuning) works the same way, with pull requests (`#4`) instead of merge
   requests (`!4`). Bitbucket signs in with your Atlassian account's **email address** and an
   **API token with scopes** (app passwords no longer work): "Create a token on Bitbucket" opens
   the Atlassian page. Give it `read:user`, `read:pullrequest` and `read:repository` for

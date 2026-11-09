@@ -2,7 +2,8 @@
 
 Status: phases 1 (GitLab account and Reviews view), 2 (reading a merge request in
 Branchline), 3 (AI providers), 4 (the review quest, with self-review) and the reading part of
-8 (Bitbucket Cloud) are built; the rest is planned. Phases 1 to 3 shipped in 0.2.5.
+8 (Bitbucket Cloud, beta) are built; the rest is planned. Phases 1 to 3 shipped in 0.2.5,
+phase 4 and Bitbucket in 0.3.0.
 
 ## Goal
 
