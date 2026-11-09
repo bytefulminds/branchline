@@ -1,5 +1,5 @@
-import { Archive, CircleCheck, Search, TriangleAlert, X } from "lucide-react";
-import { IconButton } from "../../components/Button";
+import { Archive, CircleCheck, Search, TriangleAlert, X, Sparkles } from "lucide-react";
+import { Button, IconButton } from "../../components/Button";
 import { useStashActions } from "../stash/StashActions";
 import { useCallback, useMemo, useState } from "react";
 import { useConfirm } from "../../components/ConfirmDialog";
@@ -20,6 +20,7 @@ import { MergeEditor } from "../conflicts/MergeEditor";
 import { useSettings } from "../settings/SettingsProvider";
 import { OperationBanner } from "../integrate/OperationBanner";
 import { RepositoryOverview } from "../repository/RepositoryOverview";
+import { useSelfReview } from "../quest/useSelfReview";
 import type { RepositoryController } from "../repository/useRepository";
 import { filterGroups, groupChanges, type ChangeEntry } from "./changeModel";
 import { CommitBox } from "./CommitBox";
@@ -173,6 +174,8 @@ export function ChangesView({
     groups.unstaged.length && `${groups.unstaged.length.toLocaleString()} unstaged`,
   ].filter(Boolean);
 
+  const reviewBranch = useSelfReview(repo);
+
   return (
     <div className="bl-changes">
       <div className="bl-changes__list" style={{ width: listWidth }}>
@@ -182,6 +185,16 @@ export function ChangesView({
             <span className="text-small text-secondary truncate">
               {summary.length ? summary.join(" · ") : "Nothing to commit"}
             </span>
+            {reviewBranch && (
+              <Button
+                size="sm"
+                icon={<Sparkles size={14} aria-hidden />}
+                className="bl-changes__review"
+                onClick={reviewBranch}
+              >
+                Review with AI
+              </Button>
+            )}
             {repo.totalChanges > 0 && (
               <IconButton
                 label="Stash changes…"

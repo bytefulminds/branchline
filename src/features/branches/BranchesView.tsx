@@ -18,6 +18,7 @@ import {
   Pencil,
   Plus,
   Search,
+  Sparkles,
   Trash2,
   Unplug,
   X,
@@ -31,6 +32,7 @@ import { Spinner } from "../../components/Spinner";
 import { displayPath, plural, relativeTime } from "../../lib/format";
 import { readJson, writeJson } from "../../services/storage";
 import type { BranchInfo, RemoteInfo, RepositoryInfo } from "../../types/git";
+import { useSelfReview } from "../quest/useSelfReview";
 import { useIntegrateActions } from "../integrate/IntegrateActions";
 import { refDragProps, useRefDrop } from "../integrate/refDrag";
 import { describeUrl } from "../remote/describeUrl";
@@ -91,6 +93,7 @@ export function BranchesView({ repo }: { repo: RepositoryInfo }) {
   const worktrees = useWorktreeActions();
   const remote = useRemoteActions();
   const integrate = useIntegrateActions();
+  const reviewBranch = useSelfReview(repo);
   const drop = useRefDrop(repo);
   const showMenu = useContextMenu();
   const [query, setQuery] = useState("");
@@ -147,6 +150,18 @@ export function BranchesView({ repo }: { repo: RepositoryInfo }) {
       disabled: b.isCurrent || !current || repo.operation !== null,
       onSelect: () => integrate.rebase({ kind: "branch", name: b.name }, b.name),
     },
+    ...(b.isCurrent && !b.remote && reviewBranch
+      ? [
+          {
+            id: "self-review",
+            label: "Review my branch…",
+            description: "A review quest with AI on this branch's own commits",
+            icon: <Sparkles size={16} />,
+            disabled: repo.operation !== null,
+            onSelect: reviewBranch,
+          },
+        ]
+      : []),
     ...(b.isCurrent && !b.remote
       ? [
           {

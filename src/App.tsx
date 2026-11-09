@@ -25,6 +25,8 @@ import { TagActionsProvider } from "./features/tags/TagActions";
 import { TagsView } from "./features/tags/TagsView";
 import { ReviewsProvider, useReviewsState } from "./features/reviews/ReviewsProvider";
 import { ReviewsView } from "./features/reviews/ReviewsView";
+import { QuestProvider, type QuestSpec } from "./features/quest/QuestProvider";
+import { QuestView } from "./features/quest/QuestView";
 import { WorktreeActionsProvider } from "./features/worktrees/WorktreeActions";
 import { WorktreesView } from "./features/worktrees/WorktreesView";
 import { ContextMenuProvider } from "./components/ContextMenu";
@@ -64,13 +66,19 @@ function Workspace() {
   const gitConsole = useGitConsole();
   const [settingsOpen, setSettingsOpen] = useState<SettingsSection | null>(null);
   const [overlay, setOverlay] = useState<"palette" | "shortcuts" | null>(null);
+  // A review quest on your own branch, shown instead of the current view.
+  const [quest, setQuest] = useState<QuestSpec | null>(null);
+  const questActions = useMemo(
+    () => ({ spec: quest, start: setQuest, stop: () => setQuest(null) }),
+    [quest],
+  );
   const [gitVersion, setGitVersion] = useState<GitVersion | GitError | null>(null);
   const [view, setView] = useState<WorkspaceView>("changes");
   const [creating, setCreating] = useState<"clone" | "init" | null>(null);
   const { state, open, refresh } = controller;
   const reviews = useReviewsState(state.status === "ready" ? state.repo.path : null);
   const reviewsAvailable = reviews.available;
-  // Reviews is only a view while the repository's GitLab account is connected.
+  // Reviews is only a view while the repository's GitLab or Bitbucket account is connected.
   const shownView: WorkspaceView = view === "reviews" && !reviewsAvailable ? "changes" : view;
 
   // `branchline <path>` opens that repository on startup; otherwise, when the
@@ -221,7 +229,10 @@ function Workspace() {
       break;
     case "ready":
       content =
-        shownView === "history" ? (
+        // The quest only exists while AI is on; turning it off ends it (its progress is kept).
+        quest && settings.ai.enabled && quest.repoPath === state.repo.path ? (
+          <QuestView key={quest.storageKey} spec={quest} onExit={() => setQuest(null)} />
+        ) : shownView === "history" ? (
           <HistoryView
             key={state.repo.path}
             repo={state.repo}
@@ -248,110 +259,117 @@ function Workspace() {
   }
 
   return (
-    <ReviewsProvider value={reviews}>
-      <BranchActionsProvider
-        repo={state.status === "ready" ? state.repo : null}
-        controller={controller}
-      >
-        <RemoteActionsProvider
+    <QuestProvider value={questActions}>
+      <ReviewsProvider value={reviews}>
+        <BranchActionsProvider
           repo={state.status === "ready" ? state.repo : null}
           controller={controller}
-          onShowChanges={() => setView("changes")}
         >
-          <StashActionsProvider
+          <RemoteActionsProvider
             repo={state.status === "ready" ? state.repo : null}
             controller={controller}
             onShowChanges={() => setView("changes")}
           >
-            <IntegrateActionsProvider
+            <StashActionsProvider
               repo={state.status === "ready" ? state.repo : null}
               controller={controller}
               onShowChanges={() => setView("changes")}
             >
-              <TagActionsProvider
+              <IntegrateActionsProvider
                 repo={state.status === "ready" ? state.repo : null}
                 controller={controller}
+                onShowChanges={() => setView("changes")}
               >
-                <WorktreeActionsProvider
+                <TagActionsProvider
                   repo={state.status === "ready" ? state.repo : null}
                   controller={controller}
                 >
-                  <AppShell
+                  <WorktreeActionsProvider
+                    repo={state.status === "ready" ? state.repo : null}
                     controller={controller}
-                    gitVersion={gitVersion}
-                    onOpen={openPicker}
-                    onClone={() => setCreating("clone")}
-                    onCreate={() => setCreating("init")}
-                    onSettings={() => setSettingsOpen("general")}
-                    onCommands={() => setOverlay("palette")}
-                    view={shownView}
-                    onView={setView}
                   >
-                    <FileHistoryProvider
-                      value={
-                        state.status === "ready"
-                          ? (path: string) => {
-                              showFileHistory(state.repo.path, path);
-                              setView("history");
-                            }
-                          : null
-                      }
-                    >
-                      {content}
-                    </FileHistoryProvider>
-                  </AppShell>
-                  {overlay === "palette" && (
-                    <AppCommandPalette
+                    <AppShell
                       controller={controller}
-                      handlers={commandHandlers}
-                      onClose={() => setOverlay(null)}
-                    />
-                  )}
-                  {overlay === "shortcuts" && <ShortcutsDialog onClose={() => setOverlay(null)} />}
-                  {settingsOpen && (
-                    <SettingsView
-                      repoPath={state.status === "ready" ? state.repo.path : null}
-                      repoName={state.status === "ready" ? state.repo.name : ""}
-                      initialSection={settingsOpen}
-                      onClose={() => setSettingsOpen(null)}
-                      onCheckForUpdates={() => void updates.check({ quiet: false })}
-                    />
-                  )}
-                  {creating === "clone" && (
-                    <CloneDialog
-                      defaultParent={defaultParent}
-                      onCancel={() => setCreating(null)}
-                      onDone={(path) => {
-                        setCreating(null);
-                        toast({ tone: "success", title: "Cloned", description: path });
-                        void open(path);
+                      gitVersion={gitVersion}
+                      onOpen={openPicker}
+                      onClone={() => setCreating("clone")}
+                      onCreate={() => setCreating("init")}
+                      onSettings={() => setSettingsOpen("general")}
+                      onCommands={() => setOverlay("palette")}
+                      view={shownView}
+                      onView={(v) => {
+                        setQuest(null);
+                        setView(v);
                       }}
-                    />
-                  )}
-                  {creating === "init" && (
-                    <InitDialog
-                      defaultFolder={
-                        defaultParent ? `${defaultParent}${separatorOf(defaultParent)}` : ""
-                      }
-                      onCancel={() => setCreating(null)}
-                      onDone={(path) => {
-                        setCreating(null);
-                        toast({
-                          tone: "success",
-                          title: "Created a repository",
-                          description: path,
-                        });
-                        void open(path);
-                      }}
-                    />
-                  )}
-                </WorktreeActionsProvider>
-              </TagActionsProvider>
-            </IntegrateActionsProvider>
-          </StashActionsProvider>
-        </RemoteActionsProvider>
-      </BranchActionsProvider>
-    </ReviewsProvider>
+                    >
+                      <FileHistoryProvider
+                        value={
+                          state.status === "ready"
+                            ? (path: string) => {
+                                showFileHistory(state.repo.path, path);
+                                setView("history");
+                              }
+                            : null
+                        }
+                      >
+                        {content}
+                      </FileHistoryProvider>
+                    </AppShell>
+                    {overlay === "palette" && (
+                      <AppCommandPalette
+                        controller={controller}
+                        handlers={commandHandlers}
+                        onClose={() => setOverlay(null)}
+                      />
+                    )}
+                    {overlay === "shortcuts" && (
+                      <ShortcutsDialog onClose={() => setOverlay(null)} />
+                    )}
+                    {settingsOpen && (
+                      <SettingsView
+                        repoPath={state.status === "ready" ? state.repo.path : null}
+                        repoName={state.status === "ready" ? state.repo.name : ""}
+                        initialSection={settingsOpen}
+                        onClose={() => setSettingsOpen(null)}
+                        onCheckForUpdates={() => void updates.check({ quiet: false })}
+                      />
+                    )}
+                    {creating === "clone" && (
+                      <CloneDialog
+                        defaultParent={defaultParent}
+                        onCancel={() => setCreating(null)}
+                        onDone={(path) => {
+                          setCreating(null);
+                          toast({ tone: "success", title: "Cloned", description: path });
+                          void open(path);
+                        }}
+                      />
+                    )}
+                    {creating === "init" && (
+                      <InitDialog
+                        defaultFolder={
+                          defaultParent ? `${defaultParent}${separatorOf(defaultParent)}` : ""
+                        }
+                        onCancel={() => setCreating(null)}
+                        onDone={(path) => {
+                          setCreating(null);
+                          toast({
+                            tone: "success",
+                            title: "Created a repository",
+                            description: path,
+                          });
+                          void open(path);
+                        }}
+                      />
+                    )}
+                  </WorktreeActionsProvider>
+                </TagActionsProvider>
+              </IntegrateActionsProvider>
+            </StashActionsProvider>
+          </RemoteActionsProvider>
+        </BranchActionsProvider>
+      </ReviewsProvider>
+    </QuestProvider>
   );
 }
 

@@ -247,6 +247,7 @@ pub fn connect(raw_url: &str, token: &str) -> Result<Account, GitError> {
         url,
         host,
         id: user.id,
+        uid: None,
         name: if user.name.is_empty() {
             user.username.clone()
         } else {
@@ -505,6 +506,7 @@ pub fn detail(account: &Account, project_id: u64, iid: u64) -> Result<RequestDet
         commits,
         threads,
         files: Vec::new(),
+        conflict_files: None,
     })
 }
 

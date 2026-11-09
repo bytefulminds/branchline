@@ -1,4 +1,4 @@
-import { CircleAlert, GitCommitHorizontal, Sparkles, Square } from "lucide-react";
+import { ArrowUpFromLine, CircleAlert, GitCommitHorizontal, Sparkles, Square } from "lucide-react";
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { Button } from "../../components/Button";
 import { Splitter } from "../../components/Splitter";
@@ -6,10 +6,11 @@ import { useToast } from "../../components/Toast";
 import { usePersistentNumber } from "../../lib/usePersistentNumber";
 import { aiService, PROVIDERS, providerModel } from "../../services/ai";
 import { gitService } from "../../services/git";
-import { modKeyLabel, isPrimaryModifier } from "../../services/platform";
+import { modKeyLabel, isPrimaryModifier, platform } from "../../services/platform";
 import type { CommitDraft, GitError, RepositoryInfo } from "../../types/git";
 import type { RepositoryController } from "../repository/useRepository";
 import { useGitConsole } from "../console/GitConsoleProvider";
+import { useRemoteActions } from "../remote/RemoteActions";
 import { useSettings } from "../settings/SettingsProvider";
 import "./CommitBox.css";
 
@@ -217,8 +218,22 @@ export function CommitBox({
     }
   };
 
-  const submit = async () => {
-    if (blocker || busy) return;
+  const remote = useRemoteActions();
+  // Pushing an amended commit that was already pushed needs a force push: left to the user.
+  const pushBlocker =
+    repo.head.kind !== "branch"
+      ? "Not on a branch"
+      : amend
+        ? "An amended commit may need a force push; push it yourself afterwards"
+        : remote.remotes.length === 0
+          ? "No remotes configured"
+          : remote.activity
+            ? "Wait for the running fetch, pull or push"
+            : null;
+
+  /** Commit, and with `push` also push the branch (or publish it when it has no upstream). */
+  const submit = async (push = false) => {
+    if (blocker || busy || (push && pushBlocker)) return;
     setError(null);
     const text = joinMessage(message);
     const failure = await controller.run(amend ? "Amending" : "Committing", (path) =>
@@ -238,6 +253,7 @@ export function CommitBox({
       description: message.summary.trim(),
     });
     summaryRef.current?.focus();
+    if (push) remote.push();
   };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
@@ -249,7 +265,7 @@ export function CommitBox({
     }
     if (e.key === "Enter" && isPrimaryModifier(e) && !suggesting) {
       e.preventDefault();
-      void submit();
+      void submit(e.shiftKey);
     }
   };
 
@@ -385,19 +401,33 @@ export function CommitBox({
           </div>
         )}
 
-        <Button
-          type="submit"
-          variant="primary"
-          icon={<GitCommitHorizontal size={16} aria-hidden />}
-          disabled={!!blocker || busy || !!suggesting}
-          loading={
-            busy && (controller.operation === "Committing" || controller.operation === "Amending")
-          }
-          shortcut={`${modKeyLabel}↵`}
-          className="bl-commit-box__submit"
-        >
-          {label}
-        </Button>
+        <div className="bl-commit-box__actions">
+          <Button
+            type="submit"
+            variant="primary"
+            icon={<GitCommitHorizontal size={16} aria-hidden />}
+            disabled={!!blocker || busy || !!suggesting}
+            loading={
+              busy && (controller.operation === "Committing" || controller.operation === "Amending")
+            }
+            shortcut={`${modKeyLabel}↵`}
+            className="bl-commit-box__submit"
+          >
+            {label}
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            icon={<ArrowUpFromLine size={15} aria-hidden />}
+            disabled={!!blocker || !!pushBlocker || busy || !!suggesting}
+            title={pushBlocker ?? "Commit, then push"}
+            shortcut={platform === "macos" ? "⌘⇧↵" : `${modKeyLabel}Shift+↵`}
+            className="bl-commit-box__push"
+            onClick={() => void submit(true)}
+          >
+            Commit and push
+          </Button>
+        </div>
         <p className="bl-commit-box__hint text-small" aria-live="polite">
           {suggesting
             ? `Writing with ${providerModel(settings.ai) || PROVIDERS[settings.ai.provider].name}…`

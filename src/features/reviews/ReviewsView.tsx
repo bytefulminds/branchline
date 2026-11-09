@@ -21,7 +21,7 @@ import { displayTitle, forgeInfo, type ForgeInfo } from "./forges";
 
 export { displayTitle };
 import { MergeRequestView } from "./MergeRequestView";
-import { useReviews } from "./ReviewsProvider";
+import { conflictKey, useReviews } from "./ReviewsProvider";
 import "../branches/BranchesView.css";
 import "./ReviewsView.css";
 
@@ -62,10 +62,13 @@ function open(url: string) {
 function Row({
   mr,
   showProject,
+  refPrefix,
   onOpen,
 }: {
   mr: MergeRequest;
   showProject: boolean;
+  /** `!` or `#`, as the service writes request numbers. */
+  refPrefix: string;
   /** Read it in Branchline; null when it belongs to another project than the repository. */
   onOpen: (() => void) | null;
 }) {
@@ -90,7 +93,9 @@ function Row({
         </span>
         <span className="bl-branch__meta text-small text-secondary">
           <span className="mono text-muted">
-            {showProject ? mr.projectPath : ""}!{mr.iid}
+            {showProject ? mr.projectPath : ""}
+            {refPrefix}
+            {mr.iid}
           </span>
           <span className="bl-review__author">
             <Avatar name={mr.author.name} email={mr.author.username} size={16} />
@@ -192,8 +197,17 @@ function emptyText(filter: RequestFilter, data: ReviewList, f: ForgeInfo): strin
 /** Open merge requests on the repository's hosting service: those waiting for your review,
  * those you created, or all open ones; for this project or all projects. */
 export function ReviewsView({ repoPath }: { repoPath: string }) {
-  const { source, matched, list, allProjects, setAllProjects, filter, setFilter, refresh } =
-    useReviews();
+  const {
+    source,
+    matched,
+    list,
+    allProjects,
+    setAllProjects,
+    filter,
+    setFilter,
+    refresh,
+    knownConflicts,
+  } = useReviews();
   const [opened, setOpened] = useState<MergeRequest | null>(null);
   const inProject = (mr: MergeRequest) =>
     matched && !!source && mr.projectPath.toLowerCase() === source.project.toLowerCase();
@@ -211,7 +225,7 @@ export function ReviewsView({ repoPath }: { repoPath: string }) {
   if (opened) {
     return (
       <MergeRequestView
-        key={`${opened.projectId}!${opened.iid}`}
+        key={`${opened.projectPath}!${opened.iid}`}
         repoPath={repoPath}
         request={opened}
         onBack={() => {
@@ -231,7 +245,7 @@ export function ReviewsView({ repoPath }: { repoPath: string }) {
             {data ? summary(filter, data, f) : ""}
           </span>
         </div>
-        <div className="bl-segmented" role="group" aria-label="Which merge requests">
+        <div className="bl-segmented" role="group" aria-label={`Which ${f.nouns}`}>
           {FILTER_LABELS.filter((x) => matched || x.id !== "allOpen").map((x) => (
             <button
               key={x.id}
@@ -246,7 +260,7 @@ export function ReviewsView({ repoPath }: { repoPath: string }) {
         </div>
         {matched && (
           <label className="bl-branches__sort text-small">
-            <span className="visually-hidden">Show merge requests from</span>
+            <span className="visually-hidden">Show {f.nouns} from</span>
             <select
               className="bl-input"
               value={allProjects ? "all" : "project"}
@@ -300,8 +314,9 @@ export function ReviewsView({ repoPath }: { repoPath: string }) {
             <ul className="bl-branch-list bl-reviews__list" aria-label={listLabel}>
               {items.map((mr) => (
                 <Row
-                  key={`${mr.projectId}!${mr.iid}`}
-                  mr={mr}
+                  key={`${mr.projectPath}!${mr.iid}`}
+                  refPrefix={f.ref}
+                  mr={knownConflicts[conflictKey(mr)] ? { ...mr, hasConflicts: true } : mr}
                   showProject={allProjects}
                   onOpen={inProject(mr) ? () => setOpened(mr) : null}
                 />

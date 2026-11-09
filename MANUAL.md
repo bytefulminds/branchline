@@ -12,7 +12,7 @@ Everything Branchline can do, and how. For a quick tour with screenshots, see th
 - [Stashes, tags and worktrees](#stashes-tags-and-worktrees)
 - [Merge, rebase, cherry-pick and revert](#merge-rebase-cherry-pick-and-revert)
 - [Conflicts and the merge editor](#conflicts-and-the-merge-editor)
-- [Merge requests (GitLab)](#merge-requests-gitlab)
+- [Merge requests (GitLab and Bitbucket)](#merge-requests-gitlab-and-bitbucket)
 - [AI](#ai)
 - [Git console and hooks](#git-console-and-hooks)
 - [Settings](#settings)
@@ -28,13 +28,15 @@ Everything Branchline can do, and how. For a quick tour with screenshots, see th
 Download the installer for your system from the
 [releases page](https://gitlab.com/bytefulminds/branchline/-/releases). Branchline needs
 [Git](https://git-scm.com/downloads) 2.20 or newer. It checks for updates after starting and
-installs them when you agree (Settings > General to turn that off).
+installs them when you agree (Settings > General to turn that off). On Linux it only tells
+you a new version is out and opens the releases page, because installing a package needs
+administrator rights; install it the way you installed Branchline.
 
 | System | File | Notes |
 |---|---|---|
 | macOS 11 or newer (Apple silicon and Intel) | `.dmg` | Drag Branchline to Applications |
 | Windows 10 and 11 | `-setup.exe` (or `.msi`) | |
-| Linux | `.AppImage`, `.deb` or `.rpm` | AppImage: make it executable (`chmod +x`) and run it. Updates install for the AppImage only |
+| Linux | `.AppImage`, `.deb` or `.rpm` | AppImage: make it executable (`chmod +x`) and run it. New versions are announced, with a link to the releases page |
 
 The installers are not signed with Apple or Microsoft certificates yet, so the system
 asks before the first launch:
@@ -82,6 +84,10 @@ Updates are signed with Branchline's own update key, so only genuine releases ar
 - Commit and amend from the Changes view: summary and description, a length hint, merge
   messages prefilled, `Ctrl+Enter` / `⌘↵`, and clear errors for a missing identity or failing
   hooks. The commit box shows the name and email you commit as.
+- **Commit and push** (`Ctrl+Shift+Enter` / `⌘⇧↵`) commits, then pushes the branch, or
+  publishes it when it has no upstream yet. It is not offered while amending (an amended
+  commit that was pushed before needs a force push, which you do yourself), on a detached
+  HEAD, or without a remote.
 - Drag the line above the commit summary to make the message box taller or shorter (the
   description fills the space, the size is remembered; double-click resets it).
 
@@ -198,10 +204,10 @@ Updates are signed with Branchline's own update key, so only genuine releases ar
   editor opened it. Binary files, symbolic links and files deleted on one side get whole-file
   choices (keep one version or delete the file).
 
-## Merge requests (GitLab)
+## Merge requests (GitLab and Bitbucket)
 
-- Connect your GitLab account in Settings > Accounts: choose the service (GitLab today;
-  GitHub and Bitbucket are planned), the address (GitLab.com or your own server) and a
+- Connect your account in Settings > Accounts: choose the service (GitLab or Bitbucket Cloud;
+  GitHub is planned). For GitLab, enter the address (GitLab.com or your own server) and a
   personal access token. Make the token under your own profile, so it acts as you. "Create a token on GitLab" opens the right page with
   the name and the `api` scope filled in; `read_api` is enough to only read. Branchline checks
   the token before it keeps it, and says what it may do.
@@ -238,9 +244,58 @@ Updates are signed with Branchline's own update key, so only genuine releases ar
   its diff, in one column or side by side, with that file's comment threads above it: their
   line, whether they are resolved, and whether they were made on an older version. System
   notes such as "added 1 commit" are left out.
-- Merge requests of other projects (in All projects) open on GitLab, as does the button next
-  to Open. Commenting and approving from Branchline, and an optional AI review game, are
-  planned; see [the plan](docs/plans/merge-request-reviews.md).
+- **Bitbucket Cloud** (beta: new in 0.3.0 and marked as such in Settings, as it may still
+  need some tuning) works the same way, with pull requests (`#4`) instead of merge
+  requests (`!4`). Bitbucket signs in with your Atlassian account's **email address** and an
+  **API token with scopes** (app passwords no longer work): "Create a token on Bitbucket" opens
+  the Atlassian page. Give it `read:user`, `read:pullrequest` and `read:repository` for
+  Bitbucket; `write:pullrequest` will be needed for commenting and approving later. Both are
+  kept together in the password store. Bitbucket Data Center is not supported yet.
+- Bitbucket has no merge request refs, so opening a pull request fetches its source branch
+  (from the fork when it comes from one, at the same kind of address as your remote) and its
+  target branch into `refs/branchline/pull-requests/<number>/`, and the diff starts where the
+  branch forked from the target. Pull requests to review are listed per repository: across
+  all of Bitbucket only **Created by you** is available. Build statuses show as the pipeline.
+- Bitbucket does not say whether a pull request merges cleanly, so when you open one,
+  Branchline tries the merge on this computer (`git merge-tree`, which touches neither your
+  files nor your branches). The overview then shows "Merges cleanly" or the files that would
+  conflict, and the list shows the Conflicts badge for it from then on. This needs Git 2.38
+  or newer; with an older Git nothing is shown.
+- Merge requests of other projects (in All projects) open on the website, as does the button
+  next to Open. Posting comments and approving from Branchline are planned; see
+  [the plan](docs/plans/merge-request-reviews.md).
+
+## Review quest (AI)
+
+With AI on (Settings > AI), a merge request opened in Branchline has **Start review quest**.
+The AI is the game master, not the reviewer: it asks questions that make you look closely at
+the change, and you decide what is right.
+
+- One round per changed file, with one to three questions:
+  - **Quiz** (multiple choice) and **true or false**: answer once; the explanation says why,
+    and the lines that matter light up in the diff.
+  - **Find the line**: click the right line in the diff.
+  - **Your take**: an open question. The AI responds to your answer, never calls it wrong and
+    never asks you something back, and may suggest a review comment you can edit and keep.
+- An answered question stays in view until **Next question**; **Skip question** and **Skip
+  file** are always there.
+- Click any added or removed line to write a draft comment on it.
+- Points: 10 per answer, 5 more for a quiz question right or an open answer with some
+  thought, 15 per draft comment and 5 per file finished. Coverage is the share of changed
+  lines in finished files. Points are for thought and findings, never for speed.
+- Binary, generated and lock files get no round. Above 40 files, the files with the most
+  changed lines get one. The summary lists everything that was left out.
+- The summary shows your points, coverage and draft comments: edit or remove them, or copy
+  them all. Posting them to GitLab from Branchline comes in a later version.
+- Progress is saved per merge request on this computer, so you can stop and continue later.
+  A new commit on the merge request starts a new quest.
+- **Review my branch** (**Review with AI** in Changes, the current branch's menu in Branches,
+  the newest commit's menu in History, or the command palette) plays the same quest on your
+  own branch: its commits since it was created or forked, without uncommitted changes. The
+  questions are what a reviewer is likely to ask, and findings become notes for yourself.
+- Sent to your AI provider per round: the title and description, the file's diff with line
+  numbers (shortened to fit) and earlier comments on that file. Nothing is sent with AI off,
+  and with AI off none of this appears anywhere.
 
 ## AI
 
@@ -274,7 +329,8 @@ Updates are signed with Branchline's own update key, so only genuine releases ar
 - Routine reads such as `status` are hidden unless you ask for them; failures always show.
   Filter on failed commands only, or search the commands and their output.
 - A failed commit or push offers "Show Git output", which opens the console on that command.
-- Requests to GitLab show up there too (see [Merge requests](#merge-requests-gitlab)).
+- Requests to GitLab and Bitbucket show up there too (see
+  [Merge requests](#merge-requests-gitlab-and-bitbucket)).
   Copy a command to run it yourself in a terminal.
 - Git hooks such as Husky and lint-staged find the same tools as your terminal. Apps started
   from the Dock or Finder get a minimal PATH, so at startup Branchline asks your login shell
@@ -292,8 +348,8 @@ Open Settings with `Ctrl+,` / `⌘,` or the gear in the title bar. Changes are s
   branches on fetch, push annotated tags with commits.
 - **Identity and signing:** name, email and commit signing (GPG, SSH or X.509), for all
   repositories (`~/.gitconfig`) or only the open one.
-- **Accounts:** GitLab accounts for the Reviews view; see
-  [Merge requests](#merge-requests-gitlab).
+- **Accounts:** GitLab and Bitbucket accounts for the Reviews view; see
+  [Merge requests](#merge-requests-gitlab-and-bitbucket).
 - **Editor and diff:** the editor and terminal that "Open in editor", "Open in terminal" and
   "Show in Finder/Explorer" use (repository menu, and a button on each changed file), diff
   layout, syntax highlighting, context lines, ignoring whitespace, tab width and code font size.
@@ -316,9 +372,10 @@ keyboard shortcut in the app.
 | `Ctrl+O` | `⌘O` | Open a repository |
 | `Ctrl+R` or `F5` | `⌘R` | Refresh |
 | `Ctrl+1` to `Ctrl+6` | `⌘1` to `⌘6` | Changes, History, Branches, Stashes, Tags, Worktrees |
-| `Ctrl+7` | `⌘7` | Reviews (with a GitLab account connected) |
+| `Ctrl+7` | `⌘7` | Reviews (with a GitLab or Bitbucket account connected) |
 | `Ctrl+F` | `⌘F` | Search commits in History |
 | `Ctrl+Enter` | `⌘↵` | Commit |
+| `Ctrl+Shift+Enter` | `⌘⇧↵` | Commit and push |
 | `Ctrl+J` | `⌘J` | Git console |
 | `Ctrl+B` | `⌘B` | Collapse or expand the sidebar |
 | `Ctrl+,` | `⌘,` | Settings |
@@ -363,9 +420,10 @@ select lines), dialogs and panels. See [docs/accessibility.md](docs/accessibilit
 - API keys are stored in the system's password store and never reach the app's web view.
   Branchline reads them at most once per run, and never sends a key over plain `http://` to
   another computer.
-- GitLab tokens are stored in the system's password store and never reach the app's web
-  view; Branchline sends them only to the server they were made for, in a request header
-  (never in an address). Addresses must use `https://` (plain `http://` only for a server on
+- GitLab tokens and Bitbucket credentials (email and API token) are stored in the system's
+  password store and never reach the app's web view; Branchline sends them only to the server
+  they were made for (Bitbucket: api.bitbucket.org), in a request header (never in an
+  address). Addresses must use `https://` (plain `http://` only for a server on
   this computer), may not contain credentials, and redirects are not followed. Merge request
   pages open in the browser only when they belong to a connected server.
 - The webview has a strict CSP and only the Tauri permissions it needs (window controls, the
@@ -373,7 +431,8 @@ select lines), dialogs and panels. See [docs/accessibility.md](docs/accessibilit
   browser only for Branchline's own GitLab pages, ollama.com, the API key pages of Anthropic
   and OpenAI, and package pages on npmjs.com and crates.io.
 - Updates are only installed when their signature matches the update key built into
-  Branchline, and only after you agree. The update check only contacts the release page on
+  Branchline, and only after you agree (on Linux they are not installed by Branchline at
+  all). The update check only contacts the release page on
   GitLab.
 - The Git console log stays in memory (the last 500 commands, at most 8 KB of output and
   32 KB of messages each) and is gone when Branchline quits. Credentials in URLs are removed
@@ -421,8 +480,8 @@ by page. Method and all numbers per platform: [docs/performance.md](docs/perform
 - The changed-file list is capped at 10,000 entries.
 - Bare repositories are not supported.
 - Paths that are not valid UTF-8 are shown with replacement characters.
-- Reviews work with GitLab only for now (GitHub and Bitbucket are planned) and list at most
-  50 merge requests. On Linux, keeping a token needs a running Secret Service (GNOME Keyring,
+- Reviews work with GitLab and Bitbucket Cloud (GitHub and Bitbucket Data Center are not
+  supported yet) and list at most 50 merge requests. On Linux, keeping a token needs a running Secret Service (GNOME Keyring,
   KWallet); without one, Settings says so.
 - Reading a merge request shows its comments above the file's diff, not between the lines,
   and shows descriptions and comments as plain text (Markdown is not formatted yet). It
@@ -525,7 +584,7 @@ src-tauri/               Rust backend
   src/git/identity.rs    user.name, user.email and commit signing (global or per repository)
   src/settings.rs        Settings file (JSON in the app's configuration folder)
   src/secrets.rs         Tokens and API keys in the system's password store
-  src/forge/             GitLab accounts, remote parsing and the merge requests to review
+  src/forge/             GitLab and Bitbucket accounts, remote parsing, requests to review
   src/shell_env.rs       PATH from the login shell, for hooks
   src/open.rs            Open in editor or terminal, show in the file manager
   src/ai/                AI providers (Ollama, OpenAI-compatible, Anthropic, OpenAI) and

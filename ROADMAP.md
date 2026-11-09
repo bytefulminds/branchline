@@ -88,8 +88,8 @@ Reading merge requests and the AI providers are in 0.2.5; the review quest is pl
 - [x] GitLab account and a Reviews view with the merge requests waiting for you
 - [x] Read a merge request in Branchline (commits, diff, existing comments)
 - [x] AI providers: Ollama, OpenAI-compatible servers, Anthropic and OpenAI
-- [ ] Review quest: rounds of questions, scoring, draft comments, self-review of your own branch
+- [x] Review quest: rounds of questions, scoring, draft comments, self-review of your own branch
 - [ ] Post the review: comments on lines, approve or request changes
 - [ ] Review notes remembered per project
 - [ ] GitHub pull requests
-- [ ] Bitbucket pull requests
+- [x] Bitbucket Cloud pull requests (Data Center later)

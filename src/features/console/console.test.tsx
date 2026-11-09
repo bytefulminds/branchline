@@ -128,7 +128,7 @@ describe("Git console", () => {
         });
     });
     await user.type(screen.getByLabelText("Commit summary"), "Add app");
-    await user.click(screen.getByRole("button", { name: /^Commit/ }));
+    await user.click(screen.getByRole("button", { name: /^Commit \d+ file/ }));
     await user.click(await screen.findByRole("button", { name: "Show Git output" }));
     const panel = await screen.findByRole("region", { name: "Git console" });
     await waitFor(() =>

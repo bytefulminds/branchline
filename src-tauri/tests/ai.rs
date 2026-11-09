@@ -9,6 +9,9 @@ use std::sync::{Arc, Mutex};
 
 use branchline_lib::ai::provider::{self, chat, endpoint, models_at, save_key, Endpoint};
 use branchline_lib::ai::rebase::suggest_rebase;
+use branchline_lib::ai::review::{
+    quest_plan, quest_reply, quest_round, QuestContext, QuestionKind, ReplyContext,
+};
 use branchline_lib::ai::suggest_commit_message;
 use branchline_lib::error::GitError;
 use branchline_lib::git::remote::cancel;
@@ -674,4 +677,99 @@ fn a_rebase_suggestion_that_does_not_fit_is_retried_then_explained() {
     let err = suggest_rebase(&path(&t), &cfg(&url), &base, "op-ai-12").unwrap_err();
     assert!(err.to_string().contains("did not fit"), "{err}");
     assert_eq!(seen.lock().unwrap().len(), 2, "asked twice");
+}
+
+fn rev(d: &Path, r: &str) -> String {
+    String::from_utf8(
+        Command::new("git")
+            .args(["rev-parse", r])
+            .current_dir(d)
+            .output()
+            .unwrap()
+            .stdout,
+    )
+    .unwrap()
+    .trim()
+    .to_string()
+}
+
+#[test]
+fn asks_questions_about_a_file_with_line_references() {
+    let t = repo();
+    let d = t.path();
+    git(d, &["commit", "-qm", "feat: greet visitors"]);
+    let (base, head) = (rev(d, "HEAD~1"), rev(d, "HEAD"));
+    let plan = quest_plan(&path(&t), &base, &head).unwrap();
+    assert_eq!(plan.rounds.len(), 1);
+    assert_eq!(plan.rounds[0].path, "greet.txt");
+
+    let (url, seen) = fake_ollama(|_| {
+        let answer = serde_json::json!({ "questions": [
+            { "type": "findline", "question": "Click the new greeting.", "lines": [{ "side": "new", "line": 2 }], "explanation": "Line 2 is added." },
+            { "type": "truefalse", "question": "The first line changed.", "answer": false, "explanation": "Only a line was added." },
+            { "type": "open", "question": "Is the greeting friendly enough?", "explanation": "Tone matters." },
+            { "type": "findline", "question": "Click line 40.", "lines": [{ "side": "new", "line": 40 }], "explanation": "Not there." }
+        ]});
+        (200, ndjson(&[&answer.to_string()]))
+    });
+    let ctx = QuestContext {
+        base: base.clone(),
+        head: head.clone(),
+        path: "greet.txt".into(),
+        title: "Greet visitors".into(),
+        discussion: "Tom: please keep it short".into(),
+        ..QuestContext::default()
+    };
+    let round = quest_round(&path(&t), &cfg(&url), &ctx, "op-q-1").unwrap();
+    let kinds: Vec<_> = round.questions.iter().map(|q| q.kind).collect();
+    assert_eq!(
+        kinds,
+        [
+            QuestionKind::FindLine,
+            QuestionKind::TrueFalse,
+            QuestionKind::Open
+        ],
+        "the question about a line outside the diff is dropped"
+    );
+
+    let body: serde_json::Value = serde_json::from_str(&seen.lock().unwrap()[0].1).unwrap();
+    let user = body["messages"][1]["content"].as_str().unwrap();
+    assert!(user.contains("[new 2] + hello there"), "{user}");
+    assert!(user.contains("[new 1]   hi"));
+    assert!(user.contains("Title: Greet visitors"));
+    assert!(user.contains("please keep it short"));
+    assert!(!user.contains("UNSTAGED-SECRET"));
+    assert_eq!(body["format"]["type"], "object");
+
+    let (url, seen) = fake_ollama(|_| {
+        let answer = serde_json::json!({
+            "reply": "Yes, and a name would make it warmer. Have you thought about guests?",
+            "comment": "Could we greet visitors by name?",
+            "line": { "side": "new", "line": 2 }
+        });
+        (200, ndjson(&[&answer.to_string()]))
+    });
+    let reply = quest_reply(
+        &path(&t),
+        &cfg(&url),
+        &ReplyContext {
+            quest: ctx,
+            question: "Is the greeting friendly enough?".into(),
+            answer: "Maybe add a name".into(),
+        },
+        "op-q-2",
+    )
+    .unwrap();
+    assert_eq!(
+        reply.comment.as_deref(),
+        Some("Could we greet visitors by name?")
+    );
+    assert_eq!(reply.line.map(|l| l.line), Some(2));
+    // The reviewer cannot answer back: the prompt says so, and a trailing question is dropped.
+    assert_eq!(reply.reply, "Yes, and a name would make it warmer.");
+    let body: serde_json::Value = serde_json::from_str(&seen.lock().unwrap()[0].1).unwrap();
+    assert!(body["messages"][0]["content"]
+        .as_str()
+        .unwrap()
+        .contains("never ask them a question"));
 }

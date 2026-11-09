@@ -15,17 +15,29 @@ use crate::secrets;
 #[serde(rename_all = "camelCase")]
 pub enum ForgeKind {
     Gitlab,
+    /// Bitbucket Cloud (bitbucket.org).
+    Bitbucket,
+}
+
+impl ForgeKind {
+    /// What the service calls a change request.
+    pub fn noun(self) -> &'static str {
+        match self {
+            ForgeKind::Gitlab => "merge request",
+            ForgeKind::Bitbucket => "pull request",
+        }
+    }
 }
 
 /// What the token may do, as far as Branchline could tell.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Access {
-    /// Read merge requests only (`read_api`).
+    /// Read merge requests only (GitLab `read_api`, Bitbucket `read:pullrequest`).
     Read,
-    /// Read, comment and approve (`api`).
+    /// Read, comment and approve (GitLab `api`, Bitbucket `write:pullrequest`).
     Write,
-    /// The server did not say (older GitLab).
+    /// The server did not say (older GitLab, Bitbucket API tokens).
     Unknown,
 }
 
@@ -40,6 +52,9 @@ pub struct Account {
     /// The user's id on the server (0 for accounts saved before Branchline kept it).
     #[serde(default)]
     pub id: u64,
+    /// The user's id when the service uses text ids (Bitbucket's `{uuid}`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub uid: Option<String>,
     pub username: String,
     pub name: String,
     pub access: Access,
@@ -65,6 +80,7 @@ impl Account {
 pub fn secret_key(kind: ForgeKind, url: &str) -> String {
     match kind {
         ForgeKind::Gitlab => format!("gitlab:{url}"),
+        ForgeKind::Bitbucket => format!("bitbucket:{url}"),
     }
 }
 

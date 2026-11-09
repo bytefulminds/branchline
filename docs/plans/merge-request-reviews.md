@@ -1,8 +1,9 @@
 # Plan: review merge requests in Branchline, with an AI as a game master
 
 Status: phases 1 (GitLab account and Reviews view), 2 (reading a merge request in
-Branchline) and 3 (AI providers) are built; the rest is planned. Work happens on the branch
-`feature/review-with-ollama`.
+Branchline), 3 (AI providers), 4 (the review quest, with self-review) and the reading part of
+8 (Bitbucket Cloud, beta) are built; the rest is planned. Phases 1 to 3 shipped in 0.2.5,
+phase 4 and Bitbucket in 0.3.0.
 
 ## Goal
 
@@ -81,7 +82,7 @@ check both states: with AI off, none of these controls are in the page.
 | Multiple choice      | "What does this change do when `days` is empty?" with three or four answers | The AI writes the answer key together with the question; Branchline checks the choice, no second call |
 | True or false        | "After this change, `format_temperature` can return a negative number."     | Same as above                                                                                         |
 | Find the line        | "Click the line where the API version is chosen."                           | Branchline checks the clicked line against the line numbers the AI gave                               |
-| Spot the risk (open) | "What could go wrong with this new query on a large table?"                 | The AI responds to the answer: agrees, adds what was missed, or asks a follow-up. Never "wrong"       |
+| Spot the risk (open) | "What could go wrong with this new query on a large table?"                 | The AI responds to the answer: agrees and adds what was missed, never asks back. Never "wrong"    |
 | Your call (open)     | "Would you keep this as one function or split it?"                          | No right answer; the answer can become a comment                                                      |
 
 Quiz questions keep the pace up and check understanding; open questions are where real
@@ -214,4 +215,7 @@ Each phase can be released on its own and is tested before the next starts.
 6. **Review notes.** Lessons per project, the optional team guide file.
 7. **GitHub.** Pull requests where your review is requested, `refs/pull/<n>/head`, review
    comments and reviews.
-8. **Bitbucket** (later). No merge request refs, so the source branch is fetched instead.
+8. **Bitbucket.** Cloud: built for reading (account with email and API token, lists, reading
+   pull requests, also from forks, and the quest). No merge request refs, so the source and
+   target branches are fetched instead and the diff starts at their merge base. Posting the
+   review comes with phase 5; Data Center later.

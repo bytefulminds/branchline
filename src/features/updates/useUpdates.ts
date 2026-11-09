@@ -3,6 +3,7 @@ import { check, type Update } from "@tauri-apps/plugin-updater";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useToast } from "../../components/Toast";
 import { openLink, RELEASES_URL } from "../../services/links";
+import { platform } from "../../services/platform";
 import { useSettings } from "../settings/SettingsProvider";
 
 /** Wait after start before looking for an update, so it never slows down opening a repository. */
@@ -16,6 +17,9 @@ export interface UpdatesController {
 /**
  * Finds, downloads and installs new releases (Tauri updater, signed with Branchline's
  * update key). Nothing is installed without asking; the app restarts after installing.
+ * On Linux it only says a release is out and points to the releases page: installing a
+ * .deb or .rpm, or replacing an AppImage outside your home folder, needs administrator
+ * rights, which the package manager should ask for, not Branchline.
  */
 export function useUpdates(): UpdatesController {
   const toast = useToast();
@@ -50,7 +54,13 @@ export function useUpdates(): UpdatesController {
       running.current = true;
       try {
         const update = await check();
-        if (update) {
+        if (update && platform === "linux") {
+          toast({
+            title: `Branchline ${update.version} is available`,
+            description: `You have ${update.currentVersion}. Download it from the releases page and install it the way you installed this version.`,
+            actions: [{ label: "Open releases page", onClick: () => openLink(RELEASES_URL) }],
+          });
+        } else if (update) {
           toast({
             title: `Branchline ${update.version} is available`,
             description: `You have ${update.currentVersion}. Install it now? Branchline restarts afterwards.`,

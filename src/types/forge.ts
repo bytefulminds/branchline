@@ -2,8 +2,8 @@
 
 import type { CommitFile } from "./git";
 
-/** Supported services; GitHub and Bitbucket are planned. */
-export type ForgeKind = "gitlab";
+/** Supported services (Bitbucket means Bitbucket Cloud); GitHub is planned. */
+export type ForgeKind = "gitlab" | "bitbucket";
 
 /** Which open requests to list. "allOpen" works for one project only. */
 export type RequestFilter = "reviewRequested" | "createdByYou" | "allOpen";
@@ -16,8 +16,11 @@ export interface Account {
   /** Server address, for example `https://gitlab.com`. */
   url: string;
   host: string;
-  /** The user's id on the server (0 for accounts saved by an earlier version). */
+  /** The user's id on the server (0 for accounts saved by an earlier version, and on
+   * Bitbucket, which uses `uid`). */
   id: number;
+  /** The user's id when the service uses text ids (Bitbucket's `{uuid}`). */
+  uid?: string;
   username: string;
   name: string;
   access: Access;
@@ -38,6 +41,7 @@ export interface Person {
 }
 
 export interface MergeRequest {
+  /** GitLab's project id; 0 on Bitbucket, which names repositories only by path. */
   projectId: number;
   projectPath: string;
   iid: number;
@@ -110,4 +114,7 @@ export interface RequestDetail {
   commits: RequestCommit[];
   threads: Thread[];
   files: CommitFile[];
+  /** Files that would conflict when merged into the target branch, from a trial merge on
+   * this computer (Bitbucket). null when not checked or Git could not tell. */
+  conflictFiles: string[] | null;
 }

@@ -706,6 +706,44 @@ pub async fn suggest_rebase(
     .await
 }
 
+/// The files of a review quest between `base` and `head`, in round order.
+#[tauri::command]
+pub async fn quest_plan(
+    repo: String,
+    base: String,
+    head: String,
+) -> Result<crate::ai::review::QuestPlan, GitError> {
+    blocking(move || crate::ai::review::quest_plan(&repo, &base, &head)).await
+}
+
+/// The AI's questions about one file. Cancel with `cancel_remote_operation(op_id)`.
+#[tauri::command]
+pub async fn quest_round(
+    repo: String,
+    context: crate::ai::review::QuestContext,
+    op_id: String,
+) -> Result<crate::ai::review::Round, GitError> {
+    blocking(move || {
+        let cfg = settings::current().ai;
+        crate::ai::review::quest_round(&repo, &cfg, &context, &op_id)
+    })
+    .await
+}
+
+/// The AI's response to an open answer. Cancel with `cancel_remote_operation(op_id)`.
+#[tauri::command]
+pub async fn quest_reply(
+    repo: String,
+    context: crate::ai::review::ReplyContext,
+    op_id: String,
+) -> Result<crate::ai::review::Reply, GitError> {
+    blocking(move || {
+        let cfg = settings::current().ai;
+        crate::ai::review::quest_reply(&repo, &cfg, &context, &op_id)
+    })
+    .await
+}
+
 /// Whether an API key is stored for the provider. The key itself is never returned.
 #[tauri::command]
 pub async fn ai_key_exists(provider: settings::AiProvider) -> Result<bool, GitError> {
@@ -748,9 +786,10 @@ pub fn forge_accounts() -> Vec<crate::forge::accounts::Account> {
 pub async fn connect_account(
     kind: crate::forge::accounts::ForgeKind,
     url: String,
+    login: Option<String>,
     token: String,
 ) -> Result<crate::forge::accounts::Account, GitError> {
-    blocking(move || crate::forge::connect(kind, &url, &token)).await
+    blocking(move || crate::forge::connect(kind, &url, login.as_deref(), &token)).await
 }
 
 /// Forget an account and delete its token.

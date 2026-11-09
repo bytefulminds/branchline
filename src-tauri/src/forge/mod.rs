@@ -1,10 +1,11 @@
 //! Hosting services: accounts, and the merge requests (pull requests) to look at.
 //!
 //! Everything outside this module works with the service-neutral types here; each service
-//! (GitLab now, GitHub and Bitbucket later) is a module behind `connect`, `token_page` and
-//! `review_requests`, chosen by the account's `ForgeKind`.
+//! (GitLab and Bitbucket Cloud now, GitHub later) is a module behind `connect`, `token_page`
+//! and `review_requests`, chosen by the account's `ForgeKind`.
 
 pub mod accounts;
+pub mod bitbucket;
 pub mod gitlab;
 pub mod remote;
 
@@ -39,6 +40,7 @@ pub struct Person {
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MergeRequest {
+    /// GitLab's project id; 0 on services that name projects only by path (Bitbucket).
     pub project_id: u64,
     /// `group/project`.
     pub project_path: String,
@@ -118,6 +120,10 @@ pub struct RequestDetail {
     pub threads: Vec<Thread>,
     /// Files changed from `base` to `head`, computed from the local repository.
     pub files: Vec<crate::git::log::CommitFile>,
+    /// Files that would conflict when merged into the target branch, from a local trial
+    /// merge (Bitbucket, which does not report conflicts). `None` when not checked or Git
+    /// could not tell; GitLab reports conflicts itself in `request.has_conflicts`.
+    pub conflict_files: Option<Vec<String>>,
 }
 
 /// The project on a hosting service that an open repository belongs to.
@@ -176,10 +182,16 @@ pub struct ReviewList {
 }
 
 /// Check a token with the service and remember the account (token in the credential
-/// store). Each service gets its own module; GitHub and Bitbucket are planned.
-pub fn connect(kind: ForgeKind, url: &str, token: &str) -> Result<Account, GitError> {
+/// store). `login` is the email address Bitbucket signs in with; GitLab does not use it.
+pub fn connect(
+    kind: ForgeKind,
+    url: &str,
+    login: Option<&str>,
+    token: &str,
+) -> Result<Account, GitError> {
     match kind {
         ForgeKind::Gitlab => gitlab::connect(url, token),
+        ForgeKind::Bitbucket => bitbucket::connect(url, login.unwrap_or(""), token),
     }
 }
 
@@ -187,6 +199,7 @@ pub fn connect(kind: ForgeKind, url: &str, token: &str) -> Result<Account, GitEr
 pub fn token_page(kind: ForgeKind, url: &str) -> Result<String, GitError> {
     match kind {
         ForgeKind::Gitlab => gitlab::token_page(url),
+        ForgeKind::Bitbucket => Ok(bitbucket::TOKEN_PAGE.to_string()),
     }
 }
 
@@ -213,16 +226,24 @@ pub fn review_requests(
     };
     let all_projects = all_projects || own_project.is_none();
     if all_projects && filter == RequestFilter::AllOpen {
-        return Err(GitError::Forge(
-            "Choose one project to see all of its open merge requests.".into(),
-        ));
+        return Err(GitError::Forge(format!(
+            "Choose one project to see all of its open {}s.",
+            account.kind.noun()
+        )));
     }
     let project = own_project.as_deref().filter(|_| !all_projects);
-    let items = match account.kind {
-        ForgeKind::Gitlab => gitlab::requests(&account, project, filter)?,
+    let (items, max) = match account.kind {
+        ForgeKind::Gitlab => (
+            gitlab::requests(&account, project, filter)?,
+            gitlab::MAX_REVIEWS,
+        ),
+        ForgeKind::Bitbucket => (
+            bitbucket::requests(&account, project, filter)?,
+            bitbucket::MAX_REVIEWS,
+        ),
     };
     Ok(ReviewList {
-        truncated: items.len() >= gitlab::MAX_REVIEWS,
+        truncated: items.len() >= max,
         account,
         project: project.map(str::to_string),
         items,
@@ -248,8 +269,12 @@ pub fn open_request(
             source.host
         ))
     })?;
-    let mut detail = match account.kind {
-        ForgeKind::Gitlab => gitlab::detail(&account, project_id, iid)?,
+    let (mut detail, source_project) = match account.kind {
+        ForgeKind::Gitlab => (gitlab::detail(&account, project_id, iid)?, None),
+        ForgeKind::Bitbucket => {
+            let (d, from) = bitbucket::detail(&account, &source.project, iid)?;
+            (d, Some(from))
+        }
     };
     if !detail
         .request
@@ -257,19 +282,49 @@ pub fn open_request(
         .eq_ignore_ascii_case(&source.project)
     {
         return Err(GitError::Forge(format!(
-            "This merge request belongs to {}, not to the open repository ({}). Open it on the \
+            "This {} belongs to {}, not to the open repository ({}). Open it on the \
              website, or open that project's repository in Branchline.",
-            detail.request.project_path, source.project
+            account.kind.noun(),
+            detail.request.project_path,
+            source.project
         )));
     }
-    crate::git::remote::fetch_merge_request(
-        repo,
-        &source.remote,
-        iid,
-        &detail.head,
-        op_id,
-        on_progress,
-    )?;
+    match &source_project {
+        None => crate::git::remote::fetch_merge_request(
+            repo,
+            &source.remote,
+            iid,
+            &detail.head,
+            op_id,
+            on_progress,
+        )?,
+        // No merge request refs: fetch the branches, then work out the range locally.
+        Some(from) => {
+            let (base, head, target) = crate::git::remote::fetch_pull_request(
+                repo,
+                &crate::git::remote::PullRequestFetch {
+                    remote: &source.remote,
+                    project: &source.project,
+                    source_project: from,
+                    source_branch: &detail.request.source_branch,
+                    target_branch: &detail.request.target_branch,
+                    id: iid,
+                    head: &detail.head,
+                    target: &detail.base,
+                },
+                op_id,
+                on_progress,
+            )?;
+            // Bitbucket does not say whether it merges cleanly, so try the merge locally.
+            detail.conflict_files = crate::git::remote::merge_conflicts(repo, &target, &head);
+            detail.request.has_conflicts = detail
+                .conflict_files
+                .as_ref()
+                .is_some_and(|f| !f.is_empty());
+            detail.base = base;
+            detail.head = head;
+        }
+    }
     let root = crate::git::repository::resolve_root(repo)?;
     detail.files = crate::git::log::range_files(&root, &detail.base, &detail.head)?;
     Ok(detail)
