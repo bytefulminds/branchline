@@ -304,13 +304,14 @@ describe("Bitbucket Cloud", () => {
       }
       if (cmd === "open_merge_request")
         return {
-          request: pr,
+          request: { ...pr, hasConflicts: true },
           description: "",
           base: "a".repeat(40),
           head: "b".repeat(40),
           commits: [],
           threads: [],
           files: [],
+          conflictFiles: ["src/api.py"],
         } satisfies RequestDetail;
     });
     render(<App />);
@@ -354,6 +355,15 @@ describe("Bitbucket Cloud", () => {
       projectId: 0,
       iid: 4,
     });
+    // Bitbucket does not report conflicts; the trial merge on opening found one.
+    const note = await screen.findByRole("note");
+    expect(note).toHaveTextContent("Merge conflicts with main");
+    expect(note).toHaveTextContent("src/api.py");
+    // Back in the list, the row shows what opening it found.
+    expect(within(row).queryByText(/Conflicts/)).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Reviews" }));
+    const again = await screen.findByRole("list", { name: "Pull requests to review" });
+    expect(within(again).getAllByRole("listitem")[0]).toHaveTextContent("Conflicts");
   });
 });
 
@@ -363,6 +373,7 @@ describe("reading a merge request", () => {
     description: "Caches forecasts for ten minutes.\n\nCloses #12.",
     base: "b".repeat(40),
     head: "c".repeat(40),
+    conflictFiles: null,
     commits: [
       { oid: "c".repeat(40), title: "Add the cache", authorName: "Tom Jansen", createdAt: "" },
     ],

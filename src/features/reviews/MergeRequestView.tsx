@@ -25,7 +25,7 @@ import { diffRows } from "../changes/diffModel";
 import { Avatar } from "../history/Avatar";
 import { fileStatus } from "../history/CommitDetailsPanel";
 import { displayTitle, forgeInfo } from "./forges";
-import { useReviews } from "./ReviewsProvider";
+import { conflictKey, useReviews } from "./ReviewsProvider";
 import { QuestView } from "../quest/QuestView";
 import { useSettings } from "../settings/SettingsProvider";
 import "../history/HistoryView.css";
@@ -173,11 +173,55 @@ function FileDiffPane({
   );
 }
 
+/** Whether it merges cleanly into the target branch: the service's own answer (GitLab), or
+ * a trial merge on this computer (Bitbucket). */
+function MergeCheck({ detail }: { detail: RequestDetail }) {
+  const target = detail.request.targetBranch;
+  const files = detail.conflictFiles;
+  if (detail.request.hasConflicts) {
+    return (
+      <div className="bl-mr__conflicts" role="note">
+        <TriangleAlert size={15} aria-hidden />
+        <div>
+          <strong>Merge conflicts with {target}</strong>
+          {files?.length ? (
+            <>
+              <p className="text-small">
+                Merging into {target} would conflict in {plural(files.length, "file")} (checked on
+                this computer):
+              </p>
+              <ul className="bl-mr__conflict-files mono text-small">
+                {files.map((f) => (
+                  <li key={f}>{f}</li>
+                ))}
+              </ul>
+            </>
+          ) : (
+            <p className="text-small">
+              The branch has to be updated with {target} before it can be merged.
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  }
+  if (files) {
+    return (
+      <p className="bl-mr__clean text-small text-secondary">
+        <CircleCheck size={14} aria-hidden /> Merges cleanly into {target} (checked on this
+        computer).
+      </p>
+    );
+  }
+  return null;
+}
+
 /** Description, general discussion and commits. */
 function Overview({ detail }: { detail: RequestDetail }) {
   const general = detail.threads.filter((t) => !t.position);
   return (
     <section className="bl-mr__overview" aria-label="Overview">
+      <MergeCheck detail={detail} />
       <h2 className="bl-section-label">Description</h2>
       {detail.description.trim() ? (
         <p className="bl-mr__description selectable">{detail.description}</p>
@@ -227,7 +271,8 @@ export function MergeRequestView({
   const [width, setWidth] = usePersistentNumber("mergeRequestPanelWidth", 340);
   const { settings } = useSettings();
   const [questing, setQuesting] = useState(false);
-  const f = forgeInfo(useReviews().source?.account?.kind);
+  const { source, noteConflicts } = useReviews();
+  const f = forgeInfo(source?.account?.kind);
   const Noun = `${f.noun[0]!.toUpperCase()}${f.noun.slice(1)}`;
   const opId = state.s === "loading" ? state.opId : null;
   const started = useRef<string | null>(null);
@@ -239,9 +284,13 @@ export function MergeRequestView({
       .openMergeRequest(repoPath, request.projectId, request.iid, opId, (progress) =>
         setState((s) => (s.s === "loading" ? { ...s, progress } : s)),
       )
-      .then((detail) => setState({ s: "ready", detail }))
+      .then((detail) => {
+        setState({ s: "ready", detail });
+        // Remembered for the list, which does not know about conflicts on Bitbucket.
+        if (detail.conflictFiles) noteConflicts(conflictKey(request), detail.request.hasConflicts);
+      })
       .catch((error: GitError) => setState({ s: "error", error }));
-  }, [opId, repoPath, request.projectId, request.iid]);
+  }, [opId, repoPath, request, noteConflicts]);
 
   const detail = state.s === "ready" ? state.detail : null;
   const file = detail?.files.find((f) => f.path === selected) ?? null;
@@ -300,6 +349,11 @@ export function MergeRequestView({
               {r.iid}
             </span>
             {r.draft && <span className="bl-tag-kind">Draft</span>}
+            {r.hasConflicts && (
+              <span className="bl-review__conflicts" title="Has merge conflicts">
+                <TriangleAlert size={12} aria-hidden /> Conflicts
+              </span>
+            )}
             <span>
               <Avatar name={r.author.name} email={r.author.username} size={16} /> {r.author.name}
             </span>

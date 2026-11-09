@@ -169,7 +169,10 @@ describe("shortcuts and about", () => {
     };
     await user.click(within(dialog).getByRole("button", { name: "Check for updates" }));
     expect(await screen.findByText("Branchline 0.2.0 is available")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Install and restart" })).toBeInTheDocument();
+    // The tests run as Linux: there Branchline points to the releases page instead of
+    // installing (see updates.test.tsx for macOS and Windows).
+    expect(screen.getByRole("button", { name: "Open releases page" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Install and restart" })).toBeNull();
   });
 });
 

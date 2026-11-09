@@ -5,6 +5,7 @@ import type { GitError } from "../../types/git";
 import type {
   Account,
   ForgeKind,
+  MergeRequest,
   RequestFilter,
   ReviewList,
   ReviewSource,
@@ -45,7 +46,16 @@ export interface ReviewsState {
   refresh: () => void;
   connect: (kind: ForgeKind, url: string, token: string, login?: string) => Promise<Account>;
   disconnect: (kind: ForgeKind, url: string) => Promise<void>;
+  /** Conflicts found by a trial merge when a request was opened, by `conflictKey`; for
+   * services that do not report them in the list (Bitbucket). */
+  knownConflicts: Record<string, boolean>;
+  noteConflicts: (key: string, conflicts: boolean) => void;
 }
+
+/** A request at its last update: a new push changes `updatedAt`, so an old check is not
+ * reused. */
+export const conflictKey = (mr: Pick<MergeRequest, "projectPath" | "iid" | "updatedAt">) =>
+  `${mr.projectPath}#${mr.iid}@${mr.updatedAt}`;
 
 const noop = () => {};
 const ReviewsContext = createContext<ReviewsState>({
@@ -62,6 +72,8 @@ const ReviewsContext = createContext<ReviewsState>({
   refresh: noop,
   connect: () => Promise.reject(new Error("not available")),
   disconnect: () => Promise.resolve(),
+  knownConflicts: {},
+  noteConflicts: noop,
 });
 
 export const useReviews = () => useContext(ReviewsContext);
@@ -127,6 +139,10 @@ export function useReviewsState(repoPath: string | null): ReviewsState {
     return FILTERS.includes(saved as RequestFilter) ? (saved as RequestFilter) : "reviewRequested";
   });
   const [round, setRound] = useState(0);
+  const [knownConflicts, setKnownConflicts] = useState<Record<string, boolean>>({});
+  const noteConflicts = useCallback((key: string, conflicts: boolean) => {
+    setKnownConflicts((k) => (k[key] === conflicts ? k : { ...k, [key]: conflicts }));
+  }, []);
   const lastRound = useRef(0);
 
   const reloadAccounts = useCallback(() => {
@@ -225,5 +241,7 @@ export function useReviewsState(repoPath: string | null): ReviewsState {
     refresh,
     connect,
     disconnect,
+    knownConflicts,
+    noteConflicts,
   };
 }

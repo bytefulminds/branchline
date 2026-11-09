@@ -305,6 +305,8 @@ fn opens_pull_requests_from_a_branch_and_from_a_fork() {
     let fork_head = git(&seed, &["rev-parse", "HEAD"]);
     git(&seed, &["switch", "-q", "main"]);
     fs::write(seed.join("later.txt"), "later\n").unwrap();
+    // main changes the line feature/x adds under, so merging feature would conflict.
+    fs::write(seed.join("greet.txt"), "hey\n").unwrap();
     git(&seed, &["add", "."]);
     git(&seed, &["commit", "-qm", "Later on main"]);
     let target = git(&seed, &["rev-parse", "HEAD"]);
@@ -350,6 +352,9 @@ fn opens_pull_requests_from_a_branch_and_from_a_fork() {
     assert_eq!(detail.commits[0].author_name, "Bob");
     assert_eq!(detail.files.len(), 1);
     assert_eq!(detail.files[0].path, "greet.txt");
+    // Bitbucket does not report conflicts; the trial merge with the target finds them.
+    assert_eq!(detail.conflict_files, Some(vec!["greet.txt".to_string()]));
+    assert!(detail.request.has_conflicts);
     assert_eq!(
         git(
             &work,
@@ -368,4 +373,6 @@ fn opens_pull_requests_from_a_branch_and_from_a_fork() {
     assert_eq!(fork_detail.head, fork_head);
     assert_eq!(fork_detail.base, base);
     assert_eq!(fork_detail.files[0].path, "other.txt");
+    assert_eq!(fork_detail.conflict_files, Some(vec![]));
+    assert!(!fork_detail.request.has_conflicts);
 }

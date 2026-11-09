@@ -21,7 +21,7 @@ import { displayTitle, forgeInfo, type ForgeInfo } from "./forges";
 
 export { displayTitle };
 import { MergeRequestView } from "./MergeRequestView";
-import { useReviews } from "./ReviewsProvider";
+import { conflictKey, useReviews } from "./ReviewsProvider";
 import "../branches/BranchesView.css";
 import "./ReviewsView.css";
 
@@ -197,8 +197,17 @@ function emptyText(filter: RequestFilter, data: ReviewList, f: ForgeInfo): strin
 /** Open merge requests on the repository's hosting service: those waiting for your review,
  * those you created, or all open ones; for this project or all projects. */
 export function ReviewsView({ repoPath }: { repoPath: string }) {
-  const { source, matched, list, allProjects, setAllProjects, filter, setFilter, refresh } =
-    useReviews();
+  const {
+    source,
+    matched,
+    list,
+    allProjects,
+    setAllProjects,
+    filter,
+    setFilter,
+    refresh,
+    knownConflicts,
+  } = useReviews();
   const [opened, setOpened] = useState<MergeRequest | null>(null);
   const inProject = (mr: MergeRequest) =>
     matched && !!source && mr.projectPath.toLowerCase() === source.project.toLowerCase();
@@ -307,7 +316,7 @@ export function ReviewsView({ repoPath }: { repoPath: string }) {
                 <Row
                   key={`${mr.projectPath}!${mr.iid}`}
                   refPrefix={f.ref}
-                  mr={mr}
+                  mr={knownConflicts[conflictKey(mr)] ? { ...mr, hasConflicts: true } : mr}
                   showProject={allProjects}
                   onOpen={inProject(mr) ? () => setOpened(mr) : null}
                 />

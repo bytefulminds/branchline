@@ -687,13 +687,14 @@ pub struct PullRequestFetch<'a> {
 
 /// Fetch a pull request's source branch (from the fork when it comes from one) and target
 /// branch into `refs/branchline/pull-requests/<id>/`, unless both commits are already there.
-/// Returns the diff range: the merge base with the target, and the full head commit.
+/// Returns the diff range (the merge base with the target, and the full head commit) and the
+/// target branch's full commit.
 pub fn fetch_pull_request(
     repo: &str,
     pr: &PullRequestFetch,
     op_id: &str,
     on_progress: &mut dyn FnMut(Progress),
-) -> Result<(String, String), GitError> {
+) -> Result<(String, String, String), GitError> {
     super::log::validate_oid(pr.head)?;
     super::log::validate_oid(pr.target)?;
     let root = resolve_root(repo)?;
@@ -773,7 +774,47 @@ pub fn fetch_pull_request(
             "The pull request's branch has no history in common with its target branch.".into(),
         ));
     }
-    Ok((base, head))
+    Ok((base, head, target))
+}
+
+/// Files that would conflict when `head` is merged into `target`, from a trial merge that
+/// touches neither the working folder nor any branch (`git merge-tree --write-tree`, Git
+/// 2.38 and newer). `None` when Git cannot tell (an older Git, or an error).
+pub fn merge_conflicts(repo: &str, target: &str, head: &str) -> Option<Vec<String>> {
+    super::log::validate_oid(target).ok()?;
+    super::log::validate_oid(head).ok()?;
+    let root = resolve_root(repo).ok()?;
+    let out = run_git_with(
+        &root,
+        &[
+            "merge-tree",
+            "--write-tree",
+            "--name-only",
+            "--no-messages",
+            "-z",
+            target,
+            head,
+        ],
+        &RunOptions {
+            ok_codes: &[0, 1, 128, 129],
+            ..RunOptions::default()
+        },
+    )
+    .ok()?;
+    match out.code {
+        0 => Some(Vec::new()),
+        1 => {
+            let mut files: Vec<String> = Vec::new();
+            for name in out.stdout.split(|b| *b == 0).skip(1) {
+                let name = String::from_utf8_lossy(name).to_string();
+                if !name.is_empty() && !files.contains(&name) {
+                    files.push(name);
+                }
+            }
+            Some(files)
+        }
+        _ => None,
+    }
 }
 
 /// The address of a fork, from the remote's address with the project path swapped:

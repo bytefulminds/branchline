@@ -240,7 +240,7 @@ describe("suggesting a commit message", () => {
       repo: REPO.path,
     });
     expect(await screen.findByText("Writing with qwen2.5-coder:7b…")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^Commit/ })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /^Commit \d+ file/ })).toBeDisabled();
 
     channel!.onmessage("refactor: move a.rs");
     await waitFor(() => expect(summary).toHaveValue("refactor: move a.rs"));

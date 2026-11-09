@@ -94,6 +94,60 @@ describe("commit box", () => {
     await waitFor(() => expect(calls.some((c) => c.cmd === "create_commit")).toBe(true));
   });
 
+  it("commits and pushes, with the button or Ctrl+Shift+Enter", async () => {
+    const pushed = {
+      outcome: {
+        updatedRefs: 1,
+        conflicts: false,
+        upToDate: false,
+        stashKept: false,
+        target: "origin/main",
+      },
+      repo: CLEAN,
+    };
+    const { user, calls, form } = await openRepo(REPO, (cmd) => {
+      if (cmd === "create_commit") return CLEAN;
+      if (cmd === "list_remotes")
+        return [{ name: "origin", url: "https://example.com/demo.git", pushUrl: null }];
+      if (cmd === "push_branch") return pushed;
+    });
+    const push = within(form).getByRole("button", { name: "Commit and push" });
+    await user.type(within(form).getByLabelText("Commit summary"), "Add parser");
+    await waitFor(() => expect(push).toBeEnabled());
+    await user.click(push);
+    await waitFor(() => expect(calls.some((c) => c.cmd === "push_branch")).toBe(true));
+    const order = calls
+      .map((c) => c.cmd)
+      .filter((c) => c === "create_commit" || c === "push_branch");
+    expect(order).toEqual(["create_commit", "push_branch"]);
+    expect(calls.find((c) => c.cmd === "push_branch")?.args.request).toMatchObject({
+      branch: "main",
+      force: false,
+    });
+  });
+
+  it("commits and pushes with Ctrl+Shift+Enter", async () => {
+    const { user, calls, form } = await openRepo(REPO, (cmd) => {
+      if (cmd === "create_commit") return CLEAN;
+      if (cmd === "list_remotes")
+        return [{ name: "origin", url: "https://example.com/demo.git", pushUrl: null }];
+    });
+    await waitFor(() => expect(calls.some((c) => c.cmd === "list_remotes")).toBe(true));
+    await user.type(
+      within(form).getByLabelText("Commit summary"),
+      "Quick fix{Control>}{Shift>}{Enter}{/Shift}{/Control}",
+    );
+    await waitFor(() => expect(calls.some((c) => c.cmd === "push_branch")).toBe(true));
+  });
+
+  it("does not offer Commit and push while amending or without a remote", async () => {
+    const { user, form } = await openRepo(REPO, (cmd) => (cmd === "list_remotes" ? [] : undefined));
+    const push = within(form).getByRole("button", { name: "Commit and push" });
+    await user.type(within(form).getByLabelText("Commit summary"), "Add parser");
+    expect(push).toBeDisabled();
+    expect(push).toHaveAttribute("title", "No remotes configured");
+  });
+
   it("prefills the previous message when amending", async () => {
     const { user, calls, form } = await openRepo(CLEAN, (cmd) =>
       cmd === "create_commit" ? CLEAN : undefined,

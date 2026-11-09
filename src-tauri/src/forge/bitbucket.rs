@@ -643,6 +643,7 @@ pub fn detail(
             commits,
             threads,
             files: Vec::new(),
+            conflict_files: None,
         },
         source_project,
     ))

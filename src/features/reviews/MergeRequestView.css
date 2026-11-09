@@ -159,3 +159,36 @@
   border-color: var(--color-accent);
   color: var(--color-accent);
 }
+
+/* Whether the request merges cleanly into its target branch. */
+.bl-mr__conflicts {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid rgb(245 158 11 / 40%);
+  border-radius: var(--radius-md);
+  background: rgb(245 158 11 / 8%);
+}
+.bl-mr__conflicts > svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--color-warning);
+}
+.bl-mr__conflicts p {
+  margin: 2px 0 0;
+}
+.bl-mr__conflict-files {
+  margin: var(--space-1) 0 0;
+  padding-left: var(--space-4);
+}
+.bl-mr__clean {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: 0 0 var(--space-3);
+}
+.bl-mr__clean svg {
+  color: var(--color-accent);
+}

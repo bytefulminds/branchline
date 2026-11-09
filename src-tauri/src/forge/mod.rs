@@ -120,6 +120,10 @@ pub struct RequestDetail {
     pub threads: Vec<Thread>,
     /// Files changed from `base` to `head`, computed from the local repository.
     pub files: Vec<crate::git::log::CommitFile>,
+    /// Files that would conflict when merged into the target branch, from a local trial
+    /// merge (Bitbucket, which does not report conflicts). `None` when not checked or Git
+    /// could not tell; GitLab reports conflicts itself in `request.has_conflicts`.
+    pub conflict_files: Option<Vec<String>>,
 }
 
 /// The project on a hosting service that an open repository belongs to.
@@ -296,7 +300,7 @@ pub fn open_request(
         )?,
         // No merge request refs: fetch the branches, then work out the range locally.
         Some(from) => {
-            let (base, head) = crate::git::remote::fetch_pull_request(
+            let (base, head, target) = crate::git::remote::fetch_pull_request(
                 repo,
                 &crate::git::remote::PullRequestFetch {
                     remote: &source.remote,
@@ -311,6 +315,12 @@ pub fn open_request(
                 op_id,
                 on_progress,
             )?;
+            // Bitbucket does not say whether it merges cleanly, so try the merge locally.
+            detail.conflict_files = crate::git::remote::merge_conflicts(repo, &target, &head);
+            detail.request.has_conflicts = detail
+                .conflict_files
+                .as_ref()
+                .is_some_and(|f| !f.is_empty());
             detail.base = base;
             detail.head = head;
         }

@@ -141,7 +141,8 @@ And more: clone or create repositories, fetch, pull and push with live progress 
 stashes (also "stash, pull and reapply" when local changes are in the way), tags, worktrees,
 cherry-pick and revert (several commits at once), file history, a file system watcher that
 picks up changes from your editor within a second, full keyboard control with screen reader
-support, and automatic updates when you agree.
+support, and automatic updates when you agree (on Linux, a note with a link to the new
+release).
 
 ## Getting started
 

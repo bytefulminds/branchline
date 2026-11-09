@@ -19,11 +19,16 @@ description on GitLab.
   request, from Changes, Branches, History or the command palette.
 - Bitbucket Cloud: connect with your Atlassian email and an API token, see the pull requests
   to review, yours and all open ones, read them in Branchline (also from forks) and play the
-  review quest on them.
+  review quest on them. Opening one tries the merge on this computer and shows the files
+  that would conflict, since Bitbucket does not report conflicts.
+- Commit and push: next to Commit, and with `Ctrl+Shift+Enter` / `⌘⇧↵`. Publishes the
+  branch when it has no upstream.
 
 ### Changed
 
 - Changes: the AI review button now says **Review with AI** instead of showing only an icon.
+- Linux: Branchline no longer installs updates itself (installing a package needs
+  administrator rights). It says when a new version is out and opens the releases page.
 
 ## [0.2.5] - 2026-11-03
 

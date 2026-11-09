@@ -506,6 +506,7 @@ pub fn detail(account: &Account, project_id: u64, iid: u64) -> Result<RequestDet
         commits,
         threads,
         files: Vec::new(),
+        conflict_files: None,
     })
 }
 

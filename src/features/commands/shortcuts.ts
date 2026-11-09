@@ -22,6 +22,7 @@ export const SHORTCUTS = {
   console: mod("J"),
   sidebar: mod("B"),
   commit: mod("↵"),
+  commitAndPush: mod(`${shift}↵`),
 };
 
 export interface ShortcutGroup {
@@ -65,6 +66,7 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
         action: "Move to a changed line, select it, extend",
       },
       { keys: SHORTCUTS.commit, action: "Commit" },
+      { keys: SHORTCUTS.commitAndPush, action: "Commit and push" },
       { keys: "Esc", action: "Stop writing a suggested message" },
     ],
   },

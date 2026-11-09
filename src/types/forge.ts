@@ -114,4 +114,7 @@ export interface RequestDetail {
   commits: RequestCommit[];
   threads: Thread[];
   files: CommitFile[];
+  /** Files that would conflict when merged into the target branch, from a trial merge on
+   * this computer (Bitbucket). null when not checked or Git could not tell. */
+  conflictFiles: string[] | null;
 }

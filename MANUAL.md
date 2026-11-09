@@ -28,13 +28,15 @@ Everything Branchline can do, and how. For a quick tour with screenshots, see th
 Download the installer for your system from the
 [releases page](https://gitlab.com/bytefulminds/branchline/-/releases). Branchline needs
 [Git](https://git-scm.com/downloads) 2.20 or newer. It checks for updates after starting and
-installs them when you agree (Settings > General to turn that off).
+installs them when you agree (Settings > General to turn that off). On Linux it only tells
+you a new version is out and opens the releases page, because installing a package needs
+administrator rights; install it the way you installed Branchline.
 
 | System | File | Notes |
 |---|---|---|
 | macOS 11 or newer (Apple silicon and Intel) | `.dmg` | Drag Branchline to Applications |
 | Windows 10 and 11 | `-setup.exe` (or `.msi`) | |
-| Linux | `.AppImage`, `.deb` or `.rpm` | AppImage: make it executable (`chmod +x`) and run it. Updates install for the AppImage only |
+| Linux | `.AppImage`, `.deb` or `.rpm` | AppImage: make it executable (`chmod +x`) and run it. New versions are announced, with a link to the releases page |
 
 The installers are not signed with Apple or Microsoft certificates yet, so the system
 asks before the first launch:
@@ -82,6 +84,10 @@ Updates are signed with Branchline's own update key, so only genuine releases ar
 - Commit and amend from the Changes view: summary and description, a length hint, merge
   messages prefilled, `Ctrl+Enter` / `⌘↵`, and clear errors for a missing identity or failing
   hooks. The commit box shows the name and email you commit as.
+- **Commit and push** (`Ctrl+Shift+Enter` / `⌘⇧↵`) commits, then pushes the branch, or
+  publishes it when it has no upstream yet. It is not offered while amending (an amended
+  commit that was pushed before needs a force push, which you do yourself), on a detached
+  HEAD, or without a remote.
 - Drag the line above the commit summary to make the message box taller or shorter (the
   description fills the space, the size is remembered; double-click resets it).
 
@@ -249,6 +255,11 @@ Updates are signed with Branchline's own update key, so only genuine releases ar
   target branch into `refs/branchline/pull-requests/<number>/`, and the diff starts where the
   branch forked from the target. Pull requests to review are listed per repository: across
   all of Bitbucket only **Created by you** is available. Build statuses show as the pipeline.
+- Bitbucket does not say whether a pull request merges cleanly, so when you open one,
+  Branchline tries the merge on this computer (`git merge-tree`, which touches neither your
+  files nor your branches). The overview then shows "Merges cleanly" or the files that would
+  conflict, and the list shows the Conflicts badge for it from then on. This needs Git 2.38
+  or newer; with an older Git nothing is shown.
 - Merge requests of other projects (in All projects) open on the website, as does the button
   next to Open. Posting comments and approving from Branchline are planned; see
   [the plan](docs/plans/merge-request-reviews.md).
@@ -363,6 +374,7 @@ keyboard shortcut in the app.
 | `Ctrl+7` | `⌘7` | Reviews (with a GitLab or Bitbucket account connected) |
 | `Ctrl+F` | `⌘F` | Search commits in History |
 | `Ctrl+Enter` | `⌘↵` | Commit |
+| `Ctrl+Shift+Enter` | `⌘⇧↵` | Commit and push |
 | `Ctrl+J` | `⌘J` | Git console |
 | `Ctrl+B` | `⌘B` | Collapse or expand the sidebar |
 | `Ctrl+,` | `⌘,` | Settings |
@@ -418,7 +430,8 @@ select lines), dialogs and panels. See [docs/accessibility.md](docs/accessibilit
   browser only for Branchline's own GitLab pages, ollama.com, the API key pages of Anthropic
   and OpenAI, and package pages on npmjs.com and crates.io.
 - Updates are only installed when their signature matches the update key built into
-  Branchline, and only after you agree. The update check only contacts the release page on
+  Branchline, and only after you agree (on Linux they are not installed by Branchline at
+  all). The update check only contacts the release page on
   GitLab.
 - The Git console log stays in memory (the last 500 commands, at most 8 KB of output and
   32 KB of messages each) and is gone when Branchline quits. Credentials in URLs are removed
