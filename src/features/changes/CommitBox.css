@@ -50,6 +50,16 @@
 }
 .bl-commit-box__push {
   flex: 1 1 auto;
+  min-width: 0;
+}
+.bl-commit-box__actions {
+  container-type: inline-size;
+}
+/* Too narrow for "Commit and push" with its shortcut: keep the words, drop the hint. */
+@container (max-width: 300px) {
+  .bl-commit-box__push .bl-button__kbd {
+    display: none;
+  }
 }
 .bl-commit-box__hint {
   min-height: 16px;

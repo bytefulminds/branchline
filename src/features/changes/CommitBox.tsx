@@ -420,10 +420,8 @@ export function CommitBox({
             variant="secondary"
             icon={<ArrowUpFromLine size={15} aria-hidden />}
             disabled={!!blocker || !!pushBlocker || busy || !!suggesting}
-            title={
-              pushBlocker ?? `Commit, then push (${platform === "macos" ? "⌘⇧↵" : "Ctrl+Shift+↵"})`
-            }
-            aria-keyshortcuts={platform === "macos" ? "Meta+Shift+Enter" : "Control+Shift+Enter"}
+            title={pushBlocker ?? "Commit, then push"}
+            shortcut={platform === "macos" ? "⌘⇧↵" : `${modKeyLabel}Shift+↵`}
             className="bl-commit-box__push"
             onClick={() => void submit(true)}
           >

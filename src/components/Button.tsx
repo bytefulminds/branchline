@@ -18,6 +18,7 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 export function toAriaShortcut(label: string): string {
   return label
     .replace("⌘", "Meta+")
+    .replace("⇧", "Shift+")
     .replace("Ctrl+", "Control+")
     .replace("↵", "Enter")
     .replace(/\+\+/g, "+");

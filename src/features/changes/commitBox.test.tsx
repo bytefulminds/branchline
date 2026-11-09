@@ -33,6 +33,8 @@ describe("commit message helpers", () => {
   it("maps shortcut hints to aria-keyshortcuts", () => {
     expect(toAriaShortcut("Ctrl+↵")).toBe("Control+Enter");
     expect(toAriaShortcut("⌘↵")).toBe("Meta+Enter");
+    expect(toAriaShortcut("Ctrl+Shift+↵")).toBe("Control+Shift+Enter");
+    expect(toAriaShortcut("⌘⇧↵")).toBe("Meta+Shift+Enter");
     expect(toAriaShortcut("⌘O")).toBe("Meta+O");
   });
 
