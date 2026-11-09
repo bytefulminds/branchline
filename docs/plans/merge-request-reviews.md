@@ -81,7 +81,7 @@ check both states: with AI off, none of these controls are in the page.
 | Multiple choice      | "What does this change do when `days` is empty?" with three or four answers | The AI writes the answer key together with the question; Branchline checks the choice, no second call |
 | True or false        | "After this change, `format_temperature` can return a negative number."     | Same as above                                                                                         |
 | Find the line        | "Click the line where the API version is chosen."                           | Branchline checks the clicked line against the line numbers the AI gave                               |
-| Spot the risk (open) | "What could go wrong with this new query on a large table?"                 | The AI responds to the answer: agrees, adds what was missed, or asks a follow-up. Never "wrong"       |
+| Spot the risk (open) | "What could go wrong with this new query on a large table?"                 | The AI responds to the answer: agrees and adds what was missed, never asks back. Never "wrong"    |
 | Your call (open)     | "Would you keep this as one function or split it?"                          | No right answer; the answer can become a comment                                                      |
 
 Quiz questions keep the pace up and check understanding; open questions are where real

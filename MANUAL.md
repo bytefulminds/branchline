@@ -252,8 +252,8 @@ the change, and you decide what is right.
   - **Quiz** (multiple choice) and **true or false**: answer once; the explanation says why,
     and the lines that matter light up in the diff.
   - **Find the line**: click the right line in the diff.
-  - **Your take**: an open question. The AI responds to your answer, never calls it wrong, and
-    may suggest a review comment you can edit and keep.
+  - **Your take**: an open question. The AI responds to your answer, never calls it wrong and
+    never asks you something back, and may suggest a review comment you can edit and keep.
 - An answered question stays in view until **Next question**; **Skip question** and **Skip
   file** are always there.
 - Click any added or removed line to write a draft comment on it.

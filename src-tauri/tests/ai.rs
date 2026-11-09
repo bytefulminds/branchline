@@ -741,9 +741,9 @@ fn asks_questions_about_a_file_with_line_references() {
     assert!(!user.contains("UNSTAGED-SECRET"));
     assert_eq!(body["format"]["type"], "object");
 
-    let (url, _) = fake_ollama(|_| {
+    let (url, seen) = fake_ollama(|_| {
         let answer = serde_json::json!({
-            "reply": "Yes, and a name would make it warmer.",
+            "reply": "Yes, and a name would make it warmer. Have you thought about guests?",
             "comment": "Could we greet visitors by name?",
             "line": { "side": "new", "line": 2 }
         });
@@ -765,4 +765,11 @@ fn asks_questions_about_a_file_with_line_references() {
         Some("Could we greet visitors by name?")
     );
     assert_eq!(reply.line.map(|l| l.line), Some(2));
+    // The reviewer cannot answer back: the prompt says so, and a trailing question is dropped.
+    assert_eq!(reply.reply, "Yes, and a name would make it warmer.");
+    let body: serde_json::Value = serde_json::from_str(&seen.lock().unwrap()[0].1).unwrap();
+    assert!(body["messages"][0]["content"]
+        .as_str()
+        .unwrap()
+        .contains("never ask them a question"));
 }

@@ -597,8 +597,9 @@ pub fn reply_prompt(cfg: &AiSettings, own_branch: bool) -> String {
     format!(
         "You are the game master of a code review game. You asked the reviewer an open \
 question about a file's diff, and they answered. Respond in two to four sentences: agree \
-with what they got right, add what they missed, or ask one follow-up question. Never say \
-the answer is wrong; there is no single right answer.\n\
+with what they got right and add what they missed. Never say the answer is wrong; there is \
+no single right answer. The reviewer cannot answer you, so never ask them a question: end \
+with a statement. If something is still worth raising, put it in the comment.\n\
 \n\
 When their answer points at something that should change, also write {comment} in \
 \"comment\", and the line it is about in \"line\" (a reference from the diff, such as \
@@ -609,6 +610,30 @@ Write in {language}. Answer with JSON only: {{\"reply\": \"...\", \"comment\": \
     )
 }
 
+/// Splits questions off the end of a reply: the reviewer cannot answer them. A reply that is
+/// only a question is kept as it is. Returns the reply and the questions that were dropped.
+fn drop_trailing_questions(reply: &str) -> (String, String) {
+    let mut kept = reply.trim_end();
+    while kept.ends_with('?') || kept.ends_with('\u{ff1f}') {
+        // The end of the sentence before the question: punctuation followed by a space.
+        let cut = kept
+            .char_indices()
+            .zip(kept.chars().skip(1))
+            .filter(|((_, c), next)| {
+                matches!(c, '.' | '!' | '?' | '\u{3002}' | '\u{ff01}' | '\u{ff1f}')
+                    && next.is_whitespace()
+            })
+            .map(|((i, c), _)| i + c.len_utf8())
+            .last();
+        match cut {
+            Some(i) => kept = kept[..i].trim_end(),
+            None => break,
+        }
+    }
+    let question = reply.trim()[kept.len()..].trim().to_string();
+    (kept.to_string(), question)
+}
+
 pub fn parse_reply(raw: &str, known: &KnownLines) -> Result<Reply, String> {
     let json = json_part(raw).ok_or("no JSON object")?;
     let v: Value = serde_json::from_str(json).map_err(|e| format!("invalid JSON: {e}"))?;
@@ -616,10 +641,14 @@ pub fn parse_reply(raw: &str, known: &KnownLines) -> Result<Reply, String> {
     if reply.is_empty() {
         return Err("no reply".into());
     }
-    let comment = v["comment"]
+    let mut comment = v["comment"]
         .as_str()
         .map(|c| c.trim().to_string())
         .filter(|c| !c.is_empty());
+    let (reply, question) = drop_trailing_questions(&reply);
+    if comment.is_none() && !question.is_empty() {
+        comment = Some(question);
+    }
     let line = comment.as_ref().and_then(|_| {
         parse_lines(&json!([v["line"]]), &known.all)
             .into_iter()
@@ -827,6 +856,39 @@ mod tests {
         assert_eq!(r.comment, None);
         assert_eq!(r.line, None);
         assert!(parse_reply("{}", &known).is_err());
+    }
+
+    #[test]
+    fn replies_do_not_end_with_questions() {
+        let known = KnownLines {
+            all: HashSet::new(),
+            changed: HashSet::new(),
+        };
+        // A trailing question becomes the suggested comment when there is none.
+        let r = parse_reply(
+            r#"{"reply":"Right, the timeout is fixed at 5.5 seconds. Did you check the retry? What about slow networks?"}"#,
+            &known,
+        )
+        .unwrap();
+        assert_eq!(r.reply, "Right, the timeout is fixed at 5.5 seconds.");
+        assert_eq!(
+            r.comment.as_deref(),
+            Some("Did you check the retry? What about slow networks?")
+        );
+        // With a comment already there, the question is just dropped.
+        let r = parse_reply(
+            r#"{"reply":"Good point. Why not a setting?","comment":"Make this a setting."}"#,
+            &known,
+        )
+        .unwrap();
+        assert_eq!(r.reply, "Good point.");
+        assert_eq!(r.comment.as_deref(), Some("Make this a setting."));
+        // A reply that is only a question stays, and so does one without questions.
+        let r = parse_reply(r#"{"reply":"Is v1.2 still supported?"}"#, &known).unwrap();
+        assert_eq!(r.reply, "Is v1.2 still supported?");
+        assert_eq!(r.comment, None);
+        let r = parse_reply(r#"{"reply":"Agreed. Nothing to add."}"#, &known).unwrap();
+        assert_eq!(r.reply, "Agreed. Nothing to add.");
     }
 
     #[test]
