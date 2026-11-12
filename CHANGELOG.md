@@ -21,6 +21,11 @@ again. (0.3.1 was not released; its fix is part of this version.)
 - Settings > AI > Context length (Ollama): a fixed size for every request (16K tokens by
   default), or Ollama's own setting.
 
+### Changed
+
+- Settings > AI and the manual now say what each AI feature sends (a commit message, rewrite
+  suggestions, the review quest), instead of only mentioning the staged diff.
+
 ### Fixed
 
 - Bitbucket: Reviews could not list your pull requests across all repositories (status

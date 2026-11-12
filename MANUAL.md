@@ -305,8 +305,10 @@ the change, and you decide what is right.
   own branch: its commits since it was created or forked, without uncommitted changes. The
   questions are what a reviewer is likely to ask, and findings become notes for yourself.
 - Sent to your AI provider per round: the title and description, the file's diff with line
-  numbers (shortened to fit) and earlier comments on that file. Nothing is sent with AI off,
-  and with AI off none of this appears anywhere.
+  numbers (shortened to fit) and earlier comments on that file. Once you start a quest, this
+  is sent for every file of the quest in turn, in the background, not only for the files you
+  open; your open answers are sent when you send them. Nothing is sent with AI off, and with
+  AI off none of this appears anywhere.
 
 ## AI
 
@@ -334,8 +336,14 @@ the change, and you decide what is right.
   request always wins over the one set in Ollama itself, so if you set a size in Ollama (its
   app, or `OLLAMA_CONTEXT_LENGTH`), choose **Ollama's setting** to use that one; then
   switching between Branchline and a chat with the same model does not reload it either.
-- Only the staged diff (shortened), the list of changed files, the branch name and recent commit
-  subjects are sent, and only when you ask. See [Privacy and security](#privacy-and-security).
+- What is sent depends on the feature, and only when you use it (see
+  [Privacy and security](#privacy-and-security)):
+  - **Suggest message:** the staged diff (shortened), the list of changed files, the branch
+    name and recent commit subjects. Unstaged files are never sent.
+  - **Rewrite history with AI:** the messages and diffs (shortened) of the branch's commits
+    in the rebase.
+  - **Review quest:** the merge request's title and description, each file's diff and the
+    earlier comments on it, and your open answers.
 
 ## Git console and hooks
 
@@ -426,13 +434,15 @@ select lines), dialogs and panels. See [docs/accessibility.md](docs/accessibilit
   anything reaches the UI, including error messages.
 - Force push always uses `--force-with-lease`, so it cannot overwrite commits you have not
   fetched.
-- AI suggestions only contact the provider you chose (your Ollama or OpenAI-compatible
-  server, or the API of Anthropic or OpenAI), only when you ask for a suggestion (or test
-  the connection), and only send the staged diff (shortened), the list of changed files, the
-  branch name and recent commit subjects. Unstaged files are never sent. Addresses may not
+- AI features only contact the provider you chose (your Ollama or OpenAI-compatible server,
+  or the API of Anthropic or OpenAI), only when you use one (or test the connection), and
+  only send what that feature needs: the staged diff for a commit message (unstaged files
+  are never sent), the branch's commits for rewrite suggestions, and a merge request's (or
+  your branch's) changes, description and comments for the review quest. See [AI](#ai) for
+  the details. Addresses may not
   contain credentials, redirects are not followed, and system proxies are skipped for
   `localhost`. Settings warn when the server is not on this computer, and say plainly that a
-  cloud provider gets your staged changes.
+  cloud provider gets the changes you use AI on.
 - API keys are stored in the system's password store and never reach the app's web view.
   Branchline reads them at most once per run, and never sends a key over plain `http://` to
   another computer.

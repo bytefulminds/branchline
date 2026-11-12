@@ -328,7 +328,9 @@ export function AiSection({ s, set }: { s: Settings; set: Setter }) {
       {provider.cloud && (
         <p className="bl-setting__help bl-setting__note">
           <span className="bl-setting__warning">
-            When you ask for a suggestion, your staged changes are sent to {provider.name}.
+            When you use an AI feature, the changes it is about are sent to {provider.name}: your
+            staged changes for a commit message, a branch&apos;s commits to rewrite, or a merge
+            request&apos;s changes in the review quest.
           </span>{" "}
           {ai.provider === "anthropic"
             ? "A Claude Pro or Max plan does not include the API."
@@ -348,7 +350,7 @@ export function AiSection({ s, set }: { s: Settings; set: Setter }) {
                 : "For example http://localhost:1234/v1 for LM Studio."}{" "}
               {remote && (
                 <span className="bl-setting__warning">
-                  Your staged changes are sent to this server; use one you trust.
+                  The changes you use AI on are sent to this server; use one you trust.
                   {url.toLowerCase().startsWith("http://") &&
                     " Plain http:// is not encrypted on the network."}
                 </span>
