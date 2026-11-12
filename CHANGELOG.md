@@ -7,6 +7,22 @@ description on GitLab.
 
 ## [Unreleased]
 
+### Added
+
+- Review quest: the AI prepares the questions in the background, one file at a time, so the
+  next file is usually ready when you get there. The file list shows how many questions each
+  file has. **New questions** asks for other questions about a file.
+- Settings > AI > Context length (Ollama): a fixed size for every request (16K tokens by
+  default), or Ollama's own setting.
+
+### Fixed
+
+- Review quest: a remark such as "I can't think of a question" is no longer shown as a
+  question; Branchline asks again (up to three times).
+- Ollama: the context size no longer changes from request to request, which made Ollama
+  reload the model between requests. Before, Branchline also always replaced the size set in
+  Ollama itself; now you can keep that one.
+
 ## [0.3.1] - 2026-11-12
 
 A fix for Bitbucket: **Created by you** across all repositories works again.

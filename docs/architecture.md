@@ -250,8 +250,9 @@ progress (read from `rebase-merge/msgnum` and `end`).
 - `src/ai/provider.rs` talks to the provider chosen in Settings with `ureq`, from the
   backend, so the webview's CSP stays closed to the network:
   - Ollama: `/api/tags`, `/api/version`, `/api/chat` (NDJSON stream), with `think: false`
-    (retried without it when a version refuses it), `num_ctx` sized to the prompt (8,192 to
-    32,768 tokens) and `num_predict` as a limit. Reasoning that a model still streams is
+    (retried without it when a version refuses it), `num_ctx` from Settings (16,384 by
+    default, the same on every request since Ollama reloads the model when it changes; larger
+    only for a prompt that does not fit; left out with "Ollama's setting") and `num_predict` as a limit. Reasoning that a model still streams is
     counted, never shown, and stops the request beyond 48,000 characters.
   - OpenAI-compatible servers (LM Studio, vLLM, llama.cpp, OpenRouter): `GET {base}/models`
     and `POST {base}/chat/completions` with `stream: true` (server-sent events, text in
@@ -500,9 +501,15 @@ checks that every line leaving a row enters the next one and that all lanes clos
 line (`[new 17] + code`, `[old 20] - code`), and the answer is JSON (with a schema for Ollama).
 Questions are checked against that diff: a reference that is not in it is dropped, a
 find-the-line question needs an added or removed line (the ones a reviewer can click), a quiz
-needs 2 to 5 choices and a valid answer, and at most three questions are kept. An answer
-without a usable question is asked for once more, then reported. Open answers get a reply in
+needs 2 to 5 choices and a valid answer, a remark instead of a question ("I can't think of a
+question") is dropped, and at most three questions are kept. An answer without a usable
+question is asked for again, up to three times, then reported. Open answers get a reply in
 the same way, with an optional suggested comment and line.
+
+`QuestView` prepares the questions in the background, one request at a time: `nextToPrepare`
+picks the open file first, then the ones after it. The request belongs to the quest, not to the
+file shown, so moving between files does not stop it unless the open file needs questions
+first; it waits while an open answer is with the AI, and Stop pauses it.
 
 The frontend (`features/quest/`) keeps the quest state (questions, answers, points, draft
 comments) in local storage per merge request (`project!iid`) or branch, tied to the head

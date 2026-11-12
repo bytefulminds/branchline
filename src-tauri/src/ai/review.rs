@@ -326,6 +326,9 @@ as {{\"side\": \"new\", \"line\": 17}}.\n\
 or two sentences. Wrong answers are no failure; the explanation teaches.\n\
 - Do not ask about things the earlier comments already discuss.\n\
 - Keep questions short and concrete.\n\
+- Every question must be a real question about this diff. Never answer that you cannot think \
+of a question: even a small change has something to check, such as a name, a value, a \
+missing test or what happens on an error.\n\
 \n\
 Answer with JSON only: {{\"questions\": [{{\"type\": \"choice\", \"question\": \"...\", \"choices\": \
 [\"...\"], \"answer\": 0, \"lines\": [{{\"side\": \"new\", \"line\": 17}}], \"explanation\": \
@@ -389,6 +392,31 @@ fn parse_lines(v: &Value, known: &HashSet<LineRef>) -> Vec<LineRef> {
 }
 
 /// Check the questions against the diff and drop the ones that do not fit.
+/// A model sometimes answers with a remark instead of a question ("I can't think of a
+/// question for this file"). Those are left out, so the round is asked again.
+fn is_no_question(prompt: &str) -> bool {
+    let p = prompt.to_lowercase().replace('\u{2019}', "'");
+    [
+        "can't think of",
+        "cannot think of",
+        "can not think of",
+        "couldn't think of",
+        "could not think of",
+        "can't come up with",
+        "cannot come up with",
+        "unable to come up with",
+        "unable to think of",
+        "no questions",
+        "no question to ask",
+        "nothing to ask",
+        "nothing worth asking",
+        "not enough information to ask",
+        "not enough context to ask",
+    ]
+    .iter()
+    .any(|m| p.contains(m))
+}
+
 pub fn parse_round(raw: &str, path: &str, known: &KnownLines) -> Result<Round, String> {
     let json = json_part(raw).ok_or("no JSON object")?;
     let v: Value = serde_json::from_str(json).map_err(|e| format!("invalid JSON: {e}"))?;
@@ -408,7 +436,7 @@ pub fn parse_round(raw: &str, path: &str, known: &KnownLines) -> Result<Round, S
             .unwrap_or_default()
             .trim()
             .to_string();
-        if prompt.is_empty() {
+        if prompt.is_empty() || is_no_question(&prompt) {
             continue;
         }
         let mut lines = parse_lines(&q["lines"], &known.all);
@@ -518,7 +546,9 @@ pub fn quest_round(
     let system = round_prompt(ctx);
     let user = round_input(ctx, &diff);
     let mut last = String::new();
-    for _ in 0..2 {
+    // Small models sometimes answer with a remark instead of questions; asking again often
+    // works, so up to three times.
+    for _ in 0..3 {
         if token.is_cancelled() {
             return Err(GitError::Cancelled);
         }
@@ -686,7 +716,9 @@ pub fn quest_reply(
         ctx.quest.path, ctx.question
     );
     let mut last = String::new();
-    for _ in 0..2 {
+    // Small models sometimes answer with a remark instead of questions; asking again often
+    // works, so up to three times.
+    for _ in 0..3 {
         let mut raw = String::new();
         chat_json(
             &ep,
@@ -822,6 +854,32 @@ mod tests {
             &known
         )
         .is_err());
+    }
+
+    #[test]
+    fn leaves_out_remarks_that_are_no_questions() {
+        let known = KnownLines {
+            all: HashSet::new(),
+            changed: HashSet::new(),
+        };
+        // Only a remark: no usable questions, so the round is asked again.
+        assert!(parse_round(
+            r#"{"questions":[{"type":"open","question":"I can’t think of a question for this small change.","explanation":""}]}"#,
+            "x",
+            &known
+        )
+        .is_err());
+        let round = parse_round(
+            r#"{"questions":[
+             {"type":"open","question":"There is nothing to ask about this file.","explanation":""},
+             {"type":"open","question":"What happens when the city list is empty?","explanation":"Look at the loop."}
+            ]}"#,
+            "x",
+            &known,
+        )
+        .unwrap();
+        assert_eq!(round.questions.len(), 1);
+        assert!(round.questions[0].prompt.starts_with("What happens"));
     }
 
     #[test]

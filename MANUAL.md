@@ -279,6 +279,15 @@ the change, and you decide what is right.
   - **Find the line**: click the right line in the diff.
   - **Your take**: an open question. The AI responds to your answer, never calls it wrong and
     never asks you something back, and may suggest a review comment you can edit and keep.
+- The AI prepares the questions in the background, one file at a time: the open file first,
+  then the files after it, so the next file is usually ready when you get there. The circle
+  before each file shows how many questions are ready (a spinner while they are being
+  prepared, `!` when that failed). Choosing a file that has none yet asks for that one first.
+  While the AI responds to an open answer, preparing waits. **Stop** pauses preparing until
+  you continue.
+- When the AI answers with a remark instead of questions ("I can't think of a question"),
+  Branchline leaves it out and asks again, up to three times. **New questions** asks for
+  other questions about the file, until you answer one.
 - An answered question stays in view until **Next question**; **Skip question** and **Skip
   file** are always there.
 - Click any added or removed line to write a draft comment on it.
@@ -318,8 +327,13 @@ the change, and you decide what is right.
   description for the staged changes. The text streams in, `Esc` or Stop cancels it, and a
   message you had typed can be restored with Undo.
 - Thinking models (Qwen 3, DeepSeek R1, gpt-oss) are asked to answer without a thinking
-  step in Ollama, which is much faster for commit messages. Branchline also sets Ollama's
-  context size so the whole shortened diff fits.
+  step in Ollama, which is much faster for commit messages.
+- **Context length** (Ollama): how much text the model reads at once; 16K tokens by default.
+  Branchline asks for the same size on every request, because Ollama reloads the model
+  whenever it changes; only a prompt that does not fit makes it larger. The size sent with a
+  request always wins over the one set in Ollama itself, so if you set a size in Ollama (its
+  app, or `OLLAMA_CONTEXT_LENGTH`), choose **Ollama's setting** to use that one; then
+  switching between Branchline and a chat with the same model does not reload it either.
 - Only the staged diff (shortened), the list of changed files, the branch name and recent commit
   subjects are sent, and only when you ask. See [Privacy and security](#privacy-and-security).
 

@@ -43,6 +43,8 @@ export interface Settings {
     /** Ollama server and model. */
     url: string;
     model: string;
+    /** Context window asked of Ollama, in tokens; 0 uses Ollama's own setting. */
+    ollamaContext: number;
     compatibleUrl: string;
     compatibleModel: string;
     anthropicModel: string;
@@ -83,6 +85,7 @@ export const DEFAULT_SETTINGS: Settings = {
     provider: "ollama",
     url: "http://localhost:11434",
     model: "",
+    ollamaContext: 16384,
     compatibleUrl: "http://localhost:1234/v1",
     compatibleModel: "",
     anthropicModel: "",

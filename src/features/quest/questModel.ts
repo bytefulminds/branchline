@@ -155,6 +155,29 @@ export function stats(state: QuestState): QuestStats {
   return s;
 }
 
+/** Whether a file still needs its questions from the AI. */
+export function needsQuestions(round: RoundState | undefined): boolean {
+  return !round || (round.questions === null && !round.skipped && !round.done);
+}
+
+/**
+ * The next file to ask the AI about, one at a time: the open one first, then the files after
+ * it, then the ones before it. Files that failed wait for Try again.
+ */
+export function nextToPrepare(
+  plan: QuestPlan,
+  state: QuestState,
+  failed: Record<string, unknown>,
+): string | null {
+  const n = plan.rounds.length;
+  const start = state.current < n ? state.current : 0;
+  for (let k = 0; k < n; k++) {
+    const path = plan.rounds[(start + k) % n]!.path;
+    if (needsQuestions(state.rounds[path]) && !(path in failed)) return path;
+  }
+  return null;
+}
+
 /** Whether a question has been answered (or skipped). */
 export function isAnswered(a: AnswerState | undefined): boolean {
   return !!a && (a.skipped || a.choice !== undefined || !!a.line || a.text !== undefined);

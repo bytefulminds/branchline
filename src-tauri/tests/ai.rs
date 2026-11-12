@@ -419,6 +419,7 @@ fn anthropic_streams_text_deltas_with_its_own_headers() {
         base: url,
         key: Some("sk-ant-1".into()),
         model: "claude-new".into(),
+        context: 16_384,
     };
     assert_eq!(collect(&ep).unwrap(), "docs: explain providers");
 
@@ -457,6 +458,7 @@ fn anthropic_errors_in_the_stream_and_refused_keys_are_explained() {
         base: url.clone(),
         key: Some("bad".into()),
         model: "claude-new".into(),
+        context: 16_384,
     };
     let err = collect(&ep).unwrap_err();
     assert!(err.to_string().contains("Anthropic is busy"), "{err}");
@@ -489,6 +491,7 @@ fn openai_lists_chat_models_and_leaves_out_the_temperature() {
         base: url,
         key: Some("sk-1".into()),
         model: "o4-mini".into(),
+        context: 16_384,
     };
     assert_eq!(collect(&ep).unwrap(), "chore: tidy");
     let seen = seen.lock().unwrap();
