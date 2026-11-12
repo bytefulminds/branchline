@@ -145,9 +145,28 @@ fn route(path: &str) -> (u16, String) {
                 pr(3, "cy", &[], "acme/app", "feature"),
             ]}))
         }
-        "/2.0/pullrequests/%7Bada-uuid%7D" => {
+        // Removed by Bitbucket in April 2026 (CHANGE-2770), as it answers today.
+        "/2.0/pullrequests/%7Bada-uuid%7D" => (
+            404,
+            r#"{"type":"error","error":{"message":"There is no API hosted at this URL."}}"#.into(),
+        ),
+        "/2.0/user/workspaces" => json(serde_json::json!({ "values": [
+            { "administrator": false, "workspace": { "slug": "acme", "name": "Acme" } },
+            { "administrator": true, "workspace": { "slug": "ada-home", "name": "Ada" } },
+            { "administrator": false, "workspace": { "slug": "gone", "name": "Gone" } }
+        ]})),
+        "/2.0/workspaces/acme/pullrequests/%7Bada-uuid%7D" => {
+            assert!(query.contains("state=OPEN"), "{query}");
             json(serde_json::json!({ "values": [pr(2, "ada", &["bob"], "acme/app", "feature")] }))
         }
+        "/2.0/workspaces/ada-home/pullrequests/%7Bada-uuid%7D" => {
+            let mut newer = pr(7, "ada", &[], "acme/app", "feature");
+            newer["destination"]["repository"]["full_name"] = "ada-home/notes".into();
+            newer["updated_on"] = "2026-11-05T10:00:00+00:00".into();
+            json(serde_json::json!({ "values": [newer] }))
+        }
+        // A workspace you lost access to does not hide the others.
+        "/2.0/workspaces/gone/pullrequests/%7Bada-uuid%7D" => (403, r#"{"type":"error"}"#.into()),
         p if p.ends_with("/statuses") => {
             json(serde_json::json!({ "values": [{ "state": "SUCCESSFUL" }] }))
         }
@@ -211,7 +230,7 @@ fn connects_with_email_and_api_token() {
 #[test]
 fn lists_pull_requests_of_the_repository_by_role() {
     let _g = serial();
-    let (url, _) = fake_bitbucket(route);
+    let (url, seen) = fake_bitbucket(route);
     bitbucket::connect(&url, EMAIL, TOKEN).unwrap();
     let t = TempDir::new().unwrap();
     git(t.path(), &["init", "-q", "-b", "main"]);
@@ -242,8 +261,25 @@ fn lists_pull_requests_of_the_repository_by_role() {
     assert_eq!(all.items.len(), 3);
 
     // Across all repositories: yours, by user id; to review needs a repository.
+    // Bitbucket removed the cross-workspace endpoint, so each workspace is asked; newest first.
     let everywhere = review_requests(repo, true, RequestFilter::CreatedByYou).unwrap();
-    assert_eq!(everywhere.items.len(), 1);
+    let found: Vec<(String, u64)> = everywhere
+        .items
+        .iter()
+        .map(|p| (p.project_path.clone(), p.iid))
+        .collect();
+    assert_eq!(
+        found,
+        vec![
+            ("ada-home/notes".to_string(), 7),
+            ("acme/app".to_string(), 2)
+        ]
+    );
+    assert!(seen
+        .lock()
+        .unwrap()
+        .iter()
+        .all(|p| !p.starts_with("/2.0/pullrequests/")));
     let err = review_requests(repo, true, RequestFilter::ReviewRequested)
         .unwrap_err()
         .to_string();

@@ -1,6 +1,6 @@
 [package]
 name = "branchline"
-version = "0.3.0"
+version = "0.3.1"
 description = "Branchline: a fast, local-first, open-source Git desktop client"
 authors = ["Branchline contributors"]
 license = "MIT"

@@ -248,14 +248,16 @@ Updates are signed with Branchline's own update key, so only genuine releases ar
   need some tuning) works the same way, with pull requests (`#4`) instead of merge
   requests (`!4`). Bitbucket signs in with your Atlassian account's **email address** and an
   **API token with scopes** (app passwords no longer work): "Create a token on Bitbucket" opens
-  the Atlassian page. Give it `read:user`, `read:pullrequest` and `read:repository` for
-  Bitbucket; `write:pullrequest` will be needed for commenting and approving later. Both are
+  the Atlassian page. Give it `read:user`, `read:pullrequest`, `read:repository` and
+  `read:workspace` for Bitbucket (the last one for **Created by you** across all your
+  workspaces); `write:pullrequest` will be needed for commenting and approving later. Both are
   kept together in the password store. Bitbucket Data Center is not supported yet.
 - Bitbucket has no merge request refs, so opening a pull request fetches its source branch
   (from the fork when it comes from one, at the same kind of address as your remote) and its
   target branch into `refs/branchline/pull-requests/<number>/`, and the diff starts where the
   branch forked from the target. Pull requests to review are listed per repository: across
-  all of Bitbucket only **Created by you** is available. Build statuses show as the pipeline.
+  all of Bitbucket only **Created by you** is available; Branchline asks each of your
+  workspaces for it (up to 20). Build statuses show as the pipeline.
 - Bitbucket does not say whether a pull request merges cleanly, so when you open one,
   Branchline tries the merge on this computer (`git merge-tree`, which touches neither your
   files nor your branches). The overview then shows "Merges cleanly" or the files that would

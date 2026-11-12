@@ -7,6 +7,18 @@ description on GitLab.
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-11-12
+
+A fix for Bitbucket: **Created by you** across all repositories works again.
+
+### Fixed
+
+- Bitbucket: Reviews could not list your pull requests across all repositories (status
+  404). Bitbucket removed the API for that in April 2026; Branchline now asks each of your
+  workspaces instead. Give the API token the `read:workspace` scope for this (Settings >
+  Accounts says so). An API that Bitbucket no longer offers is now reported as such, instead
+  of as "could not find".
+
 ## [0.3.0] - 2026-11-09
 
 Review with an AI as your game master: Branchline walks you through a merge request (or your

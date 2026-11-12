@@ -1,7 +1,7 @@
 {
   "name": "branchline",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Branchline: a fast, local-first, open-source Git desktop client.",
   "license": "MIT",
   "type": "module",
@@ -17,6 +17,7 @@
     "test:watch": "vitest",
     "licenses": "node scripts/licenses.mjs",
     "licenses:check": "node scripts/licenses.mjs --check",
+    "check:bitbucket": "node scripts/check-bitbucket.mjs",
     "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml",
     "check": "npm run typecheck && npm run lint && npm run format:check && npm test && npm run test:rust && cargo fmt --check --manifest-path src-tauri/Cargo.toml",
     "tauri": "tauri",
