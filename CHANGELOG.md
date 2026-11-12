@@ -7,6 +7,12 @@ description on GitLab.
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-11-13
+
+The review quest gets faster: the AI prepares the questions in the background while you play,
+and Ollama no longer reloads the model between requests. Bitbucket's **Created by you** works
+again. (0.3.1 was not released; its fix is part of this version.)
+
 ### Added
 
 - Review quest: the AI prepares the questions in the background, one file at a time, so the
@@ -17,23 +23,16 @@ description on GitLab.
 
 ### Fixed
 
-- Review quest: a remark such as "I can't think of a question" is no longer shown as a
-  question; Branchline asks again (up to three times).
-- Ollama: the context size no longer changes from request to request, which made Ollama
-  reload the model between requests. Before, Branchline also always replaced the size set in
-  Ollama itself; now you can keep that one.
-
-## [0.3.1] - 2026-11-12
-
-A fix for Bitbucket: **Created by you** across all repositories works again.
-
-### Fixed
-
 - Bitbucket: Reviews could not list your pull requests across all repositories (status
   404). Bitbucket removed the API for that in April 2026; Branchline now asks each of your
   workspaces instead. Give the API token the `read:workspace` scope for this (Settings >
   Accounts says so). An API that Bitbucket no longer offers is now reported as such, instead
   of as "could not find".
+- Review quest: a remark such as "I can't think of a question" is no longer shown as a
+  question; Branchline asks again (up to three times).
+- Ollama: the context size no longer changes from request to request, which made Ollama
+  reload the model between requests. Before, Branchline also always replaced the size set in
+  Ollama itself; now you can keep that one.
 
 ## [0.3.0] - 2026-11-09
 
