@@ -252,6 +252,10 @@ Updates are signed with Branchline's own update key, so only genuine releases ar
   `read:workspace` for Bitbucket (the last one for **Created by you** across all your
   workspaces); `write:pullrequest` will be needed for commenting and approving later. Both are
   kept together in the password store. Bitbucket Data Center is not supported yet.
+- Remotes on Bitbucket's SSH addresses (`git@ssh.bitbucket.org:...`, and
+  `altssh.bitbucket.org` on port 443) count as Bitbucket Cloud, as does `altssh.gitlab.com`
+  for GitLab.com. A host alias from your SSH config (such as `bitbucket-work`) is not
+  recognized yet; Reviews then says which host it could not match.
 - Bitbucket has no merge request refs, so opening a pull request fetches its source branch
   (from the fork when it comes from one, at the same kind of address as your remote) and its
   target branch into `refs/branchline/pull-requests/<number>/`, and the diff starts where the

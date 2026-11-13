@@ -8,8 +8,10 @@ use std::path::Path;
 use std::process::Command;
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 
-use branchline_lib::forge::accounts::{self, Access, ForgeKind};
-use branchline_lib::forge::{bitbucket, open_request, review_requests, RequestFilter};
+use branchline_lib::forge::accounts::{self, Access, Account, ForgeKind};
+use branchline_lib::forge::{
+    bitbucket, open_request, review_requests, review_source, RequestFilter,
+};
 use branchline_lib::secrets;
 use tempfile::TempDir;
 
@@ -411,4 +413,54 @@ fn opens_pull_requests_from_a_branch_and_from_a_fork() {
     assert_eq!(fork_detail.files[0].path, "other.txt");
     assert_eq!(fork_detail.conflict_files, Some(vec![]));
     assert!(!fork_detail.request.has_conflicts);
+}
+
+#[test]
+fn matches_remotes_on_bitbucket_s_ssh_host() {
+    let _g = serial();
+    // Bitbucket Cloud moved SSH to ssh.bitbucket.org; the account is on bitbucket.org.
+    accounts::upsert(Account {
+        kind: ForgeKind::Bitbucket,
+        url: bitbucket::CLOUD_URL.into(),
+        host: "bitbucket.org".into(),
+        id: 0,
+        uid: Some(ME.into()),
+        username: "ada".into(),
+        name: "Ada".into(),
+        access: Access::Unknown,
+    })
+    .unwrap();
+    for remote in [
+        "git@ssh.bitbucket.org:acme/app.git",
+        "ssh://git@altssh.bitbucket.org:443/acme/app.git",
+        "git@bitbucket.org:acme/app.git",
+    ] {
+        let t = TempDir::new().unwrap();
+        git(t.path(), &["init", "-q", "-b", "main"]);
+        git(t.path(), &["remote", "add", "origin", remote]);
+        let source = review_source(t.path().to_str().unwrap()).unwrap().unwrap();
+        assert_eq!(source.host, "bitbucket.org", "{remote}");
+        assert_eq!(source.project, "acme/app");
+        assert_eq!(
+            source.account.map(|a| a.kind),
+            Some(ForgeKind::Bitbucket),
+            "{remote}"
+        );
+    }
+
+    // A remote Branchline cannot match says so, instead of only pointing at repositories.
+    let t = TempDir::new().unwrap();
+    git(t.path(), &["init", "-q", "-b", "main"]);
+    git(
+        t.path(),
+        &["remote", "add", "origin", "git@bitbucket-work:acme/app.git"],
+    );
+    let err = review_requests(
+        t.path().to_str().unwrap(),
+        false,
+        RequestFilter::ReviewRequested,
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(err.contains("bitbucket-work"), "{err}");
 }

@@ -213,6 +213,11 @@ pub fn review_requests(
     // The repository's own project when its host has a connected account; otherwise all
     // projects of the first connected account.
     let source = review_source(repo)?;
+    // The repository's host, when no connected account matches it (for the messages below).
+    let unmatched = source
+        .as_ref()
+        .filter(|s| s.account.is_none())
+        .map(|s| s.host.clone());
     let (account, own_project) = match source.and_then(|s| s.account.map(|a| (a, s.project))) {
         Some((account, project)) => (account, Some(project)),
         None => {
@@ -230,6 +235,16 @@ pub fn review_requests(
             "Choose one project to see all of its open {}s.",
             account.kind.noun()
         )));
+    }
+    // Bitbucket lists requests to review per repository only: say why this one is not used.
+    if own_project.is_none() && account.kind == ForgeKind::Bitbucket {
+        if let (Some(host), RequestFilter::ReviewRequested) = (&unmatched, filter) {
+            return Err(GitError::Forge(format!(
+                "This repository's remote is on {host}, and none of your connected accounts is, \
+                 so Branchline cannot list its pull requests. Bitbucket lists pull requests to \
+                 review per repository; Created by you works across all of them."
+            )));
+        }
     }
     let project = own_project.as_deref().filter(|_| !all_projects);
     let (items, max) = match account.kind {

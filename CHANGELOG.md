@@ -35,6 +35,9 @@ again. (0.3.1 was not released; its fix is part of this version.)
   workspaces instead. Give the API token the `read:workspace` scope for this (Settings >
   Accounts says so). An API that Bitbucket no longer offers is now reported as such, instead
   of as "could not find".
+- Bitbucket: repositories cloned over SSH from `ssh.bitbucket.org` (Bitbucket's new SSH
+  address) or `altssh.bitbucket.org` were not recognized, so Reviews showed no pull requests
+  for them. When a remote matches none of your accounts, Reviews now says so.
 - Review quest: a remark such as "I can't think of a question" is no longer shown as a
   question; Branchline asks again (up to three times).
 - Ollama: the context size no longer changes from request to request, which made Ollama

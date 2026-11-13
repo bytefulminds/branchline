@@ -45,7 +45,7 @@ pub fn parse_remote(url: &str) -> Option<RemoteLocation> {
         .trim_end_matches('/')
         .trim_end_matches(".git")
         .trim_end_matches('/');
-    let host = host.to_ascii_lowercase();
+    let host = web_host(&host.to_ascii_lowercase()).to_string();
     if host.is_empty()
         || path.is_empty()
         || !path.contains('/')
@@ -59,6 +59,18 @@ pub fn parse_remote(url: &str) -> Option<RemoteLocation> {
         host,
         path: path.to_string(),
     })
+}
+
+/// The web host for a hosting service's separate SSH host, so a remote such as
+/// `git@ssh.bitbucket.org:team/app.git` matches the account on `bitbucket.org`. Bitbucket
+/// Cloud moved SSH access to `ssh.bitbucket.org` in 2026; `altssh` hosts serve SSH on port
+/// 443 for networks that block port 22.
+pub fn web_host(host: &str) -> &str {
+    match host {
+        "ssh.bitbucket.org" | "altssh.bitbucket.org" => "bitbucket.org",
+        "altssh.gitlab.com" => "gitlab.com",
+        other => other,
+    }
 }
 
 /// The host name of a web address (`https://gitlab.example.com:8443/x` gives
@@ -103,6 +115,26 @@ mod tests {
         assert_eq!(
             parse_remote("https://gitlab.example.com:8443/team/app"),
             loc("gitlab.example.com", "team/app")
+        );
+    }
+
+    #[test]
+    fn maps_ssh_hosts_to_the_service() {
+        assert_eq!(
+            parse_remote("git@ssh.bitbucket.org:acme/app.git"),
+            loc("bitbucket.org", "acme/app")
+        );
+        assert_eq!(
+            parse_remote("ssh://git@altssh.bitbucket.org:443/acme/app.git"),
+            loc("bitbucket.org", "acme/app")
+        );
+        assert_eq!(
+            parse_remote("ssh://git@altssh.gitlab.com:443/group/app.git"),
+            loc("gitlab.com", "group/app")
+        );
+        assert_eq!(
+            parse_remote("git@bitbucket.org:acme/app.git"),
+            loc("bitbucket.org", "acme/app")
         );
     }
 
