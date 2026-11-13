@@ -23,6 +23,8 @@ again. (0.3.1 was not released; its fix is part of this version.)
 
 ### Changed
 
+- Manual: how to install Node.js and Rust, check your setup, and fix common build errors
+  (such as "failed to run cargo metadata") when building from source.
 - Settings > AI and the manual now say what each AI feature sends (a commit message, rewrite
   suggestions, the review quest), instead of only mentioning the staged diff.
 

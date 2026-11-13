@@ -154,7 +154,9 @@ the `.AppImage`, `.deb` or `.rpm` for Linux. Branchline needs
 [Install](MANUAL.md#install) in the manual says how to open them the first time.
 
 Or build Branchline from source, with Node.js 20 or newer and Rust 1.77 or newer (plus the
-[Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for your system):
+[Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for your system). The
+manual's [For developers](MANUAL.md#for-developers) section says how to install them, how to
+check your setup, and what to do when the first build fails:
 
 ```bash
 git clone https://gitlab.com/bytefulminds/branchline.git

@@ -513,8 +513,8 @@ by page. Method and all numbers per platform: [docs/performance.md](docs/perform
   and shows descriptions and comments as plain text (Markdown is not formatted yet). It
   lists the first 100 commits and comment threads. The fetched `refs/branchline/...` refs stay
   in the repository; `git update-ref -d` removes one.
-- Runs on macOS and Linux; Windows has not been run yet. Automated tests and measurements so far
-  ran on Linux.
+- Builds are made for macOS, Windows and Linux; the Windows builds are the newest and the
+  least tried. The automated tests run on Linux; the release pipeline builds on all three.
 
 ## For developers
 
@@ -524,7 +524,7 @@ by page. Method and all numbers per platform: [docs/performance.md](docs/perform
 |---|---|
 | Git | 2.20 or newer on `PATH` (Branchline also checks common install locations) |
 | Node.js | 20 or newer (22 LTS recommended) |
-| Rust | stable, 1.77 or newer (`rustup` recommended) |
+| Rust | stable, 1.77 or newer, installed with [rustup](https://rustup.rs) |
 
 Platform requirements for Tauri 2 (full details: <https://v2.tauri.app/start/prerequisites/>):
 
@@ -536,7 +536,36 @@ Platform requirements for Tauri 2 (full details: <https://v2.tauri.app/start/pre
     libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
   ```
 
+### Installing Node.js and Rust
+
+- **Node.js:** the LTS installer from [nodejs.org](https://nodejs.org), or your package
+  manager (`brew install node`, `winget install OpenJS.NodeJS.LTS`).
+- **Rust**, with rustup:
+  - macOS and Linux:
+    ```sh
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+    ```
+  - Windows: run `rustup-init.exe` from [rustup.rs](https://rustup.rs) with the default
+    options (install the C++ Build Tools above first, or let it install them).
+  - Then open a **new** terminal, so it finds `cargo`. On macOS and Linux,
+    `source "$HOME/.cargo/env"` works in the current one; on Windows, sign out and in again
+    if a new terminal still does not find it.
+- Keep Rust up to date with `rustup update`.
+
+### Check your setup
+
+All of these should print a version before the first run:
+
+```sh
+git --version      # 2.20 or newer
+node --version     # 20 or newer
+cargo --version    # 1.77 or newer
+```
+
 ### Getting started
+
+The first `npm run app:dev` takes several minutes: it compiles all Rust libraries once. Later
+runs only rebuild what changed.
 
 ```sh
 npm install
@@ -546,6 +575,16 @@ npx tauri dev -- -- /path/to/repo     # open a repository on launch
 
 `npm run dev` starts only the web frontend in a browser. It renders, but Git features need the
 desktop shell and will say so.
+
+### Troubleshooting
+
+| Problem | Cause and fix |
+|---|---|
+| `failed to run 'cargo metadata'` | Rust is not installed, or `cargo` is not on the `PATH` of this terminal. Install it with rustup (above) and open a new terminal; `cargo --version` must work. |
+| `cargo` errors about the lock file or a crate needing a newer Rust | Rust is too old: `rustup update`. |
+| Linux: `webkit2gtk-4.1` or `javascriptcoregtk` not found | The Tauri system packages are missing; install the `apt` line above (or your distribution's equivalent). |
+| Windows: `link.exe` not found | The Microsoft C++ Build Tools ("Desktop development with C++") are missing. |
+| `npm run app:dev` is much slower than the installed app | Expected: development builds of the Rust code are not optimized, and the frontend is served unbundled. Judge speed with a release build: `npx tauri build --no-bundle`, then run `src-tauri/target/release/branchline` (`branchline.exe` on Windows). |
 
 ### Scripts
 
