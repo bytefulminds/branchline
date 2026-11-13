@@ -7,6 +7,7 @@ import { installTauriTestEnvironment, openButton, REPO, setup } from "../../test
 import type { FileDiff } from "../../types/git";
 import { DEFAULT_SETTINGS, type Settings } from "../../types/settings";
 import type { QuestPlan, Round } from "../../types/quest";
+import { ConfirmProvider } from "../../components/ConfirmDialog";
 import { QuestView } from "./QuestView";
 import { coverage, emptyQuest, lineRefAt, nextToPrepare, pointsFor, POINTS } from "./questModel";
 import type { QuestSpec } from "./QuestProvider";
@@ -241,6 +242,56 @@ describe("preparing questions", () => {
     hold = false;
     await user.click(screen.getByRole("button", { name: "Continue" }));
     expect(await screen.findByRole("region", { name: "Question 1 of 3" })).toBeInTheDocument();
+  });
+});
+
+describe("restarting a quest", () => {
+  it("asks new questions for every file and starts over, keeping draft comments", async () => {
+    // A saved quest: one file done with a question answered, points and a draft comment.
+    window.localStorage.setItem(
+      `branchline.quest.${SPEC.storageKey}`,
+      JSON.stringify({
+        ...emptyQuest(SPEC.head),
+        current: 1,
+        points: 40,
+        rounds: {
+          "src/api.py": {
+            questions: [ROUND.questions[0]],
+            answers: [{ choice: 0, correct: true }],
+            done: true,
+            skipped: false,
+          },
+        },
+        comments: [{ id: "c1", path: "src/api.py", line: null, body: "Cache size?" }],
+      }),
+    );
+    const user = userEvent.setup();
+    const calls = setup((cmd) => {
+      if (cmd === "get_settings") return AI_ON;
+      if (cmd === "quest_plan") return PLAN;
+      if (cmd === "quest_round") return ROUND;
+      if (cmd === "range_file_diff") return DIFF;
+    });
+    render(
+      <ConfirmProvider>
+        <QuestView spec={SPEC} onExit={() => {}} />
+      </ConfirmProvider>,
+    );
+    const summary = await screen.findByRole("region", { name: "Quest summary" });
+    expect(screen.getByText(/40 points/, { selector: ".bl-quest__points" })).toBeInTheDocument();
+    expect(calls.some((c) => c.cmd === "quest_round")).toBe(false);
+
+    await user.click(within(summary).getByRole("button", { name: "Restart quest" }));
+    const ask = await screen.findByRole("alertdialog");
+    expect(ask).toHaveTextContent("draft comment stays");
+    await user.click(within(ask).getByRole("button", { name: "Restart quest" }));
+
+    expect(await screen.findByRole("region", { name: "Question 1 of 3" })).toBeInTheDocument();
+    expect(calls.filter((c) => c.cmd === "quest_round")).toHaveLength(1);
+    expect(screen.getByText(/0 points/, { selector: ".bl-quest__points" })).toBeInTheDocument();
+    const saved = JSON.parse(window.localStorage.getItem(`branchline.quest.${SPEC.storageKey}`)!);
+    expect(saved.comments).toHaveLength(1);
+    expect(saved.points).toBe(0);
   });
 });
 

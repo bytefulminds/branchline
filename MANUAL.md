@@ -291,8 +291,9 @@ The AI is the game master, not the reviewer: it asks questions that make you loo
 the change, and you decide what is right.
 
 - One round per changed file. The more a file changed, the more questions it gets: one for a
-  small fix, up to five for a large change (by its changed lines). A model that answers a
-  large change with clearly too few questions is asked once more. The questions are:
+  small fix, up to five for a large change (by its changed lines). With Ollama the count is
+  enforced while the model writes; a model that still answers a large change with clearly too
+  few usable questions is asked once more. The questions are:
   - **Quiz** (multiple choice) and **true or false**: answer once; the explanation says why,
     and the lines that matter light up in the diff.
   - **Find the line**: click the right line in the diff.
@@ -318,6 +319,8 @@ the change, and you decide what is right.
 - The summary shows your points, coverage and draft comments: edit or remove them, or copy
   them all. Posting them to GitLab from Branchline comes in a later version.
 - Progress is saved per merge request on this computer, so you can stop and continue later.
+  **Restart** (at the top, and **Restart quest** on the summary) starts over: new questions
+  for every file, and answers, points and progress from zero. Your draft comments stay.
   A new commit on the merge request starts a new quest.
 - **Review my branch** (**Review with AI** in Changes, the current branch's menu in Branches,
   the newest commit's menu in History, or the command palette) plays the same quest on your

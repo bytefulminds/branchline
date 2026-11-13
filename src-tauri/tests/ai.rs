@@ -810,4 +810,8 @@ fn asks_again_when_a_large_change_gets_too_few_questions() {
     let body: serde_json::Value = serde_json::from_str(&asked[0].1).unwrap();
     let system = body["messages"][0]["content"].as_str().unwrap();
     assert!(system.contains("Ask 3 questions"), "{system}");
+    assert!(system.contains("with 3 objects in"), "{system}");
+    // Ollama enforces the count while the model writes.
+    assert_eq!(body["format"]["properties"]["questions"]["minItems"], 3);
+    assert_eq!(body["format"]["properties"]["questions"]["maxItems"], 5);
 }

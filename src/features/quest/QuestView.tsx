@@ -7,6 +7,7 @@ import {
   Flag,
   MessageSquarePlus,
   RefreshCw,
+  RotateCcw,
   SkipForward,
   Sparkles,
   Square,
@@ -15,6 +16,7 @@ import {
 } from "lucide-react";
 import { useEffect, useId, useMemo, useState } from "react";
 import { Button } from "../../components/Button";
+import { useConfirm } from "../../components/ConfirmDialog";
 import { Spinner } from "../../components/Spinner";
 import { StatusLetter } from "../../components/StatusLetter";
 import { splitPath } from "../../lib/format";
@@ -35,6 +37,7 @@ import {
   isAnswered,
   lineLabel,
   lineRefAt,
+  emptyQuest,
   loadQuest,
   nextToPrepare,
   POINTS,
@@ -664,6 +667,7 @@ function Summary({
   onEdit,
   onRemove,
   onExit,
+  onRestart,
 }: {
   spec: QuestSpec;
   plan: QuestPlan;
@@ -671,6 +675,7 @@ function Summary({
   onEdit: (id: string, body: string) => void;
   onRemove: (id: string) => void;
   onExit: () => void;
+  onRestart: () => void;
 }) {
   const s = stats(state);
   const cov = coverage(plan, state);
@@ -770,6 +775,9 @@ function Summary({
         <Button variant="primary" icon={<ArrowLeft size={14} aria-hidden />} onClick={onExit}>
           Back to {spec.backLabel.toLowerCase()}
         </Button>
+        <Button variant="ghost" icon={<RotateCcw size={14} aria-hidden />} onClick={onRestart}>
+          Restart quest
+        </Button>
       </div>
     </section>
   );
@@ -785,6 +793,7 @@ export function QuestView({ spec, onExit }: { spec: QuestSpec; onExit: () => voi
   // Stop pauses preparing questions; an open answer with the AI waits it out too.
   const [paused, setPaused] = useState(false);
   const [replying, setReplying] = useState(false);
+  const confirm = useConfirm();
 
   useEffect(() => {
     let cancelled = false;
@@ -859,6 +868,23 @@ export function QuestView({ spec, onExit }: { spec: QuestSpec; onExit: () => voi
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [preparing]);
+  // A fresh quest: new questions for every file, answers and points from zero. Draft comments
+  // are kept, since they are your own findings.
+  const restart = async () => {
+    const ok = await confirm({
+      title: "Restart the quest?",
+      description: `The AI asks new questions about every file, and your answers, points and progress start over.${
+        state.comments.length
+          ? ` Your ${state.comments.length === 1 ? "draft comment stays" : `${state.comments.length} draft comments stay`}.`
+          : ""
+      }`,
+      confirmLabel: "Restart quest",
+    });
+    if (!ok) return;
+    setFailed({});
+    setPaused(false);
+    update((s) => ({ ...emptyQuest(spec.head), comments: s.comments }));
+  };
   const retry = (path: string) => {
     setFailed((f) => {
       const rest = { ...f };
@@ -897,6 +923,17 @@ export function QuestView({ spec, onExit }: { spec: QuestSpec; onExit: () => voi
           <Trophy size={14} aria-hidden /> {state.points} points
           <Gain gain={gain} />
         </span>
+        {plan && (
+          <Button
+            size="sm"
+            variant="ghost"
+            icon={<RotateCcw size={14} aria-hidden />}
+            title="New questions for every file, answers and points from zero"
+            onClick={() => void restart()}
+          >
+            Restart
+          </Button>
+        )}
         {plan && !atSummary && (
           <Button
             size="sm"
@@ -1008,6 +1045,7 @@ export function QuestView({ spec, onExit }: { spec: QuestSpec; onExit: () => voi
                     update((s) => ({ ...s, comments: s.comments.filter((c) => c.id !== id) }))
                   }
                   onExit={onExit}
+                  onRestart={() => void restart()}
                 />
               ) : (
                 file && (

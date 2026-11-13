@@ -32,7 +32,10 @@ released; its fix is part of this version.)
 ### Changed
 
 - Review quest: larger changes get more questions, from one for a small fix to five for a
-  large change, instead of one to three (which small models mostly read as one).
+  large change, instead of one to three (which small models mostly read as one). With Ollama
+  the count is enforced while the model writes.
+- Review quest: **Restart** starts a quest over with new questions for every file, keeping
+  your draft comments.
 - Reviews: the overview of a merge request fills the pane, like a file's diff does.
 - Manual: how to install Node.js and Rust, check your setup, and fix common build errors
   (such as "failed to run cargo metadata") when building from source.

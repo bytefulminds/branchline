@@ -262,7 +262,9 @@ fn numbered_diff(repo: &str, ctx: &QuestContext) -> Result<(String, KnownLines),
     Ok((out, lines))
 }
 
-fn round_schema() -> Value {
+/// The answer's shape. For Ollama it is enforced while the model writes, so `minItems` makes
+/// it write at least `count` questions instead of settling for one.
+fn round_schema(count: usize) -> Value {
     let line = json!({
         "type": "object",
         "properties": {
@@ -276,6 +278,8 @@ fn round_schema() -> Value {
         "properties": {
             "questions": {
                 "type": "array",
+                "minItems": count,
+                "maxItems": MAX_QUESTIONS,
                 "items": {
                     "type": "object",
                     "properties": {
@@ -294,7 +298,6 @@ fn round_schema() -> Value {
     })
 }
 
-/// Instructions for asking about one file.
 /// Most questions asked about one file.
 pub const MAX_QUESTIONS: usize = 5;
 
@@ -310,6 +313,7 @@ pub fn question_count(changed_lines: usize) -> usize {
     }
 }
 
+/// Instructions for asking `count` questions about one file.
 pub fn round_prompt(ctx: &QuestContext, count: usize) -> String {
     let ask = if count == 1 {
         "Ask 1 question".to_string()
@@ -353,9 +357,10 @@ or two sentences. Wrong answers are no failure; the explanation teaches.\n\
 of a question: even a small change has something to check, such as a name, a value, a \
 missing test or what happens on an error.\n\
 \n\
-Answer with JSON only: {{\"questions\": [{{\"type\": \"choice\", \"question\": \"...\", \"choices\": \
-[\"...\"], \"answer\": 0, \"lines\": [{{\"side\": \"new\", \"line\": 17}}], \"explanation\": \
-\"...\"}}]}}"
+Answer with JSON only, with {count} objects in \"questions\", one per question: \
+{{\"questions\": [{{\"type\": \"choice\", \"question\": \"...\", \"choices\": [\"...\"], \
+\"answer\": 0, \"lines\": [{{\"side\": \"new\", \"line\": 17}}], \"explanation\": \"...\"}}, \
+{{\"type\": \"open\", \"question\": \"...\", \"explanation\": \"...\"}}, ...]}}"
     )
 }
 
@@ -585,7 +590,7 @@ pub fn quest_round(
             &system,
             &user,
             MAX_TOKENS,
-            &round_schema(),
+            &round_schema(wanted),
             &token,
             &mut |p| {
                 raw.push_str(p);
