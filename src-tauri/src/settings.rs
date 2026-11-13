@@ -173,6 +173,10 @@ pub struct AiSettings {
     pub url: String,
     /// Ollama model.
     pub model: String,
+    /// Context window asked of Ollama, in tokens. 0 leaves it to Ollama's own setting (its
+    /// app or `OLLAMA_CONTEXT_LENGTH`). A fixed size keeps Ollama from reloading the model
+    /// between requests, which it does whenever the size changes.
+    pub ollama_context: u32,
     /// Base address of an OpenAI-compatible server, for example `http://localhost:1234/v1`.
     pub compatible_url: String,
     pub compatible_model: String,
@@ -195,6 +199,7 @@ impl Default for AiSettings {
             provider: AiProvider::Ollama,
             url: "http://localhost:11434".into(),
             model: String::new(),
+            ollama_context: 16_384,
             compatible_url: "http://localhost:1234/v1".into(),
             compatible_model: String::new(),
             anthropic_model: String::new(),

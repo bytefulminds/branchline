@@ -52,7 +52,7 @@ export const FORGES: Record<ForgeKind, ForgeInfo> = {
     ref: "#",
     tokenName: "API token",
     tokenHelp:
-      "an API token with scopes for Bitbucket, with read:user, read:pullrequest and read:repository (add write:pullrequest to comment and approve later)",
+      "an API token with scopes for Bitbucket, with read:user, read:pullrequest, read:repository and read:workspace (add write:pullrequest to comment and approve later)",
     tokenPlaceholder: "ATATT…",
     needsEmail: true,
     access: {

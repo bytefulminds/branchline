@@ -87,6 +87,16 @@ function useStoredKey(provider: AiProvider) {
   return { exists, changed: () => setRound((n) => n + 1) };
 }
 
+/** Ollama context sizes to choose from; 0 leaves it to Ollama. */
+const CONTEXT_OPTIONS: [number, string][] = [
+  [0, "Ollama's setting"],
+  [8192, "8K tokens"],
+  [16384, "16K tokens (default)"],
+  [32768, "32K tokens"],
+  [65536, "64K tokens"],
+  [131072, "128K tokens"],
+];
+
 function ApiKeyField({
   provider,
   exists,
@@ -186,6 +196,7 @@ export function AiSection({ s, set }: { s: Settings; set: Setter }) {
   const url = providerUrl(ai);
   const model = providerModel(ai);
   const ids = {
+    context: useId(),
     provider: useId(),
     url: useId(),
     model: useId(),
@@ -273,12 +284,12 @@ export function AiSection({ s, set }: { s: Settings; set: Setter }) {
   return (
     <>
       <p className="bl-setting__help bl-setting__intro">
-        Branchline can use an AI model to help you. Today it writes a first draft of your commit
-        message from the staged changes; reviewing merge requests comes next. Choose where the model
-        runs: with <strong>Ollama</strong> or your own server, nothing leaves your computer or
-        network; with <strong>Anthropic</strong> or <strong>OpenAI</strong>, it goes to their cloud.
-        Nothing is sent until you ask for it, and with AI off, no AI feature appears anywhere in
-        Branchline.
+        Branchline can use an AI model to help you: it writes a first draft of your commit message,
+        suggests how to tidy a branch before you share it, and runs the review quest on merge
+        requests and your own branch. Choose where the model runs: with <strong>Ollama</strong> or
+        your own server, nothing leaves your computer or network; with <strong>Anthropic</strong> or{" "}
+        <strong>OpenAI</strong>, it goes to their cloud. Nothing is sent until you ask for it, and
+        with AI off, no AI feature appears anywhere in Branchline.
       </p>
       <Toggle
         label="Use AI"
@@ -317,7 +328,9 @@ export function AiSection({ s, set }: { s: Settings; set: Setter }) {
       {provider.cloud && (
         <p className="bl-setting__help bl-setting__note">
           <span className="bl-setting__warning">
-            When you ask for a suggestion, your staged changes are sent to {provider.name}.
+            When you use an AI feature, the changes it is about are sent to {provider.name}: your
+            staged changes for a commit message, a branch&apos;s commits to rewrite, or a merge
+            request&apos;s changes in the review quest.
           </span>{" "}
           {ai.provider === "anthropic"
             ? "A Claude Pro or Max plan does not include the API."
@@ -337,7 +350,7 @@ export function AiSection({ s, set }: { s: Settings; set: Setter }) {
                 : "For example http://localhost:1234/v1 for LM Studio."}{" "}
               {remote && (
                 <span className="bl-setting__warning">
-                  Your staged changes are sent to this server; use one you trust.
+                  The changes you use AI on are sent to this server; use one you trust.
                   {url.toLowerCase().startsWith("http://") &&
                     " Plain http:// is not encrypted on the network."}
                 </span>
@@ -405,6 +418,26 @@ export function AiSection({ s, set }: { s: Settings; set: Setter }) {
         </select>
         {!provider.hasAddress && testButton}
       </Field>
+      {ai.provider === "ollama" && (
+        <Field
+          label="Context length"
+          help="How much text the model reads at once. Ollama reloads the model whenever this changes, so Branchline keeps it the same for every request. Choose Ollama's setting to use what you set in Ollama itself (its app, or OLLAMA_CONTEXT_LENGTH); if that is small, long changes get cut off."
+          htmlFor={ids.context}
+        >
+          <select
+            id={ids.context}
+            className="bl-input bl-setting__select"
+            value={ai.ollamaContext}
+            onChange={(e) => setAi({ ollamaContext: Number(e.target.value) })}
+          >
+            {CONTEXT_OPTIONS.map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </Field>
+      )}
       <div className="bl-setting__connection" role="status" aria-live="polite">
         {connection.state === "ok" && (
           <span className="bl-setting__ok">

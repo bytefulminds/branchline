@@ -3,6 +3,7 @@ import {
   ArrowDown,
   ArrowUp,
   ArrowUpFromLine,
+  BrushCleaning,
   Check,
   Cloud,
   CloudDownload,
@@ -35,6 +36,7 @@ import type { BranchInfo, RemoteInfo, RepositoryInfo } from "../../types/git";
 import { useSelfReview } from "../quest/useSelfReview";
 import { useIntegrateActions } from "../integrate/IntegrateActions";
 import { refDragProps, useRefDrop } from "../integrate/refDrag";
+import { CleanupDialog } from "./CleanupDialog";
 import { describeUrl } from "../remote/describeUrl";
 import { useRemoteActions } from "../remote/RemoteActions";
 import { useWorktreeActions } from "../worktrees/WorktreeActions";
@@ -74,6 +76,8 @@ function Tracking({ branch }: { branch: BranchInfo }) {
 export type BranchSort = "name" | "date";
 
 const SORT_KEY = "branchline.branches.sort";
+const VIEW_KEY = "branchline.branches.view";
+type BranchView = "local" | "remote";
 
 /** Branches by name (natural order, so `release-9` comes before `release-10`) or by their
  * last commit, newest first; ties keep name order. The current branch always comes first. */
@@ -104,6 +108,16 @@ export function BranchesView({ repo }: { repo: RepositoryInfo }) {
     setSortState(next);
     writeJson(SORT_KEY, next);
   };
+  // Local or remote branches: one list at a time, so a long local list does not push the
+  // remote ones out of reach.
+  const [view, setViewState] = useState<BranchView>(() =>
+    readJson<unknown>(VIEW_KEY, "local") === "remote" ? "remote" : "local",
+  );
+  const setView = (next: BranchView) => {
+    setViewState(next);
+    writeJson(VIEW_KEY, next);
+  };
+  const [cleaning, setCleaning] = useState(false);
   const { branches } = actions;
 
   const q = query.trim().toLowerCase();
@@ -131,6 +145,9 @@ export function BranchesView({ repo }: { repo: RepositoryInfo }) {
       .filter(([, g]) => !q || g.list.length > 0)
       .map(([name, g]) => ({ name, ...g, list: sortBranches(g.list, sort) }));
   }, [branches, remote.remotes, q, sort]);
+  // Local branches whose upstream was deleted on the remote: "Clean up branches" looks at them.
+  const gone = (branches?.local ?? []).filter((b) => b.upstream && b.upstreamGone).length;
+  const remoteMatches = q ? remotes.reduce((n, g) => n + g.list.length, 0) : 0;
   const tracked = (name: string) =>
     (branches?.local ?? []).filter((b) => b.upstream?.startsWith(`${name}/`)).length;
 
@@ -436,9 +453,24 @@ export function BranchesView({ repo }: { repo: RepositoryInfo }) {
       <div className="bl-branches__header">
         <div className="bl-branches__title">
           <h1 className="text-h2">Branches</h1>
-          <span className="text-small text-secondary">
-            {branches.local.length} local · {branches.remote.length} remote
-          </span>
+        </div>
+        <div className="bl-segmented" role="group" aria-label="Which branches">
+          {(
+            [
+              ["local", "Local", branches.local.length],
+              ["remote", "Remote", branches.remote.length],
+            ] as const
+          ).map(([id, label, n]) => (
+            <button
+              key={id}
+              type="button"
+              className="bl-segmented__option"
+              aria-pressed={view === id}
+              onClick={() => setView(id)}
+            >
+              {label} <span className="bl-branches__count">{n.toLocaleString()}</span>
+            </button>
+          ))}
         </div>
         <label className="bl-search bl-branches__search">
           <Search size={14} aria-hidden className="bl-search__icon" />
@@ -498,8 +530,24 @@ export function BranchesView({ repo }: { repo: RepositoryInfo }) {
             </span>
           </div>
         )}
-        <h2 className="bl-section-label bl-branches__group">Local</h2>
-        {local.length ? (
+        {view === "local" && (
+          <div className="bl-branches__group-head">
+            <h2 className="bl-section-label bl-branches__group">Local</h2>
+            {gone > 0 && (
+              <Button
+                size="sm"
+                variant="ghost"
+                icon={<BrushCleaning size={14} aria-hidden />}
+                disabled={busy}
+                title="Delete branches whose upstream was deleted on the remote"
+                onClick={() => setCleaning(true)}
+              >
+                Clean up branches…
+              </Button>
+            )}
+          </div>
+        )}
+        {view !== "local" ? null : local.length ? (
           <ul className="bl-branch-list" aria-label="Local branches">
             {local.map((b) => row(b, localMenu(b), () => actions.switchTo(b.name), false))}
           </ul>
@@ -511,23 +559,41 @@ export function BranchesView({ repo }: { repo: RepositoryInfo }) {
           </p>
         )}
 
-        {remotes.map((g, i) => (
-          <section key={g.name} aria-label={`Remote ${g.name}`}>
-            {remoteHead(g.name, g.info, g.all, i === 0)}
-            {g.list.length ? (
-              <ul className="bl-branch-list" aria-label={`Branches on ${g.name}`}>
-                {g.list.map((b) =>
-                  row(b, remoteMenu(b), () => actions.checkoutRemote(b.name), true),
-                )}
-              </ul>
-            ) : (
-              <p className="bl-branches__empty text-secondary text-small">
-                No branches yet. Fetch {g.name} to see them.
-              </p>
-            )}
-          </section>
-        ))}
-        {remotes.length === 0 && !q && (
+        {view === "local" && q && remoteMatches > 0 && (
+          <p className="bl-branches__empty text-small text-muted">
+            {plural(remoteMatches, "remote branch matches", "remote branches match")}.{" "}
+            <button type="button" className="bl-link-button" onClick={() => setView("remote")}>
+              Show remote branches
+            </button>
+          </p>
+        )}
+        {view === "remote" && q && remotes.length === 0 && local.length > 0 && (
+          <p className="bl-branches__empty text-small text-muted">
+            No remote branches match, but{" "}
+            {plural(local.length, "local branch does", "local branches do")}.{" "}
+            <button type="button" className="bl-link-button" onClick={() => setView("local")}>
+              Show local branches
+            </button>
+          </p>
+        )}
+        {view === "remote" &&
+          remotes.map((g, i) => (
+            <section key={g.name} aria-label={`Remote ${g.name}`}>
+              {remoteHead(g.name, g.info, g.all, i === 0)}
+              {g.list.length ? (
+                <ul className="bl-branch-list" aria-label={`Branches on ${g.name}`}>
+                  {g.list.map((b) =>
+                    row(b, remoteMenu(b), () => actions.checkoutRemote(b.name), true),
+                  )}
+                </ul>
+              ) : (
+                <p className="bl-branches__empty text-secondary text-small">
+                  No branches yet. Fetch {g.name} to see them.
+                </p>
+              )}
+            </section>
+          ))}
+        {view === "remote" && remotes.length === 0 && !q && (
           <EmptyState
             icon={<Cloud size={22} aria-hidden />}
             title="No remotes"
@@ -544,6 +610,16 @@ export function BranchesView({ repo }: { repo: RepositoryInfo }) {
           </EmptyState>
         )}
       </div>
+      {cleaning && (
+        <CleanupDialog
+          repoPath={repo.path}
+          version={branches}
+          fetching={remote.activity?.kind === "fetch"}
+          onFetch={remote.remotes.length ? remote.fetchAll : null}
+          onDelete={actions.deleteGone}
+          onCancel={() => setCleaning(false)}
+        />
+      )}
     </section>
   );
 }

@@ -11,7 +11,8 @@ import {
 import { useConfirm } from "../../components/ConfirmDialog";
 import { useToast } from "../../components/Toast";
 import { gitService } from "../../services/git";
-import type { BranchList, GitError, RepositoryInfo, StartPoint } from "../../types/git";
+import { plural } from "../../lib/format";
+import type { BranchList, GitError, GoneBranch, RepositoryInfo, StartPoint } from "../../types/git";
 import type { RepositoryController } from "../repository/useRepository";
 import { useSettings } from "../settings/SettingsProvider";
 import { BranchNameDialog } from "./BranchNameDialog";
@@ -26,6 +27,8 @@ export interface BranchActions {
   rename: (name: string) => void;
   remove: (name: string) => void;
   checkoutCommit: (oid: string) => void;
+  /** Delete branches whose upstream is gone and that lose nothing, with Undo. */
+  deleteGone: (names: string[]) => Promise<GitError | null>;
 }
 
 const noop = () => {};
@@ -37,6 +40,7 @@ const BranchActionsContext = createContext<BranchActions>({
   rename: noop,
   remove: noop,
   checkoutCommit: noop,
+  deleteGone: () => Promise.resolve(null),
 });
 
 export function useBranchActions(): BranchActions {
@@ -195,6 +199,51 @@ export function BranchActionsProvider({
     [confirm, run, report],
   );
 
+  const deleteGone = useCallback(
+    async (names: string[]) => {
+      let deleted: GoneBranch[] = [];
+      const error = await run("Cleaning up branches", async (path) => {
+        const [gone, info] = await gitService.deleteGoneBranches(path, names);
+        deleted = gone;
+        return info;
+      });
+      if (error) {
+        report("Could not clean up branches", error);
+        return error;
+      }
+      if (deleted.length === 0) return null;
+      const restore = async () => {
+        const failed = await run("Restoring branches", async (path) => {
+          let info: RepositoryInfo | null = null;
+          for (const b of deleted) {
+            info = await gitService.createBranch(
+              path,
+              b.name,
+              { kind: "commit", oid: b.oid },
+              false,
+            );
+          }
+          return info!;
+        });
+        if (failed) report("Could not restore the branches", failed);
+        else
+          toast({
+            tone: "success",
+            title: `Restored ${plural(deleted.length, "branch", "branches")}`,
+          });
+      };
+      toast({
+        tone: "success",
+        title: `Deleted ${plural(deleted.length, "branch", "branches")}`,
+        description: deleted.map((b) => b.name).join(", "),
+        actions: [{ label: "Undo", onClick: () => void restore() }],
+        durationMs: 10000,
+      });
+      return null;
+    },
+    [run, report, toast],
+  );
+
   const value = useMemo<BranchActions>(
     () => ({
       branches,
@@ -204,8 +253,9 @@ export function BranchActionsProvider({
       rename: (name) => setDialog({ mode: "rename", name }),
       remove: (n) => void remove(n),
       checkoutCommit: (oid) => void checkoutCommit(oid),
+      deleteGone,
     }),
-    [branches, switchTo, checkoutRemote, remove, checkoutCommit],
+    [branches, switchTo, checkoutRemote, remove, checkoutCommit, deleteGone],
   );
 
   return (

@@ -7,7 +7,7 @@
 **See the flow of your code: a fast, friendly Git desktop client that shows what Git is
 doing and lets you do it with a click.**
 
-**Version 0.3.0** · [download](https://gitlab.com/bytefulminds/branchline/-/releases) for Windows, macOS and Linux
+**Version 0.3.2** · [download](https://gitlab.com/bytefulminds/branchline/-/releases) for Windows, macOS and Linux
 
 [![pipeline](https://gitlab.com/bytefulminds/branchline/badges/main/pipeline.svg)](https://gitlab.com/bytefulminds/branchline/-/pipelines)
 ![license: MIT](https://img.shields.io/badge/license-MIT-00D1A0)
@@ -56,13 +56,19 @@ action, branch and recent repository in a few letters.
 ### Branches and history, your way
 
 Create, switch, merge and rebase branches from a right-click, or drag one branch onto
-another. Clean up before you push with "Rewrite history": Branchline finds where your branch
-started, you drag commits into a new order and reword, squash or drop them, and squashed
-commits are shown grouped under the commit they go into. With AI on, it can suggest which
-commits belong together and write their messages.
+another. Switch between your local and remote branches with one toggle, and "Clean up
+branches" removes local branches whose upstream is gone once every commit is on the remote,
+with Undo; branches you never published stay. Tidy up before you push with "Rewrite
+history": Branchline finds where your branch started, you drag commits into a new order and
+reword, squash or drop them, and squashed commits are shown grouped under the commit they go
+into. With AI on, it can suggest which commits belong together and write their messages.
 
 <p align="center">
-  <img src="docs/screenshots/branches.png" alt="The Branches view with a branch menu open: switch, open in a new worktree, merge, rebase, push, rename and delete" width="49%">
+  <img src="docs/screenshots/branches.png" alt="The local branches with a branch menu open: switch, open in a new worktree, merge, rebase, push, rename and delete" width="49%">
+  <img src="docs/screenshots/branch-cleanup.png" alt="Clean up branches: two branches whose upstream was deleted are ready to delete, two with commits only on this computer are kept" width="49%">
+</p>
+
+<p align="center">
   <img src="docs/screenshots/rebase.png" alt="Rewrite history with an AI suggestion: two groups of fixed-up commits, each indented above the commit they go into, with a new message" width="49%">
 </p>
 
@@ -99,19 +105,22 @@ your system's password store. GitHub comes later.
 
 <p align="center">
   <img src="docs/screenshots/reviews.png" alt="The Reviews view with five merge requests waiting for review, showing their pipeline, comments, conflicts and approval" width="49%">
-  <img src="docs/screenshots/merge-request.png" alt="A merge request opened in Branchline: its changed files, two comment threads and the diff of api.py" width="49%">
+  <img src="docs/screenshots/merge-request.png" alt="A merge request opened in Branchline: its changed files, a comment thread on line 17, the Start review quest button and the diff of api.py" width="49%">
 </p>
 
 ### Review as a game, with an AI as game master
 
-Turn on AI and start a review quest: for every changed file the AI asks a few questions, from
-a quick quiz to "click the line that decides whether the cache is still fresh" to "what
-happens to memory when people look up many cities?". It responds to your answers, suggests
-review comments you can keep, and you earn points for thought and findings, never for speed.
-Play the same quest on your own branch before you open a merge request.
+Turn on AI and start a review quest: for every changed file the AI asks one to five
+questions, more for larger changes, from a quick quiz to "click the line that decides
+whether the cache is still fresh" to "what happens to memory when people look up many
+cities?". It responds to your answers, suggests review comments you can keep, and you earn
+points for thought and findings, never for speed. The questions for the next files are
+prepared while you play, and the number next to each file shows how many are waiting. Ask
+for new questions on a file, or restart the whole quest. Play the same quest on your own
+branch before you open a merge request.
 
 <p align="center">
-  <img src="docs/screenshots/quest.png" alt="A review quest: the AI responds to an open answer about the cache and suggests a review comment, above the diff of api.py, with 45 points earned" width="900">
+  <img src="docs/screenshots/quest.png" alt="A review quest: the AI responds to an open answer about the cache and suggests a review comment, above the diff of api.py, with 45 points earned and the number of questions next to each file" width="900">
 </p>
 
 ### Commit messages from the AI you choose
@@ -123,7 +132,7 @@ Only when you ask, and with AI turned off, no AI feature appears at all.
 
 <p align="center">
   <img src="docs/screenshots/ai-suggest.png" alt="A Conventional Commits message suggested for the staged changes, filled in the commit box" width="49%">
-  <img src="docs/screenshots/ai-settings.png" alt="The AI settings, connected to an Ollama server with a coding model chosen" width="49%">
+  <img src="docs/screenshots/ai-settings.png" alt="The AI settings, connected to an Ollama server with a coding model and context length chosen" width="49%">
 </p>
 
 ### Make it yours
@@ -134,7 +143,7 @@ Branchline lists every open-source package it is built with, with its license.
 
 <p align="center">
   <img src="docs/screenshots/settings.png" alt="The Editor and diff settings: external editor, terminal, diff layout, syntax highlighting, context lines, tab width and font size" width="49%">
-  <img src="docs/screenshots/about.png" alt="About Branchline with the version, the Bytefulminds logo and the first ten of 439 open-source packages and their licenses" width="49%">
+  <img src="docs/screenshots/about.png" alt="About Branchline with the version, the Bytefulminds logo and the first ten of 472 open-source packages and their licenses" width="49%">
 </p>
 
 And more: clone or create repositories, fetch, pull and push with live progress and Cancel,
@@ -154,7 +163,9 @@ the `.AppImage`, `.deb` or `.rpm` for Linux. Branchline needs
 [Install](MANUAL.md#install) in the manual says how to open them the first time.
 
 Or build Branchline from source, with Node.js 20 or newer and Rust 1.77 or newer (plus the
-[Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for your system):
+[Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for your system). The
+manual's [For developers](MANUAL.md#for-developers) section says how to install them, how to
+check your setup, and what to do when the first build fails:
 
 ```bash
 git clone https://gitlab.com/bytefulminds/branchline.git

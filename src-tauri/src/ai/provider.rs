@@ -53,6 +53,8 @@ pub struct Endpoint {
     pub base: String,
     pub key: Option<String>,
     pub model: String,
+    /// Ollama only: the context window to ask for, in tokens; 0 uses Ollama's own setting.
+    pub context: u32,
 }
 
 /// The provider's name in messages.
@@ -181,6 +183,7 @@ pub fn endpoint(cfg: &AiSettings) -> Result<Endpoint, GitError> {
         base,
         key,
         model: model.to_string(),
+        context: cfg.ollama_context,
     })
 }
 
@@ -471,9 +474,8 @@ enum Piece {
 /// small can otherwise keep reasoning until the request times out.
 const MAX_THINKING: usize = 48_000;
 
-/// Context window for Ollama: room for the prompt and the answer. Ollama's default (often
-/// 4,096 tokens) is smaller than a commit prompt, which cuts the diff off and can leave a
-/// model generating until the time limit.
+/// Room for the prompt and the answer. Ollama's default can be smaller than a commit prompt,
+/// which cuts the diff off and can leave a model generating until the time limit.
 fn ollama_context(prompt_chars: usize, max_tokens: u32) -> u32 {
     // About three characters per token for code, rounded up to a multiple of 2,048.
     let wanted = (prompt_chars / 3) as u32 + max_tokens + 512;
@@ -488,6 +490,17 @@ fn unreadable(provider: AiProvider) -> GitError {
         "{} sent an answer Branchline could not read.",
         name(provider)
     ))
+}
+
+/// Ollama's options for one request. The context window is the chosen size, so it stays the
+/// same from request to request (Ollama reloads the model whenever it changes); only a
+/// prompt that does not fit makes it larger. With 0 Ollama's own setting is used.
+fn ollama_options(context: u32, prompt_chars: usize, max_tokens: u32) -> Value {
+    let mut options = json!({ "temperature": 0.2, "num_predict": max_tokens });
+    if context > 0 {
+        options["num_ctx"] = json!(context.max(ollama_context(prompt_chars, max_tokens)));
+    }
+    options
 }
 
 /// Ollama streams one JSON object per line.
@@ -619,11 +632,7 @@ fn chat_with(
                 "stream": true,
                 "think": false,
                 "messages": messages,
-                "options": {
-                    "temperature": 0.2,
-                    "num_ctx": ollama_context(system.len() + user.len(), max_tokens),
-                    "num_predict": max_tokens,
-                },
+                "options": ollama_options(ep.context, system.len() + user.len(), max_tokens),
             }),
         ),
         AiProvider::OpenaiCompatible => (
@@ -858,6 +867,12 @@ mod tests {
         // A full commit prompt (about 15,000 characters) does not fit in 8,192 with the answer.
         assert_eq!(ollama_context(15_000, 4096), 10_240);
         assert_eq!(ollama_context(10_000_000, 4096), 32_768);
+        // A fixed size, larger only when the prompt needs it; 0 leaves it to Ollama.
+        assert_eq!(ollama_options(16_384, 100, 4096)["num_ctx"], 16_384);
+        assert_eq!(ollama_options(131_072, 100, 4096)["num_ctx"], 131_072);
+        assert_eq!(ollama_options(16_384, 80_000, 4096)["num_ctx"], 32_768);
+        assert!(ollama_options(0, 100, 4096).get("num_ctx").is_none());
+        assert_eq!(ollama_options(0, 100, 512)["num_predict"], 512);
     }
 
     #[test]

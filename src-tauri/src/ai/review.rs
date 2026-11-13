@@ -262,7 +262,9 @@ fn numbered_diff(repo: &str, ctx: &QuestContext) -> Result<(String, KnownLines),
     Ok((out, lines))
 }
 
-fn round_schema() -> Value {
+/// The answer's shape. For Ollama it is enforced while the model writes, so `minItems` makes
+/// it write at least `count` questions instead of settling for one.
+fn round_schema(count: usize) -> Value {
     let line = json!({
         "type": "object",
         "properties": {
@@ -276,6 +278,8 @@ fn round_schema() -> Value {
         "properties": {
             "questions": {
                 "type": "array",
+                "minItems": count,
+                "maxItems": MAX_QUESTIONS,
                 "items": {
                     "type": "object",
                     "properties": {
@@ -294,8 +298,31 @@ fn round_schema() -> Value {
     })
 }
 
-/// Instructions for asking about one file.
-pub fn round_prompt(ctx: &QuestContext) -> String {
+/// Most questions asked about one file.
+pub const MAX_QUESTIONS: usize = 5;
+
+/// How many questions a file is worth, from its changed lines: one for a small fix, up to
+/// five for a large change. Asked for exactly, because "1 to 3" made small models settle for one.
+pub fn question_count(changed_lines: usize) -> usize {
+    match changed_lines {
+        0..=10 => 1,
+        11..=40 => 2,
+        41..=120 => 3,
+        121..=300 => 4,
+        _ => MAX_QUESTIONS,
+    }
+}
+
+/// Instructions for asking `count` questions about one file.
+pub fn round_prompt(ctx: &QuestContext, count: usize) -> String {
+    let ask = if count == 1 {
+        "Ask 1 question".to_string()
+    } else {
+        format!(
+            "Ask {count} questions (the change is large enough for that many; never fewer than {})",
+            count - 1
+        )
+    };
     let who = if ctx.own_branch {
         "The developer reviews their own branch before opening a merge request. Ask what a \
 reviewer is likely to ask, so they can fix things before anyone else sees them."
@@ -310,7 +337,7 @@ edge cases, errors, naming, tests, security and behaviour changes.\n\
 You get one file's diff. Every line starts with its reference, such as [new 17] for a line in \
 the new version or [old 20] for a removed line, then +, - or a space.\n\
 \n\
-Ask 1 to 3 questions about this file, mixing these types:\n\
+{ask} about this file, each about a different part of the change, mixing these types:\n\
 - \"choice\": multiple choice with 3 or 4 \"choices\"; \"answer\" is the index of the right one \
 (0 is the first).\n\
 - \"truefalse\": a statement about the change; \"answer\" is true or false.\n\
@@ -326,10 +353,14 @@ as {{\"side\": \"new\", \"line\": 17}}.\n\
 or two sentences. Wrong answers are no failure; the explanation teaches.\n\
 - Do not ask about things the earlier comments already discuss.\n\
 - Keep questions short and concrete.\n\
+- Every question must be a real question about this diff. Never answer that you cannot think \
+of a question: even a small change has something to check, such as a name, a value, a \
+missing test or what happens on an error.\n\
 \n\
-Answer with JSON only: {{\"questions\": [{{\"type\": \"choice\", \"question\": \"...\", \"choices\": \
-[\"...\"], \"answer\": 0, \"lines\": [{{\"side\": \"new\", \"line\": 17}}], \"explanation\": \
-\"...\"}}]}}"
+Answer with JSON only, with {count} objects in \"questions\", one per question: \
+{{\"questions\": [{{\"type\": \"choice\", \"question\": \"...\", \"choices\": [\"...\"], \
+\"answer\": 0, \"lines\": [{{\"side\": \"new\", \"line\": 17}}], \"explanation\": \"...\"}}, \
+{{\"type\": \"open\", \"question\": \"...\", \"explanation\": \"...\"}}, ...]}}"
     )
 }
 
@@ -389,12 +420,37 @@ fn parse_lines(v: &Value, known: &HashSet<LineRef>) -> Vec<LineRef> {
 }
 
 /// Check the questions against the diff and drop the ones that do not fit.
+/// A model sometimes answers with a remark instead of a question ("I can't think of a
+/// question for this file"). Those are left out, so the round is asked again.
+fn is_no_question(prompt: &str) -> bool {
+    let p = prompt.to_lowercase().replace('\u{2019}', "'");
+    [
+        "can't think of",
+        "cannot think of",
+        "can not think of",
+        "couldn't think of",
+        "could not think of",
+        "can't come up with",
+        "cannot come up with",
+        "unable to come up with",
+        "unable to think of",
+        "no questions",
+        "no question to ask",
+        "nothing to ask",
+        "nothing worth asking",
+        "not enough information to ask",
+        "not enough context to ask",
+    ]
+    .iter()
+    .any(|m| p.contains(m))
+}
+
 pub fn parse_round(raw: &str, path: &str, known: &KnownLines) -> Result<Round, String> {
     let json = json_part(raw).ok_or("no JSON object")?;
     let v: Value = serde_json::from_str(json).map_err(|e| format!("invalid JSON: {e}"))?;
     let mut questions = Vec::new();
     for q in v["questions"].as_array().into_iter().flatten() {
-        if questions.len() == 3 {
+        if questions.len() == MAX_QUESTIONS {
             break;
         }
         let prompt = q["question"]
@@ -408,7 +464,7 @@ pub fn parse_round(raw: &str, path: &str, known: &KnownLines) -> Result<Round, S
             .unwrap_or_default()
             .trim()
             .to_string();
-        if prompt.is_empty() {
+        if prompt.is_empty() || is_no_question(&prompt) {
             continue;
         }
         let mut lines = parse_lines(&q["lines"], &known.all);
@@ -515,10 +571,16 @@ pub fn quest_round(
     let ep = endpoint(cfg)?;
     let (token, _registration) = register(op_id);
     let (diff, known) = numbered_diff(repo, ctx)?;
-    let system = round_prompt(ctx);
+    let wanted = question_count(known.changed.len());
+    let system = round_prompt(ctx, wanted);
     let user = round_input(ctx, &diff);
     let mut last = String::new();
-    for _ in 0..2 {
+    // The best answer so far, used when asking again does not give enough questions.
+    let mut best: Option<Round> = None;
+    let mut asked_for_more = false;
+    // Small models sometimes answer with a remark instead of questions; asking again often
+    // works, so up to three times.
+    for _ in 0..3 {
         if token.is_cancelled() {
             return Err(GitError::Cancelled);
         }
@@ -528,7 +590,7 @@ pub fn quest_round(
             &system,
             &user,
             MAX_TOKENS,
-            &round_schema(),
+            &round_schema(wanted),
             &token,
             &mut |p| {
                 raw.push_str(p);
@@ -536,9 +598,22 @@ pub fn quest_round(
             },
         )?;
         match parse_round(&raw, &ctx.path, &known) {
-            Ok(round) => return Ok(round),
+            // Clearly too few for a large change: ask once more, keeping the better answer.
+            Ok(round) if round.questions.len() + 1 < wanted && !asked_for_more => {
+                asked_for_more = true;
+                best = Some(round);
+            }
+            Ok(round) => {
+                return Ok(match best {
+                    Some(b) if b.questions.len() > round.questions.len() => b,
+                    _ => round,
+                })
+            }
             Err(why) => last = why,
         }
+    }
+    if let Some(round) = best {
+        return Ok(round);
     }
     Err(GitError::Ai(format!(
         "The model's questions did not fit this file ({last}). Try again, skip the file, or choose a larger model."
@@ -686,7 +761,9 @@ pub fn quest_reply(
         ctx.quest.path, ctx.question
     );
     let mut last = String::new();
-    for _ in 0..2 {
+    // Small models sometimes answer with a remark instead of questions; asking again often
+    // works, so up to three times.
+    for _ in 0..3 {
         let mut raw = String::new();
         chat_json(
             &ep,
@@ -822,6 +899,58 @@ mod tests {
             &known
         )
         .is_err());
+    }
+
+    #[test]
+    fn asks_more_questions_about_larger_changes() {
+        assert_eq!(question_count(4), 1);
+        assert_eq!(question_count(25), 2);
+        assert_eq!(question_count(80), 3);
+        assert_eq!(question_count(200), 4);
+        assert_eq!(question_count(5_000), MAX_QUESTIONS);
+        let ctx = QuestContext::default();
+        assert!(round_prompt(&ctx, 1).contains("Ask 1 question about this file"));
+        assert!(round_prompt(&ctx, 4).contains("Ask 4 questions"));
+
+        // Up to five are kept.
+        let known = KnownLines {
+            all: HashSet::new(),
+            changed: HashSet::new(),
+        };
+        let six: Vec<String> = (1..=6)
+            .map(|i| format!(r#"{{"type":"open","question":"Question {i}?","explanation":""}}"#))
+            .collect();
+        let raw = format!(r#"{{"questions":[{}]}}"#, six.join(","));
+        assert_eq!(
+            parse_round(&raw, "x", &known).unwrap().questions.len(),
+            MAX_QUESTIONS
+        );
+    }
+
+    #[test]
+    fn leaves_out_remarks_that_are_no_questions() {
+        let known = KnownLines {
+            all: HashSet::new(),
+            changed: HashSet::new(),
+        };
+        // Only a remark: no usable questions, so the round is asked again.
+        assert!(parse_round(
+            r#"{"questions":[{"type":"open","question":"I can’t think of a question for this small change.","explanation":""}]}"#,
+            "x",
+            &known
+        )
+        .is_err());
+        let round = parse_round(
+            r#"{"questions":[
+             {"type":"open","question":"There is nothing to ask about this file.","explanation":""},
+             {"type":"open","question":"What happens when the city list is empty?","explanation":"Look at the loop."}
+            ]}"#,
+            "x",
+            &known,
+        )
+        .unwrap();
+        assert_eq!(round.questions.len(), 1);
+        assert!(round.questions[0].prompt.starts_with("What happens"));
     }
 
     #[test]

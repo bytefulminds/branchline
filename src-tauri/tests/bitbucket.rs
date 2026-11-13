@@ -8,8 +8,10 @@ use std::path::Path;
 use std::process::Command;
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 
-use branchline_lib::forge::accounts::{self, Access, ForgeKind};
-use branchline_lib::forge::{bitbucket, open_request, review_requests, RequestFilter};
+use branchline_lib::forge::accounts::{self, Access, Account, ForgeKind};
+use branchline_lib::forge::{
+    bitbucket, open_request, review_requests, review_source, RequestFilter,
+};
 use branchline_lib::secrets;
 use tempfile::TempDir;
 
@@ -145,9 +147,28 @@ fn route(path: &str) -> (u16, String) {
                 pr(3, "cy", &[], "acme/app", "feature"),
             ]}))
         }
-        "/2.0/pullrequests/%7Bada-uuid%7D" => {
+        // Removed by Bitbucket in April 2026 (CHANGE-2770), as it answers today.
+        "/2.0/pullrequests/%7Bada-uuid%7D" => (
+            404,
+            r#"{"type":"error","error":{"message":"There is no API hosted at this URL."}}"#.into(),
+        ),
+        "/2.0/user/workspaces" => json(serde_json::json!({ "values": [
+            { "administrator": false, "workspace": { "slug": "acme", "name": "Acme" } },
+            { "administrator": true, "workspace": { "slug": "ada-home", "name": "Ada" } },
+            { "administrator": false, "workspace": { "slug": "gone", "name": "Gone" } }
+        ]})),
+        "/2.0/workspaces/acme/pullrequests/%7Bada-uuid%7D" => {
+            assert!(query.contains("state=OPEN"), "{query}");
             json(serde_json::json!({ "values": [pr(2, "ada", &["bob"], "acme/app", "feature")] }))
         }
+        "/2.0/workspaces/ada-home/pullrequests/%7Bada-uuid%7D" => {
+            let mut newer = pr(7, "ada", &[], "acme/app", "feature");
+            newer["destination"]["repository"]["full_name"] = "ada-home/notes".into();
+            newer["updated_on"] = "2026-11-05T10:00:00+00:00".into();
+            json(serde_json::json!({ "values": [newer] }))
+        }
+        // A workspace you lost access to does not hide the others.
+        "/2.0/workspaces/gone/pullrequests/%7Bada-uuid%7D" => (403, r#"{"type":"error"}"#.into()),
         p if p.ends_with("/statuses") => {
             json(serde_json::json!({ "values": [{ "state": "SUCCESSFUL" }] }))
         }
@@ -211,7 +232,7 @@ fn connects_with_email_and_api_token() {
 #[test]
 fn lists_pull_requests_of_the_repository_by_role() {
     let _g = serial();
-    let (url, _) = fake_bitbucket(route);
+    let (url, seen) = fake_bitbucket(route);
     bitbucket::connect(&url, EMAIL, TOKEN).unwrap();
     let t = TempDir::new().unwrap();
     git(t.path(), &["init", "-q", "-b", "main"]);
@@ -242,8 +263,25 @@ fn lists_pull_requests_of_the_repository_by_role() {
     assert_eq!(all.items.len(), 3);
 
     // Across all repositories: yours, by user id; to review needs a repository.
+    // Bitbucket removed the cross-workspace endpoint, so each workspace is asked; newest first.
     let everywhere = review_requests(repo, true, RequestFilter::CreatedByYou).unwrap();
-    assert_eq!(everywhere.items.len(), 1);
+    let found: Vec<(String, u64)> = everywhere
+        .items
+        .iter()
+        .map(|p| (p.project_path.clone(), p.iid))
+        .collect();
+    assert_eq!(
+        found,
+        vec![
+            ("ada-home/notes".to_string(), 7),
+            ("acme/app".to_string(), 2)
+        ]
+    );
+    assert!(seen
+        .lock()
+        .unwrap()
+        .iter()
+        .all(|p| !p.starts_with("/2.0/pullrequests/")));
     let err = review_requests(repo, true, RequestFilter::ReviewRequested)
         .unwrap_err()
         .to_string();
@@ -375,4 +413,59 @@ fn opens_pull_requests_from_a_branch_and_from_a_fork() {
     assert_eq!(fork_detail.files[0].path, "other.txt");
     assert_eq!(fork_detail.conflict_files, Some(vec![]));
     assert!(!fork_detail.request.has_conflicts);
+}
+
+#[test]
+fn matches_remotes_on_bitbucket_s_ssh_host() {
+    let _g = serial();
+    // Bitbucket Cloud moved SSH to ssh.bitbucket.org; the account is on bitbucket.org.
+    accounts::upsert(Account {
+        kind: ForgeKind::Bitbucket,
+        url: bitbucket::CLOUD_URL.into(),
+        host: "bitbucket.org".into(),
+        id: 0,
+        uid: Some(ME.into()),
+        username: "ada".into(),
+        name: "Ada".into(),
+        access: Access::Unknown,
+    })
+    .unwrap();
+    for remote in [
+        "git@ssh.bitbucket.org:acme/app.git",
+        "ssh://git@altssh.bitbucket.org:443/acme/app.git",
+        "git@bitbucket.org:acme/app.git",
+    ] {
+        let t = TempDir::new().unwrap();
+        git(t.path(), &["init", "-q", "-b", "main"]);
+        git(t.path(), &["remote", "add", "origin", remote]);
+        let source = review_source(t.path().to_str().unwrap()).unwrap().unwrap();
+        assert_eq!(source.host, "bitbucket.org", "{remote}");
+        assert_eq!(source.project, "acme/app");
+        assert_eq!(
+            source.account.map(|a| a.kind),
+            Some(ForgeKind::Bitbucket),
+            "{remote}"
+        );
+    }
+
+    // A remote Branchline cannot match says so, instead of only pointing at repositories.
+    let t = TempDir::new().unwrap();
+    git(t.path(), &["init", "-q", "-b", "main"]);
+    git(
+        t.path(),
+        &[
+            "remote",
+            "add",
+            "origin",
+            "git@no-such-alias-here:acme/app.git",
+        ],
+    );
+    let err = review_requests(
+        t.path().to_str().unwrap(),
+        false,
+        RequestFilter::ReviewRequested,
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(err.contains("no-such-alias-here"), "{err}");
 }

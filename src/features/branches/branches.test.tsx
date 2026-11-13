@@ -62,12 +62,15 @@ async function openBranchesView(extra?: Extra) {
   await ctx.user.keyboard("{Control>}3{/Control}");
   const view = await screen.findByRole("region", { name: "Branches" });
   await within(view).findByRole("list", { name: "Local branches" });
-  return { ...ctx, view };
+  /** Show the local or the remote branches. */
+  const show = (which: "Local" | "Remote") =>
+    ctx.user.click(within(view).getByRole("button", { name: new RegExp(`^${which}`) }));
+  return { ...ctx, view, show };
 }
 
 describe("branches view", () => {
   it("lists local and remote branches with tracking information", async () => {
-    const { view } = await openBranchesView();
+    const { view, show } = await openBranchesView();
     const local = within(view).getByRole("list", { name: "Local branches" });
     const rows = within(local).getAllByRole("listitem");
     expect(rows).toHaveLength(3);
@@ -75,13 +78,22 @@ describe("branches view", () => {
     expect(within(rows[0]!).getByLabelText("2 ahead")).toBeInTheDocument();
     expect(within(rows[0]!).getByLabelText("1 behind")).toBeInTheDocument();
     expect(rows[2]).toHaveTextContent("origin/old gone");
+    // One list at a time: remote branches are behind the Remote toggle, with their counts.
+    expect(within(view).queryByRole("list", { name: "Branches on origin" })).toBeNull();
+    expect(within(view).getByRole("button", { name: "Local 3" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await show("Remote");
     const remote = within(view).getByRole("list", { name: "Branches on origin" });
     expect(within(remote).getAllByRole("listitem")).toHaveLength(2);
-    expect(within(view).getByText("3 local · 2 remote")).toBeInTheDocument();
+    expect(within(view).queryByRole("list", { name: "Local branches" })).toBeNull();
+    expect(window.localStorage.getItem("branchline.branches.view")).toBe('"remote"');
+    await show("Local");
   });
 
   it("switches branches and checks out remote branches", async () => {
-    const { user, calls, view } = await openBranchesView((cmd) =>
+    const { user, calls, view, show } = await openBranchesView((cmd) =>
       cmd === "switch_branch" || cmd === "checkout_remote_branch" ? REPO : undefined,
     );
     const local = within(view).getByRole("list", { name: "Local branches" });
@@ -92,6 +104,7 @@ describe("branches view", () => {
       repo: REPO.path,
       name: "feature/login",
     });
+    await show("Remote");
     const remote = within(view).getByRole("list", { name: "Branches on origin" });
     await user.click(
       within(within(remote).getAllByRole("listitem")[1]!).getByRole("button", {
@@ -268,6 +281,62 @@ describe("remote branches in the branch menu", () => {
   });
 });
 
+describe("cleaning up branches", () => {
+  const GONE = (name: string, localOnly = 0, inUse = false) => ({
+    name,
+    upstream: `origin/${name}`,
+    oid: `${name[0]}`.repeat(40),
+    tipSummary: `Work on ${name}`,
+    tipTime: 1_700_000_000,
+    localOnly,
+    inUse,
+  });
+
+  it("deletes branches whose upstream is gone and that lose nothing, with Undo", async () => {
+    const { user, calls, view } = await openBranchesView((cmd) => {
+      if (cmd === "gone_branches") return [GONE("old"), GONE("wip", 2), GONE("main", 0, true)];
+      if (cmd === "delete_gone_branches") return [[GONE("old")], REPO];
+      if (cmd === "create_branch") return REPO;
+    });
+    await user.click(within(view).getByRole("button", { name: "Clean up branches…" }));
+    const dialog = await screen.findByRole("dialog", { name: "Clean up branches" });
+    const old = await within(dialog).findByRole("checkbox", { name: /old/ });
+    expect(old).toBeChecked();
+    // Commits only here, or checked out: listed, never offered.
+    const kept = within(dialog).getByRole("region", { name: "Kept" });
+    expect(kept).toHaveTextContent("2 commits only on this computer");
+    expect(kept).toHaveTextContent("checked out");
+    expect(within(dialog).getAllByRole("checkbox")).toHaveLength(1);
+
+    await user.click(within(dialog).getByRole("button", { name: "Delete 1 branch" }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.cmd === "delete_gone_branches")?.args).toEqual({
+        repo: REPO.path,
+        names: ["old"],
+      }),
+    );
+    expect(await screen.findByText("Deleted 1 branch")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Undo" }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.cmd === "create_branch")?.args).toEqual({
+        repo: REPO.path,
+        name: "old",
+        start: { kind: "commit", oid: "o".repeat(40) },
+        checkout: false,
+      }),
+    );
+  });
+
+  it("offers nothing when no upstream is gone", async () => {
+    const { view } = await openBranchesView((cmd) =>
+      cmd === "list_branches"
+        ? { ...BRANCHES, local: BRANCHES.local.filter((b) => !b.upstreamGone) }
+        : undefined,
+    );
+    expect(within(view).queryByRole("button", { name: "Clean up branches…" })).toBeNull();
+  });
+});
+
 describe("commit context menu", () => {
   it("creates a branch at a commit from the history", async () => {
     const commits = makeHistory(3);
@@ -328,18 +397,20 @@ describe("commit context menu", () => {
           ],
         };
     };
-    const { user, view } = await openBranchesView(extra);
+    const { user, view, show } = await openBranchesView(extra);
     const names = (label: string) =>
       within(within(view).getByRole("list", { name: label }))
         .getAllByRole("listitem")
         .map((li) => li.querySelector(".bl-branch__name .truncate")!.textContent);
     // Natural, case-insensitive order; the current branch stays on top.
     expect(names("Local branches")).toEqual(["main", "Docs", "release-9", "release-10"]);
+    await show("Remote");
     expect(names("Branches on origin")).toEqual(["a", "b"]);
 
     await user.selectOptions(within(view).getByLabelText("Sort branches"), "date");
-    expect(names("Local branches")).toEqual(["main", "release-10", "Docs", "release-9"]);
     expect(names("Branches on origin")).toEqual(["b", "a"]);
+    await show("Local");
+    expect(names("Local branches")).toEqual(["main", "release-10", "Docs", "release-9"]);
     expect(window.localStorage.getItem("branchline.branches.sort")).toBe('"date"');
   });
 });

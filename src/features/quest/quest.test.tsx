@@ -7,8 +7,9 @@ import { installTauriTestEnvironment, openButton, REPO, setup } from "../../test
 import type { FileDiff } from "../../types/git";
 import { DEFAULT_SETTINGS, type Settings } from "../../types/settings";
 import type { QuestPlan, Round } from "../../types/quest";
+import { ConfirmProvider } from "../../components/ConfirmDialog";
 import { QuestView } from "./QuestView";
-import { coverage, emptyQuest, lineRefAt, pointsFor, POINTS } from "./questModel";
+import { coverage, emptyQuest, lineRefAt, nextToPrepare, pointsFor, POINTS } from "./questModel";
 import type { QuestSpec } from "./QuestProvider";
 
 installTauriTestEnvironment();
@@ -163,6 +164,134 @@ describe("quest model", () => {
     s.rounds["src/api.py"] = { questions: [], answers: [], done: true, skipped: false };
     // The lock file is left out of the quest, so it does not count.
     expect(coverage(PLAN, s)).toBe(100);
+  });
+});
+
+describe("preparing questions", () => {
+  const three: QuestPlan = {
+    ...PLAN,
+    rounds: ["a.py", "b.py", "c.py"].map((path) => ({ ...PLAN.rounds[0]!, path })),
+  };
+
+  it("asks for the open file first, then the files after it, then the ones before", () => {
+    const s = emptyQuest("c");
+    expect(nextToPrepare(three, s, {})).toBe("a.py");
+    s.current = 1;
+    expect(nextToPrepare(three, s, {})).toBe("b.py");
+    s.rounds["b.py"] = { questions: ROUND.questions, answers: [], done: false, skipped: false };
+    expect(nextToPrepare(three, s, {})).toBe("c.py");
+    // A failed file waits for Try again; a skipped one is not asked about.
+    s.rounds["c.py"] = { questions: null, answers: [], done: false, skipped: true };
+    expect(nextToPrepare(three, s, { "a.py": new Error("x") })).toBeNull();
+    expect(nextToPrepare(three, s, {})).toBe("a.py");
+  });
+
+  it("prepares the next files in the background and shows how many questions they have", async () => {
+    const user = userEvent.setup();
+    const calls = setup((cmd, args) => {
+      if (cmd === "get_settings") return AI_ON;
+      if (cmd === "quest_plan") return { ...PLAN, rounds: three.rounds.slice(0, 2) };
+      if (cmd === "range_file_diff") return DIFF;
+      if (cmd === "quest_round") {
+        const path = (args.context as { path: string }).path;
+        return path === "a.py" ? ROUND : { path, questions: ROUND.questions.slice(0, 2) };
+      }
+    });
+    render(<QuestView spec={SPEC} onExit={() => {}} />);
+    await screen.findByRole("region", { name: "Question 1 of 3" });
+    const files = screen.getByRole("navigation", { name: "Quest files" });
+    // b.py is ready before you get there, with its count next to it.
+    const b = await within(files).findByRole("button", { name: /b\.py.*2 questions ready/ });
+    expect(
+      within(files).getByRole("button", { name: /a\.py.*3 questions ready/ }),
+    ).toBeInTheDocument();
+    const asked = calls
+      .filter((c) => c.cmd === "quest_round")
+      .map((c) => (c.args.context as { path: string }).path);
+    expect(asked).toEqual(["a.py", "b.py"]);
+    await user.click(b);
+    expect(await screen.findByRole("region", { name: "Question 1 of 2" })).toBeInTheDocument();
+    expect(calls.filter((c) => c.cmd === "quest_round")).toHaveLength(2);
+  });
+
+  it("asks for new questions about a file until one is answered", async () => {
+    let n = 0;
+    const { user } = startQuest((cmd) => {
+      if (cmd !== "quest_round") return undefined;
+      n++;
+      return n === 1
+        ? ROUND
+        : { ...ROUND, questions: [{ ...ROUND.questions[2]!, prompt: "What if the API is down?" }] };
+    });
+    await screen.findByRole("region", { name: "Question 1 of 3" });
+    await user.click(screen.getByRole("button", { name: "New questions" }));
+    expect(await screen.findByText("What if the API is down?")).toBeInTheDocument();
+    await user.type(screen.getByRole("textbox", { name: "Your answer" }), "Show the cached one");
+    await user.click(screen.getByRole("button", { name: "Send answer" }));
+    expect(screen.queryByRole("button", { name: "New questions" })).toBeNull();
+  });
+
+  it("stops preparing on Stop and continues on Continue", async () => {
+    let hold = true;
+    const { user, calls } = startQuest((cmd) =>
+      cmd === "quest_round" && hold ? new Promise(() => {}) : undefined,
+    );
+    await user.click(await screen.findByRole("button", { name: "Stop" }));
+    expect(await screen.findByText(/prepares no questions until you continue/)).toBeInTheDocument();
+    await waitFor(() => expect(calls.some((c) => c.cmd === "cancel_remote_operation")).toBe(true));
+    hold = false;
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    expect(await screen.findByRole("region", { name: "Question 1 of 3" })).toBeInTheDocument();
+  });
+});
+
+describe("restarting a quest", () => {
+  it("asks new questions for every file and starts over, keeping draft comments", async () => {
+    // A saved quest: one file done with a question answered, points and a draft comment.
+    window.localStorage.setItem(
+      `branchline.quest.${SPEC.storageKey}`,
+      JSON.stringify({
+        ...emptyQuest(SPEC.head),
+        current: 1,
+        points: 40,
+        rounds: {
+          "src/api.py": {
+            questions: [ROUND.questions[0]],
+            answers: [{ choice: 0, correct: true }],
+            done: true,
+            skipped: false,
+          },
+        },
+        comments: [{ id: "c1", path: "src/api.py", line: null, body: "Cache size?" }],
+      }),
+    );
+    const user = userEvent.setup();
+    const calls = setup((cmd) => {
+      if (cmd === "get_settings") return AI_ON;
+      if (cmd === "quest_plan") return PLAN;
+      if (cmd === "quest_round") return ROUND;
+      if (cmd === "range_file_diff") return DIFF;
+    });
+    render(
+      <ConfirmProvider>
+        <QuestView spec={SPEC} onExit={() => {}} />
+      </ConfirmProvider>,
+    );
+    const summary = await screen.findByRole("region", { name: "Quest summary" });
+    expect(screen.getByText(/40 points/, { selector: ".bl-quest__points" })).toBeInTheDocument();
+    expect(calls.some((c) => c.cmd === "quest_round")).toBe(false);
+
+    await user.click(within(summary).getByRole("button", { name: "Restart quest" }));
+    const ask = await screen.findByRole("alertdialog");
+    expect(ask).toHaveTextContent("draft comment stays");
+    await user.click(within(ask).getByRole("button", { name: "Restart quest" }));
+
+    expect(await screen.findByRole("region", { name: "Question 1 of 3" })).toBeInTheDocument();
+    expect(calls.filter((c) => c.cmd === "quest_round")).toHaveLength(1);
+    expect(screen.getByText(/0 points/, { selector: ".bl-quest__points" })).toBeInTheDocument();
+    const saved = JSON.parse(window.localStorage.getItem(`branchline.quest.${SPEC.storageKey}`)!);
+    expect(saved.comments).toHaveLength(1);
+    expect(saved.points).toBe(0);
   });
 });
 

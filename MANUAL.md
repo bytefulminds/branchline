@@ -118,7 +118,17 @@ Updates are signed with Branchline's own update key, so only genuine releases ar
 - List local and remote branches with upstream and ahead/behind, then create, switch, rename
   and delete them. Remote branches check out as tracking branches; unmerged branches need a
   second confirmation before deletion; switching never overwrites uncommitted work.
+- **Local** or **Remote**: one list at a time, with their counts, so a long local list does
+  not push the remote branches out of reach (remembered). When the filter matches branches
+  in the other list, a link switches to it.
 - Sort by name or by last commit (remembered); the current branch stays on top.
+- **Clean up branches…** (above the local list, when there is something to clean up):
+  deletes local branches whose upstream was deleted on the remote, usually after their merge
+  request was merged, and whose commits are all on the remote, so nothing is lost. Branches
+  with commits that exist only on this computer, and the branch you are on, are listed but
+  kept. Branches you never published never show up. Branches deleted on the remote are known
+  after a fetch that prunes (Settings > Git, on by default; **Fetch first** in the dialog).
+  **Undo** in the message afterwards puts the branches back on the same commits.
 - Quick branch switcher in the title bar: your most recent local branches, and below them
   the newest remote branches that have no local branch yet. Choosing one of those checks it
   out as a tracking branch. Every branch is also in the command palette.
@@ -248,14 +258,23 @@ Updates are signed with Branchline's own update key, so only genuine releases ar
   need some tuning) works the same way, with pull requests (`#4`) instead of merge
   requests (`!4`). Bitbucket signs in with your Atlassian account's **email address** and an
   **API token with scopes** (app passwords no longer work): "Create a token on Bitbucket" opens
-  the Atlassian page. Give it `read:user`, `read:pullrequest` and `read:repository` for
-  Bitbucket; `write:pullrequest` will be needed for commenting and approving later. Both are
+  the Atlassian page. Give it `read:user`, `read:pullrequest`, `read:repository` and
+  `read:workspace` for Bitbucket (the last one for **Created by you** across all your
+  workspaces); `write:pullrequest` will be needed for commenting and approving later. Both are
   kept together in the password store. Bitbucket Data Center is not supported yet.
+- Remotes on Bitbucket's SSH addresses (`git@ssh.bitbucket.org:...`, and
+  `altssh.bitbucket.org` on port 443) count as Bitbucket Cloud, as does `altssh.gitlab.com`
+  for GitLab.com. A host alias from your SSH config (`Host bitbucket-work` with
+  `HostName ssh.bitbucket.org`, then `git@bitbucket-work:team/app.git`) works too: Branchline
+  asks OpenSSH which host the alias connects to (`ssh -G`, which reads the configuration
+  without connecting). When a remote still matches none of your accounts, Reviews says which
+  host it could not match.
 - Bitbucket has no merge request refs, so opening a pull request fetches its source branch
   (from the fork when it comes from one, at the same kind of address as your remote) and its
   target branch into `refs/branchline/pull-requests/<number>/`, and the diff starts where the
   branch forked from the target. Pull requests to review are listed per repository: across
-  all of Bitbucket only **Created by you** is available. Build statuses show as the pipeline.
+  all of Bitbucket only **Created by you** is available; Branchline asks each of your
+  workspaces for it (up to 20). Build statuses show as the pipeline.
 - Bitbucket does not say whether a pull request merges cleanly, so when you open one,
   Branchline tries the merge on this computer (`git merge-tree`, which touches neither your
   files nor your branches). The overview then shows "Merges cleanly" or the files that would
@@ -271,12 +290,24 @@ With AI on (Settings > AI), a merge request opened in Branchline has **Start rev
 The AI is the game master, not the reviewer: it asks questions that make you look closely at
 the change, and you decide what is right.
 
-- One round per changed file, with one to three questions:
+- One round per changed file. The more a file changed, the more questions it gets: one for a
+  small fix, up to five for a large change (by its changed lines). With Ollama the count is
+  enforced while the model writes; a model that still answers a large change with clearly too
+  few usable questions is asked once more. The questions are:
   - **Quiz** (multiple choice) and **true or false**: answer once; the explanation says why,
     and the lines that matter light up in the diff.
   - **Find the line**: click the right line in the diff.
   - **Your take**: an open question. The AI responds to your answer, never calls it wrong and
     never asks you something back, and may suggest a review comment you can edit and keep.
+- The AI prepares the questions in the background, one file at a time: the open file first,
+  then the files after it, so the next file is usually ready when you get there. The circle
+  before each file shows how many questions are ready (a spinner while they are being
+  prepared, `!` when that failed). Choosing a file that has none yet asks for that one first.
+  While the AI responds to an open answer, preparing waits. **Stop** pauses preparing until
+  you continue.
+- When the AI answers with a remark instead of questions ("I can't think of a question"),
+  Branchline leaves it out and asks again, up to three times. **New questions** asks for
+  other questions about the file, until you answer one.
 - An answered question stays in view until **Next question**; **Skip question** and **Skip
   file** are always there.
 - Click any added or removed line to write a draft comment on it.
@@ -288,14 +319,18 @@ the change, and you decide what is right.
 - The summary shows your points, coverage and draft comments: edit or remove them, or copy
   them all. Posting them to GitLab from Branchline comes in a later version.
 - Progress is saved per merge request on this computer, so you can stop and continue later.
+  **Restart** (at the top, and **Restart quest** on the summary) starts over: new questions
+  for every file, and answers, points and progress from zero. Your draft comments stay.
   A new commit on the merge request starts a new quest.
 - **Review my branch** (**Review with AI** in Changes, the current branch's menu in Branches,
   the newest commit's menu in History, or the command palette) plays the same quest on your
   own branch: its commits since it was created or forked, without uncommitted changes. The
   questions are what a reviewer is likely to ask, and findings become notes for yourself.
 - Sent to your AI provider per round: the title and description, the file's diff with line
-  numbers (shortened to fit) and earlier comments on that file. Nothing is sent with AI off,
-  and with AI off none of this appears anywhere.
+  numbers (shortened to fit) and earlier comments on that file. Once you start a quest, this
+  is sent for every file of the quest in turn, in the background, not only for the files you
+  open; your open answers are sent when you send them. Nothing is sent with AI off, and with
+  AI off none of this appears anywhere.
 
 ## AI
 
@@ -316,10 +351,21 @@ the change, and you decide what is right.
   description for the staged changes. The text streams in, `Esc` or Stop cancels it, and a
   message you had typed can be restored with Undo.
 - Thinking models (Qwen 3, DeepSeek R1, gpt-oss) are asked to answer without a thinking
-  step in Ollama, which is much faster for commit messages. Branchline also sets Ollama's
-  context size so the whole shortened diff fits.
-- Only the staged diff (shortened), the list of changed files, the branch name and recent commit
-  subjects are sent, and only when you ask. See [Privacy and security](#privacy-and-security).
+  step in Ollama, which is much faster for commit messages.
+- **Context length** (Ollama): how much text the model reads at once; 16K tokens by default.
+  Branchline asks for the same size on every request, because Ollama reloads the model
+  whenever it changes; only a prompt that does not fit makes it larger. The size sent with a
+  request always wins over the one set in Ollama itself, so if you set a size in Ollama (its
+  app, or `OLLAMA_CONTEXT_LENGTH`), choose **Ollama's setting** to use that one; then
+  switching between Branchline and a chat with the same model does not reload it either.
+- What is sent depends on the feature, and only when you use it (see
+  [Privacy and security](#privacy-and-security)):
+  - **Suggest message:** the staged diff (shortened), the list of changed files, the branch
+    name and recent commit subjects. Unstaged files are never sent.
+  - **Rewrite history with AI:** the messages and diffs (shortened) of the branch's commits
+    in the rebase.
+  - **Review quest:** the merge request's title and description, each file's diff and the
+    earlier comments on it, and your open answers.
 
 ## Git console and hooks
 
@@ -410,13 +456,15 @@ select lines), dialogs and panels. See [docs/accessibility.md](docs/accessibilit
   anything reaches the UI, including error messages.
 - Force push always uses `--force-with-lease`, so it cannot overwrite commits you have not
   fetched.
-- AI suggestions only contact the provider you chose (your Ollama or OpenAI-compatible
-  server, or the API of Anthropic or OpenAI), only when you ask for a suggestion (or test
-  the connection), and only send the staged diff (shortened), the list of changed files, the
-  branch name and recent commit subjects. Unstaged files are never sent. Addresses may not
+- AI features only contact the provider you chose (your Ollama or OpenAI-compatible server,
+  or the API of Anthropic or OpenAI), only when you use one (or test the connection), and
+  only send what that feature needs: the staged diff for a commit message (unstaged files
+  are never sent), the branch's commits for rewrite suggestions, and a merge request's (or
+  your branch's) changes, description and comments for the review quest. See [AI](#ai) for
+  the details. Addresses may not
   contain credentials, redirects are not followed, and system proxies are skipped for
   `localhost`. Settings warn when the server is not on this computer, and say plainly that a
-  cloud provider gets your staged changes.
+  cloud provider gets the changes you use AI on.
 - API keys are stored in the system's password store and never reach the app's web view.
   Branchline reads them at most once per run, and never sends a key over plain `http://` to
   another computer.
@@ -487,8 +535,8 @@ by page. Method and all numbers per platform: [docs/performance.md](docs/perform
   and shows descriptions and comments as plain text (Markdown is not formatted yet). It
   lists the first 100 commits and comment threads. The fetched `refs/branchline/...` refs stay
   in the repository; `git update-ref -d` removes one.
-- Runs on macOS and Linux; Windows has not been run yet. Automated tests and measurements so far
-  ran on Linux.
+- Builds are made for macOS, Windows and Linux; the Windows builds are the newest and the
+  least tried. The automated tests run on Linux; the release pipeline builds on all three.
 
 ## For developers
 
@@ -498,7 +546,7 @@ by page. Method and all numbers per platform: [docs/performance.md](docs/perform
 |---|---|
 | Git | 2.20 or newer on `PATH` (Branchline also checks common install locations) |
 | Node.js | 20 or newer (22 LTS recommended) |
-| Rust | stable, 1.77 or newer (`rustup` recommended) |
+| Rust | stable, 1.77 or newer, installed with [rustup](https://rustup.rs) |
 
 Platform requirements for Tauri 2 (full details: <https://v2.tauri.app/start/prerequisites/>):
 
@@ -510,7 +558,36 @@ Platform requirements for Tauri 2 (full details: <https://v2.tauri.app/start/pre
     libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
   ```
 
+### Installing Node.js and Rust
+
+- **Node.js:** the LTS installer from [nodejs.org](https://nodejs.org), or your package
+  manager (`brew install node`, `winget install OpenJS.NodeJS.LTS`).
+- **Rust**, with rustup:
+  - macOS and Linux:
+    ```sh
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+    ```
+  - Windows: run `rustup-init.exe` from [rustup.rs](https://rustup.rs) with the default
+    options (install the C++ Build Tools above first, or let it install them).
+  - Then open a **new** terminal, so it finds `cargo`. On macOS and Linux,
+    `source "$HOME/.cargo/env"` works in the current one; on Windows, sign out and in again
+    if a new terminal still does not find it.
+- Keep Rust up to date with `rustup update`.
+
+### Check your setup
+
+All of these should print a version before the first run:
+
+```sh
+git --version      # 2.20 or newer
+node --version     # 20 or newer
+cargo --version    # 1.77 or newer
+```
+
 ### Getting started
+
+The first `npm run app:dev` takes several minutes: it compiles all Rust libraries once. Later
+runs only rebuild what changed.
 
 ```sh
 npm install
@@ -520,6 +597,16 @@ npx tauri dev -- -- /path/to/repo     # open a repository on launch
 
 `npm run dev` starts only the web frontend in a browser. It renders, but Git features need the
 desktop shell and will say so.
+
+### Troubleshooting
+
+| Problem | Cause and fix |
+|---|---|
+| `failed to run 'cargo metadata'` | Rust is not installed, or `cargo` is not on the `PATH` of this terminal. Install it with rustup (above) and open a new terminal; `cargo --version` must work. |
+| `cargo` errors about the lock file or a crate needing a newer Rust | Rust is too old: `rustup update`. |
+| Linux: `webkit2gtk-4.1` or `javascriptcoregtk` not found | The Tauri system packages are missing; install the `apt` line above (or your distribution's equivalent). |
+| Windows: `link.exe` not found | The Microsoft C++ Build Tools ("Desktop development with C++") are missing. |
+| `npm run app:dev` is much slower than the installed app | Expected: development builds of the Rust code are not optimized, and the frontend is served unbundled. Judge speed with a release build: `npx tauri build --no-bundle`, then run `src-tauri/target/release/branchline` (`branchline.exe` on Windows). |
 
 ### Scripts
 

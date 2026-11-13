@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use crate::error::GitError;
 use crate::git::remote::list_remotes;
 use accounts::{Account, ForgeKind};
-use remote::{parse_remote, url_host};
+use remote::{is_ssh, parse_remote, ssh_alias_host, url_host};
 
 /// Which open requests to list.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -146,9 +146,20 @@ pub fn review_source(repo: &str) -> Result<Option<ReviewSource>, GitError> {
     let mut candidates: Vec<ReviewSource> = list_remotes(repo)?
         .into_iter()
         .filter_map(|r| {
-            let loc = parse_remote(&r.url)?;
+            let mut loc = parse_remote(&r.url)?;
+            let mut account = accounts::for_host(&loc.host);
+            // A host alias from the SSH configuration (`git@work:team/app.git`): use the host
+            // it really connects to. Only asked when no account matches the name itself.
+            if account.is_none() && is_ssh(&r.url) {
+                if let Some(real) = ssh_alias_host(&loc.host) {
+                    if let Some(a) = accounts::for_host(&real) {
+                        account = Some(a);
+                        loc.host = real;
+                    }
+                }
+            }
             Some(ReviewSource {
-                account: accounts::for_host(&loc.host),
+                account,
                 remote: r.name,
                 host: loc.host,
                 project: loc.path,
@@ -213,6 +224,11 @@ pub fn review_requests(
     // The repository's own project when its host has a connected account; otherwise all
     // projects of the first connected account.
     let source = review_source(repo)?;
+    // The repository's host, when no connected account matches it (for the messages below).
+    let unmatched = source
+        .as_ref()
+        .filter(|s| s.account.is_none())
+        .map(|s| s.host.clone());
     let (account, own_project) = match source.and_then(|s| s.account.map(|a| (a, s.project))) {
         Some((account, project)) => (account, Some(project)),
         None => {
@@ -230,6 +246,16 @@ pub fn review_requests(
             "Choose one project to see all of its open {}s.",
             account.kind.noun()
         )));
+    }
+    // Bitbucket lists requests to review per repository only: say why this one is not used.
+    if own_project.is_none() && account.kind == ForgeKind::Bitbucket {
+        if let (Some(host), RequestFilter::ReviewRequested) = (&unmatched, filter) {
+            return Err(GitError::Forge(format!(
+                "This repository's remote is on {host}, and none of your connected accounts is, \
+                 so Branchline cannot list its pull requests. Bitbucket lists pull requests to \
+                 review per repository; Created by you works across all of them."
+            )));
+        }
     }
     let project = own_project.as_deref().filter(|_| !all_projects);
     let (items, max) = match account.kind {

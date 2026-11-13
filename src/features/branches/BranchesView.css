@@ -204,3 +204,18 @@
 .bl-remote-head:focus-within .bl-remote-head__actions {
   opacity: 1;
 }
+
+/* Local | Remote */
+.bl-branches__count {
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+[aria-pressed="true"] > .bl-branches__count {
+  color: inherit;
+}
+.bl-branches__group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}

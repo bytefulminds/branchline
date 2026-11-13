@@ -4,6 +4,9 @@
 //! (HTTP Basic). Both are kept together in the credential store, go only to Bitbucket's API
 //! in the `Authorization` header, and never reach the frontend. Pull requests have no refs
 //! of their own, so their branches are fetched instead (see `git::remote::fetch_pull_request`).
+//!
+//! `scripts/check-bitbucket.mjs` tries each request made here against the real API (the
+//! tests use a fake server); add new requests there too.
 
 use std::collections::HashMap;
 use std::time::Duration;
@@ -28,6 +31,8 @@ pub const MAX_REVIEWS: usize = 50;
 const COMMENT_PAGES: usize = 5;
 /// Extra calls per pull request (build status) run this many at a time.
 const PARALLEL: usize = 6;
+/// Workspaces asked for your pull requests across Bitbucket (each one call).
+const MAX_WORKSPACES: usize = 20;
 /// Where Atlassian API tokens are made.
 pub const TOKEN_PAGE: &str = "https://id.atlassian.com/manage-profile/security/api-tokens";
 
@@ -171,6 +176,12 @@ fn status_error(res: &Response, what: &str, scope: &str) -> GitError {
         403 => forge(format!(
             "The API token is not allowed to read {what}. Give it the {scope} scope, or check \
              that your account has access."
+        )),
+        // Bitbucket answers this way for APIs it no longer offers (for example the
+        // cross-workspace ones removed in April 2026), whatever the credentials.
+        404 if res.body.contains("no API hosted at this URL") => forge(format!(
+            "Bitbucket no longer offers the request for {what}. Branchline needs an update for \
+             this; please report it."
         )),
         404 => forge(format!(
             "Bitbucket could not find {what}, or your account has no access to it."
@@ -711,6 +722,94 @@ fn to_threads(comments: Vec<ApiComment>) -> Vec<Thread> {
         .collect()
 }
 
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct Slug {
+    slug: String,
+}
+
+/// One entry of `/2.0/user/workspaces`: the workspace, and your access to it.
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct WorkspaceAccess {
+    workspace: Option<Slug>,
+    slug: String,
+}
+
+/// Your open pull requests in every workspace you belong to, newest activity first.
+/// Bitbucket removed the cross-workspace `/2.0/pullrequests/{user}` in April 2026
+/// (CHANGE-2770), so this asks each workspace (`/2.0/workspaces/{workspace}/pullrequests/{user}`).
+fn yours_everywhere(
+    account: &Account,
+    credentials: &str,
+    fields: &str,
+) -> Result<Vec<ApiPullRequest>, GitError> {
+    let root = api_root(&account.url);
+    let workspaces: Vec<String> = pages::<WorkspaceAccess>(
+        root,
+        credentials,
+        "/user/workspaces?pagelen=100",
+        1,
+        "your workspaces",
+        "read:workspace:bitbucket",
+    )?
+    .into_iter()
+    .map(|w| w.workspace.map(|s| s.slug).unwrap_or(w.slug))
+    .filter(|s| repo_path(&format!("{s}/x")).is_ok())
+    .take(MAX_WORKSPACES)
+    .collect();
+    let who = encode(
+        &account
+            .uid
+            .clone()
+            .unwrap_or_else(|| account.username.clone()),
+    );
+    let mut found: Vec<Result<Vec<ApiPullRequest>, GitError>> = Vec::new();
+    for chunk in workspaces.chunks(PARALLEL) {
+        std::thread::scope(|s| {
+            let running: Vec<_> = chunk
+                .iter()
+                .map(|w| {
+                    let who = &who;
+                    s.spawn(move || {
+                        pages::<ApiPullRequest>(
+                            root,
+                            credentials,
+                            &format!(
+                                "/workspaces/{w}/pullrequests/{who}?state=OPEN&sort=-updated_on&pagelen={MAX_REVIEWS}&{fields}"
+                            ),
+                            1,
+                            &format!("your pull requests in {w}"),
+                            "read:pullrequest:bitbucket",
+                        )
+                    })
+                })
+                .collect();
+            for r in running {
+                found.push(r.join().unwrap_or_else(|_| Ok(Vec::new())));
+            }
+        });
+    }
+    // One workspace that refuses (no access any more) should not hide the others.
+    let mut list = Vec::new();
+    let mut first_error = None;
+    for r in found {
+        match r {
+            Ok(items) => list.extend(items),
+            Err(e) => {
+                first_error.get_or_insert(e);
+            }
+        }
+    }
+    if list.is_empty() {
+        if let Some(e) = first_error {
+            return Err(e);
+        }
+    }
+    list.sort_by(|a, b| b.updated_on.cmp(&a.updated_on));
+    Ok(list)
+}
+
 /// Open pull requests in one repository (`workspace/repo`), filtered on your role; or, with
 /// `None`, the ones you created anywhere. Newest activity first.
 pub fn requests(
@@ -722,25 +821,20 @@ pub fn requests(
     let root = api_root(&account.url);
     // Reviewers and participants are left out of lists unless asked for.
     let fields = "fields=%2Bvalues.reviewers%2C%2Bvalues.participants";
-    let (path, what) = match project {
-        Some(p) => (
-            format!(
+    let list: Vec<ApiPullRequest> = match project {
+        Some(p) => pages(
+            root,
+            &credentials,
+            &format!(
                 "/repositories/{}/pullrequests?state=OPEN&sort=-updated_on&pagelen={MAX_REVIEWS}&{fields}",
                 repo_path(p)?
             ),
-            format!("the pull requests of {p}"),
-        ),
+            1,
+            &format!("the pull requests of {p}"),
+            "read:pullrequest:bitbucket",
+        )?,
         None => match filter {
-            RequestFilter::CreatedByYou => {
-                let who = account.uid.clone().unwrap_or_else(|| account.username.clone());
-                (
-                    format!(
-                        "/pullrequests/{}?state=OPEN&sort=-updated_on&pagelen={MAX_REVIEWS}&{fields}",
-                        encode(&who)
-                    ),
-                    "your pull requests".to_string(),
-                )
-            }
+            RequestFilter::CreatedByYou => yours_everywhere(account, &credentials, fields)?,
             _ => {
                 return Err(forge(
                     "Bitbucket lists pull requests to review per repository. Open a repository \
@@ -749,14 +843,6 @@ pub fn requests(
             }
         },
     };
-    let list: Vec<ApiPullRequest> = pages(
-        root,
-        &credentials,
-        &path,
-        1,
-        &what,
-        "read:pullrequest:bitbucket",
-    )?;
     let mut items: Vec<MergeRequest> = list
         .iter()
         .filter(|p| {
@@ -863,6 +949,27 @@ mod tests {
         let pos = threads[2].position.as_ref().unwrap();
         assert_eq!((pos.new_line, pos.old_line), (None, Some(7)));
         assert_eq!(threads[2].resolved, Some(true));
+    }
+
+    #[test]
+    fn says_when_bitbucket_no_longer_offers_a_request() {
+        let res = |body: &str| Response {
+            status: 404,
+            body: body.into(),
+            retry_after: None,
+            scopes: None,
+        };
+        let removed = status_error(
+            &res(r#"{"error":{"message":"There is no API hosted at this URL."}}"#),
+            "your pull requests",
+            "read:pullrequest:bitbucket",
+        );
+        assert!(
+            removed.to_string().contains("no longer offers"),
+            "{removed}"
+        );
+        let missing = status_error(&res("{}"), "pull request #4", "read:pullrequest:bitbucket");
+        assert!(missing.to_string().contains("could not find"), "{missing}");
     }
 
     #[test]

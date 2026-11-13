@@ -6,6 +6,10 @@ CHANGELOG section as its description.
 
 ## Make a release
 
+0. When Reviews talks to a service in a new way, try it against the real service first: the
+   tests use fake servers, which cannot notice when a service changes or removes an API.
+   For Bitbucket Cloud, `npm run check:bitbucket` tries every request Branchline makes with
+   your own account (see the top of `scripts/check-bitbucket.mjs`).
 1. Write the release notes in `CHANGELOG.md` under `## [x.y.z] - date` (move them out of
    `[Unreleased]`).
 2. Set the version everywhere: `node scripts/release/bump-version.mjs x.y.z`

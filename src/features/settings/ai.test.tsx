@@ -102,6 +102,12 @@ describe("AI settings", () => {
     await waitFor(() => expect(saved(calls)?.ai.style).toBe("plain"));
     // Local server: no warning.
     expect(within(panel).queryByText(/sent to this server/)).not.toBeInTheDocument();
+
+    // The context length stays the same for every request, or is left to Ollama.
+    const context = within(panel).getByLabelText("Context length");
+    expect(context).toHaveValue("16384");
+    await user.selectOptions(context, "0");
+    await waitFor(() => expect(saved(calls)?.ai.ollamaContext).toBe(0));
   });
 
   it("warns about remote servers and shows connection errors", async () => {

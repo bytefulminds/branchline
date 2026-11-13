@@ -6,14 +6,17 @@ import {
   ClipboardCopy,
   Flag,
   MessageSquarePlus,
+  RefreshCw,
+  RotateCcw,
   SkipForward,
   Sparkles,
   Square,
   Trash2,
   Trophy,
 } from "lucide-react";
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { Button } from "../../components/Button";
+import { useConfirm } from "../../components/ConfirmDialog";
 import { Spinner } from "../../components/Spinner";
 import { StatusLetter } from "../../components/StatusLetter";
 import { splitPath } from "../../lib/format";
@@ -34,7 +37,9 @@ import {
   isAnswered,
   lineLabel,
   lineRefAt,
+  emptyQuest,
   loadQuest,
+  nextToPrepare,
   POINTS,
   pointsFor,
   type QuestState,
@@ -53,6 +58,25 @@ let nextOpId = 1;
 const opId = () => `quest-${nextOpId++}`;
 
 const EMPTY_ROUND: RoundState = { questions: null, answers: [], done: false, skipped: false };
+
+/** What the AI gets to know about one file of the quest. */
+const contextFor = (spec: QuestSpec, file: QuestFile) => ({
+  base: spec.base,
+  head: spec.head,
+  path: file.path,
+  originalPath: file.originalPath,
+  title: spec.title,
+  description: spec.description,
+  discussion: spec.discussion?.[file.path] ?? "",
+  ownBranch: spec.ownBranch,
+});
+
+/** Where the questions for the open file are: being asked, failed, or paused by Stop. */
+interface Asking {
+  asking: boolean;
+  error: GitError | null;
+  paused: boolean;
+}
 
 const KIND_LABEL: Record<Question["kind"], string> = {
   choice: "Quiz",
@@ -329,6 +353,11 @@ function RoundPane({
   onDraft,
   onFinish,
   onSkipFile,
+  status,
+  onStop,
+  onRetry,
+  onAskAgain,
+  onReplying,
 }: {
   spec: QuestSpec;
   file: QuestFile;
@@ -339,32 +368,27 @@ function RoundPane({
   onDraft: (body: string, line: LineRef | null) => void;
   onFinish: () => void;
   onSkipFile: () => void;
+  /** The questions are prepared by the quest, in the background. */
+  status: Asking;
+  onStop: () => void;
+  onRetry: () => void;
+  /** Ask the AI for other questions about this file (before any is answered). */
+  onAskAgain: () => void;
+  /** An open answer is with the AI: preparing other files waits meanwhile. */
+  onReplying: (replying: boolean) => void;
 }) {
   const [diff, setDiff] = useState<{ path: string; diff?: FileDiff; error?: GitError } | null>(
     null,
   );
-  // A failed (or stopped) request for questions, per attempt.
-  const [failed, setFailed] = useState<{ key: string; error: GitError } | null>(null);
-  const [replying, setReplying] = useState(false);
+  const [replying, setReplyingState] = useState(false);
+  const setReplying = (r: boolean) => {
+    setReplyingState(r);
+    onReplying(r);
+  };
   const [composer, setComposer] = useState<LineRef | null>(null);
   // An answered question stays in view (with its explanation) until "Next question".
   const [stay, setStay] = useState<number | null>(null);
-  const [attempt, setAttempt] = useState(0);
-  const running = useRef<string | null>(null);
-
-  const context = useMemo(
-    () => ({
-      base: spec.base,
-      head: spec.head,
-      path: file.path,
-      originalPath: file.originalPath,
-      title: spec.title,
-      description: spec.description,
-      discussion: spec.discussion?.[file.path] ?? "",
-      ownBranch: spec.ownBranch,
-    }),
-    [spec, file],
-  );
+  const context = useMemo(() => contextFor(spec, file), [spec, file]);
 
   useEffect(() => {
     let cancelled = false;
@@ -377,32 +401,7 @@ function RoundPane({
     };
   }, [spec.repoPath, spec.base, spec.head, file.path, file.originalPath]);
 
-  // Ask for the questions the first time a file comes up (and on Try again).
   const needQuestions = round.questions === null && !round.skipped;
-  const askKey = `${file.path}\n${attempt}`;
-  useEffect(() => {
-    if (!needQuestions) return;
-    const id = opId();
-    running.current = id;
-    let cancelled = false;
-    questService.round(spec.repoPath, context, id).then(
-      (r) => {
-        if (cancelled || running.current !== id) return;
-        running.current = null;
-        onUpdate((x) => ({ ...x, questions: r.questions, answers: [] }));
-      },
-      (e: GitError) => {
-        if (cancelled || running.current !== id) return;
-        running.current = null;
-        setFailed({ key: askKey, error: e });
-      },
-    );
-    return () => {
-      cancelled = true;
-      if (running.current === id) void questService.cancel(id).catch(() => {});
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [needQuestions, file.path, attempt]);
 
   const shown = diff?.path === file.path ? (diff.diff ?? null) : null;
   const rows = useMemo(() => (shown ? diffRows(shown) : []), [shown]);
@@ -430,8 +429,9 @@ function RoundPane({
 
   const fileComments = comments.filter((c) => c.path === file.path);
   const { name, dir } = splitPath(file.path);
-  const error = needQuestions && failed?.key === askKey ? failed.error : null;
-  const waiting = needQuestions && !error;
+  const error = needQuestions ? status.error : null;
+  const waiting = needQuestions && !error && status.asking;
+  const paused = needQuestions && !error && !status.asking && status.paused;
 
   const chooseLine = (ref: LineRef) => {
     if (question?.kind === "findLine" && !isAnswered(answer)) {
@@ -451,22 +451,23 @@ function RoundPane({
               size="sm"
               variant="ghost"
               icon={<Square size={12} aria-hidden />}
-              onClick={() => {
-                const id = running.current;
-                running.current = null;
-                setFailed({
-                  key: askKey,
-                  error: {
-                    kind: "cancelled",
-                    message: "Stopped. Ask again when you are ready, or skip this file.",
-                    detail: null,
-                  },
-                });
-                if (id) void questService.cancel(id).catch(() => {});
-              }}
+              onClick={onStop}
             >
               Stop
             </Button>
+          </div>
+        )}
+        {paused && (
+          <div className="bl-quest__error" role="status">
+            <p>Stopped. The AI prepares no questions until you continue.</p>
+            <div className="bl-quest__card-actions">
+              <Button size="sm" onClick={onRetry}>
+                Continue
+              </Button>
+              <Button size="sm" variant="ghost" onClick={onSkipFile}>
+                Skip this file
+              </Button>
+            </div>
           </div>
         )}
         {round.skipped && round.questions === null && (
@@ -483,7 +484,7 @@ function RoundPane({
           <div className="bl-quest__error" role="alert">
             <p>{error.message}</p>
             <div className="bl-quest__card-actions">
-              <Button size="sm" onClick={() => setAttempt((n) => n + 1)}>
+              <Button size="sm" onClick={onRetry}>
                 Try again
               </Button>
               <Button size="sm" variant="ghost" onClick={onSkipFile}>
@@ -569,14 +570,27 @@ function RoundPane({
                 {`Click a changed line in the diff to ${spec.ownBranch ? "write a note" : "draft a comment"} on it.`}
               </span>
             )}
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={<SkipForward size={14} aria-hidden />}
-              onClick={onSkipFile}
-            >
-              Skip file
-            </Button>
+            <span className="bl-quest__round-tools">
+              {round.answers.every((a) => !isAnswered(a)) && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={<RefreshCw size={14} aria-hidden />}
+                  title="Ask the AI for other questions about this file"
+                  onClick={onAskAgain}
+                >
+                  New questions
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={<SkipForward size={14} aria-hidden />}
+                onClick={onSkipFile}
+              >
+                Skip file
+              </Button>
+            </span>
           </div>
         )}
         {composer && (
@@ -653,6 +667,7 @@ function Summary({
   onEdit,
   onRemove,
   onExit,
+  onRestart,
 }: {
   spec: QuestSpec;
   plan: QuestPlan;
@@ -660,6 +675,7 @@ function Summary({
   onEdit: (id: string, body: string) => void;
   onRemove: (id: string) => void;
   onExit: () => void;
+  onRestart: () => void;
 }) {
   const s = stats(state);
   const cov = coverage(plan, state);
@@ -759,6 +775,9 @@ function Summary({
         <Button variant="primary" icon={<ArrowLeft size={14} aria-hidden />} onClick={onExit}>
           Back to {spec.backLabel.toLowerCase()}
         </Button>
+        <Button variant="ghost" icon={<RotateCcw size={14} aria-hidden />} onClick={onRestart}>
+          Restart quest
+        </Button>
       </div>
     </section>
   );
@@ -769,6 +788,12 @@ export function QuestView({ spec, onExit }: { spec: QuestSpec; onExit: () => voi
   const [loaded, setLoaded] = useState<{ plan?: QuestPlan; error?: GitError } | null>(null);
   const [state, setStateRaw] = useState(() => loadQuest(spec.storageKey, spec.head));
   const [gain, setGain] = useState<{ points: number; id: number } | null>(null);
+  // Files whose questions could not be prepared, until Try again.
+  const [failed, setFailed] = useState<Record<string, GitError>>({});
+  // Stop pauses preparing questions; an open answer with the AI waits it out too.
+  const [paused, setPaused] = useState(false);
+  const [replying, setReplying] = useState(false);
+  const confirm = useConfirm();
 
   useEffect(() => {
     let cancelled = false;
@@ -816,6 +841,59 @@ export function QuestView({ spec, onExit }: { spec: QuestSpec; onExit: () => voi
   };
   const cov = plan ? coverage(plan, state) : 0;
 
+  // Questions are prepared in the background, one file at a time (a local model answers one
+  // request at a time anyway): the open file first, then the next ones, so they are ready
+  // when you get there. Moving to another file that has none yet asks for that one first.
+  const preparing = plan && !paused && !replying ? nextToPrepare(plan, state, failed) : null;
+  useEffect(() => {
+    if (!preparing || !plan) return;
+    const prepared = plan.rounds.find((f) => f.path === preparing);
+    if (!prepared) return;
+    const id = opId();
+    let settled = false;
+    questService.round(spec.repoPath, contextFor(spec, prepared), id).then(
+      (r) => {
+        settled = true;
+        setRound(preparing, (x) =>
+          x.questions === null ? { ...x, questions: r.questions, answers: [] } : x,
+        );
+      },
+      (error: GitError) => {
+        settled = true;
+        if (error.kind !== "cancelled") setFailed((f) => ({ ...f, [preparing]: error }));
+      },
+    );
+    return () => {
+      if (!settled) void questService.cancel(id).catch(() => {});
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preparing]);
+  // A fresh quest: new questions for every file, answers and points from zero. Draft comments
+  // are kept, since they are your own findings.
+  const restart = async () => {
+    const ok = await confirm({
+      title: "Restart the quest?",
+      description: `The AI asks new questions about every file, and your answers, points and progress start over.${
+        state.comments.length
+          ? ` Your ${state.comments.length === 1 ? "draft comment stays" : `${state.comments.length} draft comments stay`}.`
+          : ""
+      }`,
+      confirmLabel: "Restart quest",
+    });
+    if (!ok) return;
+    setFailed({});
+    setPaused(false);
+    update((s) => ({ ...emptyQuest(spec.head), comments: s.comments }));
+  };
+  const retry = (path: string) => {
+    setFailed((f) => {
+      const rest = { ...f };
+      delete rest[path];
+      return rest;
+    });
+    setPaused(false);
+  };
+
   return (
     <section className="bl-quest" aria-label="Review quest">
       <header className="bl-quest__head">
@@ -845,6 +923,17 @@ export function QuestView({ spec, onExit }: { spec: QuestSpec; onExit: () => voi
           <Trophy size={14} aria-hidden /> {state.points} points
           <Gain gain={gain} />
         </span>
+        {plan && (
+          <Button
+            size="sm"
+            variant="ghost"
+            icon={<RotateCcw size={14} aria-hidden />}
+            title="New questions for every file, answers and points from zero"
+            onClick={() => void restart()}
+          >
+            Restart
+          </Button>
+        )}
         {plan && !atSummary && (
           <Button
             size="sm"
@@ -878,6 +967,19 @@ export function QuestView({ spec, onExit }: { spec: QuestSpec; onExit: () => voi
               {plan.rounds.map((f, i) => {
                 const r = state.rounds[f.path];
                 const { name, dir } = splitPath(f.path);
+                const count = !r?.done && !r?.skipped ? r?.questions?.length : undefined;
+                const note =
+                  r?.done && !r.skipped
+                    ? ", done"
+                    : r?.skipped
+                      ? ", skipped"
+                      : count !== undefined
+                        ? `, ${count} ${count === 1 ? "question" : "questions"} ready`
+                        : preparing === f.path
+                          ? ", preparing questions"
+                          : f.path in failed
+                            ? ", questions could not be prepared"
+                            : "";
                 return (
                   <button
                     key={f.path}
@@ -890,14 +992,24 @@ export function QuestView({ spec, onExit }: { spec: QuestSpec; onExit: () => voi
                       <CircleCheck size={14} aria-hidden className="bl-quest__done" />
                     ) : r?.skipped ? (
                       <SkipForward size={14} aria-hidden className="text-muted" />
+                    ) : count !== undefined ? (
+                      <span className="bl-quest__dot bl-quest__dot--count" aria-hidden>
+                        {count}
+                      </span>
+                    ) : preparing === f.path ? (
+                      <span className="bl-quest__dot bl-quest__dot--busy" aria-hidden>
+                        <Spinner size={10} />
+                      </span>
+                    ) : f.path in failed ? (
+                      <span className="bl-quest__dot bl-quest__dot--failed" aria-hidden>
+                        !
+                      </span>
                     ) : (
                       <span className="bl-quest__dot" aria-hidden />
                     )}
                     <span className="bl-commit-file__name truncate">{name}</span>
                     <span className="bl-commit-file__dir truncate">{dir}</span>
-                    <span className="visually-hidden">
-                      {r?.done && !r.skipped ? ", done" : r?.skipped ? ", skipped" : ""}
-                    </span>
+                    <span className="visually-hidden">{note}</span>
                   </button>
                 );
               })}
@@ -933,6 +1045,7 @@ export function QuestView({ spec, onExit }: { spec: QuestSpec; onExit: () => voi
                     update((s) => ({ ...s, comments: s.comments.filter((c) => c.id !== id) }))
                   }
                   onExit={onExit}
+                  onRestart={() => void restart()}
                 />
               ) : (
                 file && (
@@ -962,6 +1075,18 @@ export function QuestView({ spec, onExit }: { spec: QuestSpec; onExit: () => voi
                       setRound(file.path, (r) => ({ ...r, skipped: true, done: false }));
                       goTo(state.current + 1);
                     }}
+                    status={{
+                      asking: preparing === file.path,
+                      error: failed[file.path] ?? null,
+                      paused,
+                    }}
+                    onStop={() => setPaused(true)}
+                    onRetry={() => retry(file.path)}
+                    onAskAgain={() => {
+                      retry(file.path);
+                      setRound(file.path, (r) => ({ ...r, questions: null, answers: [] }));
+                    }}
+                    onReplying={setReplying}
                   />
                 )
               )}
