@@ -275,6 +275,20 @@ export interface BranchInfo {
   worktreePath?: string | null;
 }
 
+/** A local branch whose upstream was deleted on the remote ("Clean up branches"). */
+export interface GoneBranch {
+  name: string;
+  /** The upstream it had, such as `origin/feature/x`. */
+  upstream: string;
+  oid: string;
+  tipSummary: string;
+  tipTime: number;
+  /** Commits that no remote branch has; with 0 deleting it loses nothing. */
+  localOnly: number;
+  /** Checked out here or in another worktree. */
+  inUse: boolean;
+}
+
 export interface WorktreeInfo {
   path: string;
   /** Folder name. */

@@ -246,6 +246,25 @@ pub async fn delete_branch(
     write_then_inspect(repo, move |r| branches::delete_branch(r, &name, force)).await
 }
 
+/// Local branches whose upstream was deleted on the remote, for "Clean up branches".
+#[tauri::command]
+pub async fn gone_branches(repo: String) -> Result<Vec<branches::GoneBranch>, GitError> {
+    blocking(move || branches::gone_branches(&repo)).await
+}
+
+/// Delete gone branches that lose nothing; returns the deleted ones and the repository.
+#[tauri::command]
+pub async fn delete_gone_branches(
+    repo: String,
+    names: Vec<String>,
+) -> Result<(Vec<branches::GoneBranch>, RepositoryInfo), GitError> {
+    blocking(move || {
+        let deleted = branches::delete_gone_branches(&repo, &names)?;
+        Ok((deleted, repository::inspect(&repo)?))
+    })
+    .await
+}
+
 /// Watch `repo` for changes; emits `repository-changed` events.
 /// Setting up a recursive watch can take a moment on large trees, so it runs off the main thread.
 /// Result of a fetch, pull or push: what changed, plus the refreshed repository.

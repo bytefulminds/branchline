@@ -118,7 +118,17 @@ Updates are signed with Branchline's own update key, so only genuine releases ar
 - List local and remote branches with upstream and ahead/behind, then create, switch, rename
   and delete them. Remote branches check out as tracking branches; unmerged branches need a
   second confirmation before deletion; switching never overwrites uncommitted work.
+- **Local** or **Remote**: one list at a time, with their counts, so a long local list does
+  not push the remote branches out of reach (remembered). When the filter matches branches
+  in the other list, a link switches to it.
 - Sort by name or by last commit (remembered); the current branch stays on top.
+- **Clean up branches…** (above the local list, when there is something to clean up):
+  deletes local branches whose upstream was deleted on the remote, usually after their merge
+  request was merged, and whose commits are all on the remote, so nothing is lost. Branches
+  with commits that exist only on this computer, and the branch you are on, are listed but
+  kept. Branches you never published never show up. Branches deleted on the remote are known
+  after a fetch that prunes (Settings > Git, on by default; **Fetch first** in the dialog).
+  **Undo** in the message afterwards puts the branches back on the same commits.
 - Quick branch switcher in the title bar: your most recent local branches, and below them
   the newest remote branches that have no local branch yet. Choosing one of those checks it
   out as a tracking branch. Every branch is also in the command palette.
@@ -280,7 +290,9 @@ With AI on (Settings > AI), a merge request opened in Branchline has **Start rev
 The AI is the game master, not the reviewer: it asks questions that make you look closely at
 the change, and you decide what is right.
 
-- One round per changed file, with one to three questions:
+- One round per changed file. The more a file changed, the more questions it gets: one for a
+  small fix, up to five for a large change (by its changed lines). A model that answers a
+  large change with clearly too few questions is asked once more. The questions are:
   - **Quiz** (multiple choice) and **true or false**: answer once; the explanation says why,
     and the lines that matter light up in the diff.
   - **Find the line**: click the right line in the diff.

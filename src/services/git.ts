@@ -15,6 +15,7 @@ import type {
   RewriteBase,
   GitError,
   GitVersion,
+  GoneBranch,
   LineRequest,
   LogFilter,
   LogPage,
@@ -126,6 +127,11 @@ export const gitService = {
     call<RepositoryInfo>("rename_branch", { repo, old, new: newName }),
   deleteBranch: (repo: string, name: string, force: boolean) =>
     call<RepositoryInfo>("delete_branch", { repo, name, force }),
+  /** Local branches whose upstream was deleted on the remote. */
+  goneBranches: (repo: string) => call<GoneBranch[]>("gone_branches", { repo }),
+  /** Delete those that lose nothing (checked again in the backend); returns the deleted ones. */
+  deleteGoneBranches: (repo: string, names: string[]) =>
+    call<[GoneBranch[], RepositoryInfo]>("delete_gone_branches", { repo, names }),
   listRemotes: (repo: string) => call<RemoteInfo[]>("list_remotes", { repo }),
   /** Fetch `remote`, or every remote when null. `opId` identifies it for `cancelRemote`. */
   fetchRemote: (

@@ -295,7 +295,30 @@ fn round_schema() -> Value {
 }
 
 /// Instructions for asking about one file.
-pub fn round_prompt(ctx: &QuestContext) -> String {
+/// Most questions asked about one file.
+pub const MAX_QUESTIONS: usize = 5;
+
+/// How many questions a file is worth, from its changed lines: one for a small fix, up to
+/// five for a large change. Asked for exactly, because "1 to 3" made small models settle for one.
+pub fn question_count(changed_lines: usize) -> usize {
+    match changed_lines {
+        0..=10 => 1,
+        11..=40 => 2,
+        41..=120 => 3,
+        121..=300 => 4,
+        _ => MAX_QUESTIONS,
+    }
+}
+
+pub fn round_prompt(ctx: &QuestContext, count: usize) -> String {
+    let ask = if count == 1 {
+        "Ask 1 question".to_string()
+    } else {
+        format!(
+            "Ask {count} questions (the change is large enough for that many; never fewer than {})",
+            count - 1
+        )
+    };
     let who = if ctx.own_branch {
         "The developer reviews their own branch before opening a merge request. Ask what a \
 reviewer is likely to ask, so they can fix things before anyone else sees them."
@@ -310,7 +333,7 @@ edge cases, errors, naming, tests, security and behaviour changes.\n\
 You get one file's diff. Every line starts with its reference, such as [new 17] for a line in \
 the new version or [old 20] for a removed line, then +, - or a space.\n\
 \n\
-Ask 1 to 3 questions about this file, mixing these types:\n\
+{ask} about this file, each about a different part of the change, mixing these types:\n\
 - \"choice\": multiple choice with 3 or 4 \"choices\"; \"answer\" is the index of the right one \
 (0 is the first).\n\
 - \"truefalse\": a statement about the change; \"answer\" is true or false.\n\
@@ -422,7 +445,7 @@ pub fn parse_round(raw: &str, path: &str, known: &KnownLines) -> Result<Round, S
     let v: Value = serde_json::from_str(json).map_err(|e| format!("invalid JSON: {e}"))?;
     let mut questions = Vec::new();
     for q in v["questions"].as_array().into_iter().flatten() {
-        if questions.len() == 3 {
+        if questions.len() == MAX_QUESTIONS {
             break;
         }
         let prompt = q["question"]
@@ -543,9 +566,13 @@ pub fn quest_round(
     let ep = endpoint(cfg)?;
     let (token, _registration) = register(op_id);
     let (diff, known) = numbered_diff(repo, ctx)?;
-    let system = round_prompt(ctx);
+    let wanted = question_count(known.changed.len());
+    let system = round_prompt(ctx, wanted);
     let user = round_input(ctx, &diff);
     let mut last = String::new();
+    // The best answer so far, used when asking again does not give enough questions.
+    let mut best: Option<Round> = None;
+    let mut asked_for_more = false;
     // Small models sometimes answer with a remark instead of questions; asking again often
     // works, so up to three times.
     for _ in 0..3 {
@@ -566,9 +593,22 @@ pub fn quest_round(
             },
         )?;
         match parse_round(&raw, &ctx.path, &known) {
-            Ok(round) => return Ok(round),
+            // Clearly too few for a large change: ask once more, keeping the better answer.
+            Ok(round) if round.questions.len() + 1 < wanted && !asked_for_more => {
+                asked_for_more = true;
+                best = Some(round);
+            }
+            Ok(round) => {
+                return Ok(match best {
+                    Some(b) if b.questions.len() > round.questions.len() => b,
+                    _ => round,
+                })
+            }
             Err(why) => last = why,
         }
+    }
+    if let Some(round) = best {
+        return Ok(round);
     }
     Err(GitError::Ai(format!(
         "The model's questions did not fit this file ({last}). Try again, skip the file, or choose a larger model."
@@ -854,6 +894,32 @@ mod tests {
             &known
         )
         .is_err());
+    }
+
+    #[test]
+    fn asks_more_questions_about_larger_changes() {
+        assert_eq!(question_count(4), 1);
+        assert_eq!(question_count(25), 2);
+        assert_eq!(question_count(80), 3);
+        assert_eq!(question_count(200), 4);
+        assert_eq!(question_count(5_000), MAX_QUESTIONS);
+        let ctx = QuestContext::default();
+        assert!(round_prompt(&ctx, 1).contains("Ask 1 question about this file"));
+        assert!(round_prompt(&ctx, 4).contains("Ask 4 questions"));
+
+        // Up to five are kept.
+        let known = KnownLines {
+            all: HashSet::new(),
+            changed: HashSet::new(),
+        };
+        let six: Vec<String> = (1..=6)
+            .map(|i| format!(r#"{{"type":"open","question":"Question {i}?","explanation":""}}"#))
+            .collect();
+        let raw = format!(r#"{{"questions":[{}]}}"#, six.join(","));
+        assert_eq!(
+            parse_round(&raw, "x", &known).unwrap().questions.len(),
+            MAX_QUESTIONS
+        );
     }
 
     #[test]

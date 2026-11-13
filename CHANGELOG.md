@@ -10,8 +10,11 @@ description on GitLab.
 ## [0.3.2] - 2026-11-13
 
 The review quest gets faster: the AI prepares the questions in the background while you play,
-and Ollama no longer reloads the model between requests. Bitbucket's **Created by you** works
-again. (0.3.1 was not released; its fix is part of this version.)
+and Ollama no longer reloads the model between requests, and larger changes get more
+questions. The Branches page shows local and remote branches one at a time and can clean up
+branches that were merged and deleted on the remote. Bitbucket works again for
+**Created by you** and for repositories cloned from its new SSH address. (0.3.1 was not
+released; its fix is part of this version.)
 
 ### Added
 
@@ -20,9 +23,17 @@ again. (0.3.1 was not released; its fix is part of this version.)
   file has. **New questions** asks for other questions about a file.
 - Settings > AI > Context length (Ollama): a fixed size for every request (16K tokens by
   default), or Ollama's own setting.
+- Branches: **Local** and **Remote** are shown one at a time, with their counts, instead of
+  one long page.
+- Branches: **Clean up branches…** deletes local branches whose upstream was deleted on the
+  remote and whose commits are all there, with Undo. Branches with commits only on your
+  computer, and branches you never published, stay.
 
 ### Changed
 
+- Review quest: larger changes get more questions, from one for a small fix to five for a
+  large change, instead of one to three (which small models mostly read as one).
+- Reviews: the overview of a merge request fills the pane, like a file's diff does.
 - Manual: how to install Node.js and Rust, check your setup, and fix common build errors
   (such as "failed to run cargo metadata") when building from source.
 - Settings > AI and the manual now say what each AI feature sends (a commit message, rewrite

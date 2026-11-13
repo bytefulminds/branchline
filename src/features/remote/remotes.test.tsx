@@ -77,6 +77,9 @@ describe("remote helpers", () => {
 /** Opens Branches and returns the heading row of a remote's group. */
 async function remoteHead(user: ReturnType<typeof userEvent.setup>, name: string) {
   await user.keyboard("{Control>}3{/Control}");
+  const branches = await screen.findByRole("region", { name: "Branches" });
+  const remote = within(branches).getByRole("button", { name: /^Remote/ });
+  if (remote.getAttribute("aria-pressed") !== "true") await user.click(remote);
   const group = await screen.findByRole("region", { name: `Remote ${name}` });
   return { group, head: within(group).getByRole("heading", { name }).parentElement! };
 }
@@ -123,6 +126,7 @@ describe("remotes in the Branches view", () => {
       if (cmd === "list_branches") return { local: [], remote: [] };
     }, []);
     await user.keyboard("{Control>}3{/Control}");
+    await user.click(await screen.findByRole("button", { name: "Remote 0" }));
     expect(await screen.findByRole("heading", { name: "No remotes" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Add remote" }));
     const dialog = await screen.findByRole("dialog", { name: "Add remote" });

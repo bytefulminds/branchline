@@ -5,8 +5,8 @@ use std::path::Path;
 use std::process::Command;
 
 use branchline_lib::git::branches::{
-    checkout_detached, checkout_remote_branch, create_branch, delete_branch, list_branches,
-    rename_branch, switch_branch, validate_branch_name, StartPoint,
+    checkout_detached, checkout_remote_branch, create_branch, delete_branch, delete_gone_branches,
+    gone_branches, list_branches, rename_branch, switch_branch, validate_branch_name, StartPoint,
 };
 use branchline_lib::git::repository::{inspect, HeadState};
 use tempfile::TempDir;
@@ -265,4 +265,90 @@ fn checks_out_remote_branches_with_tracking() {
         .kind(),
         "unsupported"
     );
+}
+
+#[test]
+fn cleans_up_branches_whose_upstream_was_deleted_and_that_lose_nothing() {
+    let t = repo();
+    let d = t.path();
+    let server = TempDir::new().unwrap();
+    git(server.path(), &["init", "-q", "--bare", "-b", "main"]);
+    git(d, &["remote", "add", "origin", &s(server.path())]);
+    git(d, &["push", "-q", "-u", "origin", "main"]);
+
+    // merged: published, merged into main on the server, then deleted there.
+    git(d, &["switch", "-q", "-c", "merged"]);
+    commit(d, "m.txt", "m\n", "merged work");
+    git(d, &["push", "-q", "-u", "origin", "merged"]);
+    git(d, &["switch", "-q", "main"]);
+    git(
+        d,
+        &["merge", "-q", "--no-ff", "-m", "Merge merged", "merged"],
+    );
+    git(d, &["push", "-q", "origin", "main"]);
+    // extra: published, then a commit that only exists here; deleted on the server.
+    git(d, &["switch", "-q", "-c", "extra"]);
+    commit(d, "e.txt", "e\n", "extra work");
+    git(d, &["push", "-q", "-u", "origin", "extra"]);
+    commit(d, "e.txt", "e2\n", "not pushed");
+    // still: published and still on the server.
+    git(d, &["switch", "-q", "-c", "still", "main"]);
+    git(d, &["push", "-q", "-u", "origin", "still"]);
+    // local: never published.
+    git(d, &["switch", "-q", "-c", "local", "main"]);
+    commit(d, "l.txt", "l\n", "local work");
+    // current: published, deleted on the server, and checked out.
+    git(d, &["switch", "-q", "-c", "current", "main"]);
+    git(d, &["push", "-q", "-u", "origin", "current"]);
+    for b in ["merged", "extra", "current"] {
+        git(server.path(), &["branch", "-D", b]);
+    }
+    git(d, &["fetch", "-q", "--prune", "origin"]);
+
+    let repo = s(d);
+    let gone = gone_branches(&repo).unwrap();
+    let names: Vec<_> = gone.iter().map(|b| b.name.as_str()).collect();
+    assert_eq!(
+        names,
+        ["current", "extra", "merged"],
+        "never published and still there are left out"
+    );
+    let by = |n: &str| gone.iter().find(|b| b.name == n).unwrap().clone();
+    assert!(by("merged").removable());
+    assert_eq!(by("merged").upstream, "origin/merged");
+    // Deleted on the server without being merged: both its commits now exist only here.
+    assert_eq!(by("extra").local_only, 2);
+    assert!(!by("extra").removable());
+    assert!(by("current").in_use);
+
+    // Only what loses nothing is deleted, whatever is asked.
+    let all: Vec<String> = ["merged", "extra", "current", "local", "still"]
+        .iter()
+        .map(|n| n.to_string())
+        .collect();
+    let deleted = delete_gone_branches(&repo, &all).unwrap();
+    assert_eq!(deleted.len(), 1);
+    assert_eq!(deleted[0].name, "merged");
+    let left: Vec<_> = list_branches(d)
+        .unwrap()
+        .local
+        .into_iter()
+        .map(|b| b.name)
+        .collect();
+    assert!(!left.contains(&"merged".to_string()));
+    for kept in ["extra", "current", "local", "still", "main"] {
+        assert!(left.contains(&kept.to_string()), "{kept} is kept");
+    }
+
+    // Undo: the branch comes back on the same commit.
+    create_branch(
+        &repo,
+        "merged",
+        &StartPoint::Commit {
+            oid: deleted[0].oid.clone(),
+        },
+        false,
+    )
+    .unwrap();
+    assert_eq!(git(d, &["rev-parse", "merged"]), deleted[0].oid);
 }

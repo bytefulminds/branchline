@@ -1,4 +1,5 @@
-//! Branch listing and management: create, switch, rename and delete.
+//! Branch listing and management: create, switch, rename, delete, and cleaning up branches
+//! whose upstream was deleted on the remote.
 //!
 //! Branch names from the UI are validated with `git check-ref-format` plus
 //! extra rules (no leading dash, not `HEAD`), and always passed after `--` or as
@@ -171,6 +172,92 @@ fn find_local<'a>(list: &'a BranchList, name: &str) -> Result<&'a BranchInfo, Gi
         .iter()
         .find(|b| b.name == name)
         .ok_or_else(|| GitError::Unsupported(format!("There is no local branch named {name}.")))
+}
+
+/// A local branch whose upstream no longer exists on the remote (deleted there, usually after
+/// its merge request was merged), for "Clean up branches". Branches that never had an
+/// upstream (never published) are never listed.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GoneBranch {
+    pub name: String,
+    /// The upstream it had, such as `origin/feature/x`.
+    pub upstream: String,
+    pub oid: String,
+    pub tip_summary: String,
+    pub tip_time: i64,
+    /// Commits on it that no remote branch has. With 0, deleting it loses nothing.
+    pub local_only: u32,
+    /// Checked out here or in another worktree, so it cannot be deleted.
+    pub in_use: bool,
+}
+
+impl GoneBranch {
+    /// Deleting it loses nothing and nothing has it checked out.
+    pub fn removable(&self) -> bool {
+        self.local_only == 0 && !self.in_use
+    }
+}
+
+/// Local branches whose upstream is gone, with how many of their commits exist only here.
+/// The remote-tracking branches tell what is gone, so this is as current as the last fetch
+/// that pruned.
+pub fn gone_branches(repo: &str) -> Result<Vec<GoneBranch>, GitError> {
+    let root = resolve_root(repo)?;
+    gone_at(&root)
+}
+
+fn gone_at(root: &Path) -> Result<Vec<GoneBranch>, GitError> {
+    let list = list_branches_with_worktrees(root)?;
+    let mut out = Vec::new();
+    for b in list.local {
+        let Some(upstream) = b.upstream.clone().filter(|_| b.upstream_gone) else {
+            continue;
+        };
+        validate_oid(&b.oid)?;
+        // Commits reachable from the branch but from no remote-tracking branch.
+        let count = run_git(
+            root,
+            &["rev-list", "--count", &b.oid, "--not", "--remotes"],
+            DEFAULT_TIMEOUT,
+        )?;
+        let local_only = String::from_utf8_lossy(&count.stdout)
+            .trim()
+            .parse()
+            .unwrap_or(u32::MAX);
+        out.push(GoneBranch {
+            in_use: b.is_current || b.worktree_path.is_some(),
+            name: b.name,
+            upstream,
+            oid: b.oid,
+            tip_summary: b.tip_summary,
+            tip_time: b.tip_time,
+            local_only,
+        });
+    }
+    Ok(out)
+}
+
+/// Delete these branches, if each is still a gone branch that loses nothing (checked again
+/// here, whatever the window asked). Returns the deleted ones, with their commits, so they
+/// can be put back.
+pub fn delete_gone_branches(repo: &str, names: &[String]) -> Result<Vec<GoneBranch>, GitError> {
+    let root = resolve_root(repo)?;
+    let _guard = write_lock();
+    let gone = gone_at(&root)?;
+    let mut deleted = Vec::new();
+    for name in names {
+        let Some(b) = gone.iter().find(|b| &b.name == name) else {
+            continue;
+        };
+        if !b.removable() {
+            continue;
+        }
+        // -D: its commits are on the remote, even when not merged into the current branch.
+        run_git(&root, &["branch", "-D", "--", &b.name], DEFAULT_TIMEOUT)?;
+        deleted.push(b.clone());
+    }
+    Ok(deleted)
 }
 
 /// Map Git's "your local changes would be overwritten" refusal to a clear error.

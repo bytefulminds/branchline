@@ -55,6 +55,8 @@ Native Git CLI
 | `list_branches(repo)` | `BranchList` | Local and remote branches, upstream, ahead/behind, tip |
 | `check_branch_name(repo, name)` | `string \| null` | Live validation message for name inputs |
 | `create_branch` / `switch_branch` / `rename_branch` / `delete_branch` | `RepositoryInfo` | Delete without `force` reports `notMerged` |
+| `gone_branches` | `GoneBranch[]` | Local branches whose upstream is gone, with their commits that no remote-tracking branch has (`rev-list --count <tip> --not --remotes`) and whether they are checked out |
+| `delete_gone_branches(names)` | `[GoneBranch[], RepositoryInfo]` | Deletes (`branch -D`) only those that are still gone, lose nothing and are not checked out, checked again in the backend; returns the deleted ones for Undo |
 | `checkout_remote_branch(repo, remoteBranch)` | `RepositoryInfo` | Creates a tracking branch, or switches to it |
 | `checkout_detached(repo, oid)` | `RepositoryInfo` | Detached HEAD at a commit |
 
@@ -104,7 +106,7 @@ are in the way (`checkoutConflict`); nothing is changed.
 | `interactive_rebase(repo, base, plan, autostash)` | `IntegrateResult` | Plan: every commit once, oldest first |
 | `rewrite_base(repo)` | `RewriteBase` | Where "Rewrite history" starts for the current branch, with the number of commits and how many are pushed |
 | `quest_plan(repo, base, head)` | `QuestPlan` | The files of a review quest in round order, and the ones left out (binary, generated, over 40 files) |
-| `quest_round(repo, context, opId)` | `Round` | The AI's 1 to 3 questions about one file, checked against its diff |
+| `quest_round(repo, context, opId)` | `Round` | The AI's 1 to 5 questions about one file (more for larger changes), checked against its diff |
 | `quest_reply(repo, context, opId)` | `Reply` | The AI's response to an open answer, with an optional comment and its line |
 | `suggest_rebase(repo, base, opId)` | `RebaseSuggestion` | AI groups of neighbouring commits, oldest first, each with a message; `cancel_remote_operation(opId)` stops it |
 
@@ -508,7 +510,9 @@ line (`[new 17] + code`, `[old 20] - code`), and the answer is JSON (with a sche
 Questions are checked against that diff: a reference that is not in it is dropped, a
 find-the-line question needs an added or removed line (the ones a reviewer can click), a quiz
 needs 2 to 5 choices and a valid answer, a remark instead of a question ("I can't think of a
-question") is dropped, and at most three questions are kept. An answer without a usable
+question") is dropped, and at most five questions are kept. `question_count` asks for 1 to 5
+by the file's changed lines (exactly, since "1 to 3" made small models settle for one); an
+answer with clearly too few for a large change is asked for once more, keeping the better one. An answer without a usable
 question is asked for again, up to three times, then reported. Open answers get a reply in
 the same way, with an optional suggested comment and line.
 

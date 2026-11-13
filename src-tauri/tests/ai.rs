@@ -776,3 +776,38 @@ fn asks_questions_about_a_file_with_line_references() {
         .unwrap()
         .contains("never ask them a question"));
 }
+
+#[test]
+fn asks_again_when_a_large_change_gets_too_few_questions() {
+    let t = repo();
+    let d = t.path();
+    // 60 added lines: worth three questions.
+    let body: String = (1..=60).map(|i| format!("line {i}\n")).collect();
+    fs::write(d.join("big.txt"), body).unwrap();
+    git(d, &["add", "big.txt"]);
+    git(d, &["commit", "-qm", "feat: a big file"]);
+    let (base, head) = (rev(d, "HEAD~1"), rev(d, "HEAD"));
+
+    // The first answer has one question, the next one three.
+    let (url, seen) = fake_ollama(|_| {
+        static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let n = N.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+        let q = |i: usize| serde_json::json!({ "type": "open", "question": format!("Question {i}?"), "explanation": "" });
+        let questions: Vec<_> = (1..=if n == 1 { 1 } else { 3 }).map(q).collect();
+        let answer = serde_json::json!({ "questions": questions });
+        (200, ndjson(&[&answer.to_string()]))
+    });
+    let ctx = QuestContext {
+        base,
+        head,
+        path: "big.txt".into(),
+        ..QuestContext::default()
+    };
+    let round = quest_round(&path(&t), &cfg(&url), &ctx, "op-q-many").unwrap();
+    assert_eq!(round.questions.len(), 3);
+    let asked = seen.lock().unwrap();
+    assert_eq!(asked.len(), 2);
+    let body: serde_json::Value = serde_json::from_str(&asked[0].1).unwrap();
+    let system = body["messages"][0]["content"].as_str().unwrap();
+    assert!(system.contains("Ask 3 questions"), "{system}");
+}
