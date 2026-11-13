@@ -453,7 +453,12 @@ fn matches_remotes_on_bitbucket_s_ssh_host() {
     git(t.path(), &["init", "-q", "-b", "main"]);
     git(
         t.path(),
-        &["remote", "add", "origin", "git@bitbucket-work:acme/app.git"],
+        &[
+            "remote",
+            "add",
+            "origin",
+            "git@no-such-alias-here:acme/app.git",
+        ],
     );
     let err = review_requests(
         t.path().to_str().unwrap(),
@@ -462,5 +467,5 @@ fn matches_remotes_on_bitbucket_s_ssh_host() {
     )
     .unwrap_err()
     .to_string();
-    assert!(err.contains("bitbucket-work"), "{err}");
+    assert!(err.contains("no-such-alias-here"), "{err}");
 }

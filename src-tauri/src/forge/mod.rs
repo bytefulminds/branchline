@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use crate::error::GitError;
 use crate::git::remote::list_remotes;
 use accounts::{Account, ForgeKind};
-use remote::{parse_remote, url_host};
+use remote::{is_ssh, parse_remote, ssh_alias_host, url_host};
 
 /// Which open requests to list.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -146,9 +146,20 @@ pub fn review_source(repo: &str) -> Result<Option<ReviewSource>, GitError> {
     let mut candidates: Vec<ReviewSource> = list_remotes(repo)?
         .into_iter()
         .filter_map(|r| {
-            let loc = parse_remote(&r.url)?;
+            let mut loc = parse_remote(&r.url)?;
+            let mut account = accounts::for_host(&loc.host);
+            // A host alias from the SSH configuration (`git@work:team/app.git`): use the host
+            // it really connects to. Only asked when no account matches the name itself.
+            if account.is_none() && is_ssh(&r.url) {
+                if let Some(real) = ssh_alias_host(&loc.host) {
+                    if let Some(a) = accounts::for_host(&real) {
+                        account = Some(a);
+                        loc.host = real;
+                    }
+                }
+            }
             Some(ReviewSource {
-                account: accounts::for_host(&loc.host),
+                account,
                 remote: r.name,
                 host: loc.host,
                 project: loc.path,

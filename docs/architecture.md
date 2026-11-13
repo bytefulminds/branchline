@@ -431,6 +431,12 @@ reads would trigger the next refresh, forever. `tests/watcher.rs` guards against
 
 ## Hosting services
 
+A remote is matched to an account by its host. Bitbucket's and GitLab's separate SSH hosts
+(`ssh.bitbucket.org`, `altssh.*`) count as the web host (`remote::web_host`). An SSH remote whose
+host matches no account may be an alias from the user's SSH configuration: `remote::ssh_alias_host`
+asks `ssh -G -- <host>` (no connection, three seconds at most, plain host names only) for its
+`hostname`, once per host per run.
+
 `forge/` keeps the service-neutral types (`MergeRequest`, `RequestDetail`, `Thread`) and
 dispatches on the account's `ForgeKind` to `gitlab.rs` or `bitbucket.rs`. Tokens live in the
 credential store under `<kind>:<url>`; for Bitbucket Cloud the stored secret is

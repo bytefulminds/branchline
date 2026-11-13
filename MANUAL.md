@@ -254,8 +254,11 @@ Updates are signed with Branchline's own update key, so only genuine releases ar
   kept together in the password store. Bitbucket Data Center is not supported yet.
 - Remotes on Bitbucket's SSH addresses (`git@ssh.bitbucket.org:...`, and
   `altssh.bitbucket.org` on port 443) count as Bitbucket Cloud, as does `altssh.gitlab.com`
-  for GitLab.com. A host alias from your SSH config (such as `bitbucket-work`) is not
-  recognized yet; Reviews then says which host it could not match.
+  for GitLab.com. A host alias from your SSH config (`Host bitbucket-work` with
+  `HostName ssh.bitbucket.org`, then `git@bitbucket-work:team/app.git`) works too: Branchline
+  asks OpenSSH which host the alias connects to (`ssh -G`, which reads the configuration
+  without connecting). When a remote still matches none of your accounts, Reviews says which
+  host it could not match.
 - Bitbucket has no merge request refs, so opening a pull request fetches its source branch
   (from the fork when it comes from one, at the same kind of address as your remote) and its
   target branch into `refs/branchline/pull-requests/<number>/`, and the diff starts where the
