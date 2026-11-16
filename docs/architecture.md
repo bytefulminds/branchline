@@ -420,6 +420,12 @@ changes the working tree.
    opposite, so the side Git matches against is always the real file.
 4. `git apply --cached [--reverse] --recount` applies it; discard applies to the working tree.
 
+Untracked files have no index entry for a patch to apply to. When only part of one is staged,
+`git add --intent-to-add` first adds an empty entry, then the selected lines are applied to it
+as a modification; if that fails, `git rm --cached` makes the file untracked again. Selecting
+every line simply runs `git add`. Discarding lines edits the file in the working tree, and
+discarding all of them deletes it.
+
 A randomized integration test edits a file, picks random line selections across hunks and checks
 the resulting index and working tree byte-for-byte against an independent computation.
 

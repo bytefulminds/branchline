@@ -127,7 +127,7 @@ export function diffFor({ path, area }: { path: string; area: DiffArea }): FileD
     oldMode: null,
     newMode: null,
     change: null,
-    supportsPartial: area === "unstaged" || area === "staged",
+    supportsPartial: area === "unstaged" || area === "staged" || area === "untracked",
     hasConflictMarkers: false,
     fingerprint: `fp-${path}`,
   };

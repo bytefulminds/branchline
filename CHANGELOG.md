@@ -17,6 +17,7 @@ description on GitLab.
   v1.4.1, with the tag marked.
 - Clearing a search keeps the commit you picked from the results selected, and shows it in
   the full history between the commits around it.
+- Stage, discard and select hunks and lines of untracked files, like any other change.
 
 ### Changed
 

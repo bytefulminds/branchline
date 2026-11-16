@@ -147,6 +147,24 @@ describe("staging", () => {
     });
   });
 
+  it("stages selected lines of an untracked file", async () => {
+    const { user, calls, list } = await openRepo((cmd) =>
+      cmd === "apply_lines" ? STAGED : undefined,
+    );
+    await user.click(option(list, "new file.md"));
+    const diff = await screen.findByRole("region", { name: "Changes in notes/new file.md" });
+    const [line] = await within(diff).findAllByText(/^new$/);
+    await user.click(line!);
+    await user.click(within(diff).getByRole("button", { name: "Stage line" }));
+    expect(calls.find((c) => c.cmd === "apply_lines")?.args).toMatchObject({
+      request: {
+        path: "notes/new file.md",
+        action: "stage",
+        selections: [{ hunk: 0, lines: [2] }],
+      },
+    });
+  });
+
   it("stages a whole hunk", async () => {
     const { user, calls, list } = await openRepo((cmd) =>
       cmd === "apply_lines" ? STAGED : undefined,
@@ -211,6 +229,7 @@ describe("staging", () => {
   });
 
   it("uses the diff fixture for every area", () => {
-    expect(diffFor({ path: "x", area: "untracked" }).supportsPartial).toBe(false);
+    expect(diffFor({ path: "x", area: "untracked" }).supportsPartial).toBe(true);
+    expect(diffFor({ path: "x", area: "conflicted" }).supportsPartial).toBe(false);
   });
 });

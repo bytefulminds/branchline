@@ -33,7 +33,7 @@ Milestones are only marked complete when the behavior works against real Git and
 - [x] Randomized test that checks partial staging, unstaging and discarding byte-for-byte
 - [x] Side-by-side diff view
 - [x] Syntax highlighting in diffs
-- [ ] Line staging for untracked files (via intent-to-add)
+- [x] Line staging for untracked files (via intent-to-add)
 
 ## Milestone 3: Commits and history (done)
 

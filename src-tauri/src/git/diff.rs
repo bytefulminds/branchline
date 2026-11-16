@@ -607,7 +607,10 @@ fn diff_from_raw(
 
     let supports_partial = !parsed.is_binary
         && !parsed.hunks.is_empty()
-        && matches!(area, DiffArea::Staged | DiffArea::Unstaged)
+        && matches!(
+            area,
+            DiffArea::Staged | DiffArea::Unstaged | DiffArea::Untracked
+        )
         && !matches!(change, Some("renamed") | Some("copied"));
 
     Ok(FileDiff {

@@ -78,6 +78,9 @@ Updates are signed with Branchline's own update key, so only genuine releases ar
   use; diffs over 400 KB or with very long (minified) lines stay plain.
 - Stage, unstage and discard whole files, single hunks or selected lines (click, shift-click for
   a range). Discarding always asks for confirmation; staged content is never discarded.
+- This works for new, untracked files too: stage some of their lines and the file is staged
+  with only those lines, while the rest stays an unstaged change. Unstaging every line makes
+  it untracked again, and discarding lines only edits the file.
 - File filter, keyboard navigation in the file list (`Space`/`Enter` stages or unstages,
   `Delete` discards), resizable panels, and a virtualized list that stays fast with thousands of
   files.
@@ -543,8 +546,8 @@ by page. Method and all numbers per platform: [docs/performance.md](docs/perform
   File history follows the path given and does not follow renames.
 - Syntax highlighting colors each hunk on its own, so a comment or string that starts above a
   hunk is not recognized inside it.
-- Hunk and line operations are not available for untracked files, renames, copies and binary
-  files; those are staged as a whole.
+- Hunk and line operations are not available for renames, copies and binary files; those are
+  staged as a whole.
 - The watcher only applies the root `.gitignore` and `.git/info/exclude` when filtering events;
   changes in folders ignored by nested `.gitignore` files cause an extra (cheap) refresh.
 - The changed-file list is capped at 10,000 entries.
