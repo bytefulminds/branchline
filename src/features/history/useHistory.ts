@@ -4,6 +4,8 @@ import type { GitError, LogCommit, LogFilter, RefInfo, RepositoryInfo } from "..
 import { historyGraph, TRUNK_SEGMENT, type GraphRow } from "./graph";
 
 export const PAGE_SIZE = 300;
+/** Most commits the backend returns in one page. */
+const MAX_PAGE = 2000;
 
 export const EMPTY_FILTER: LogFilter = {
   text: "",
@@ -53,6 +55,8 @@ export interface HistoryData {
   rows: GraphRow[];
   /** Merges with merged side branches: how many commits those hold, and if they are shown. */
   folds: Map<string, { count: number; expanded: boolean }>;
+  /** Commits hidden in collapsed side branches: the merges to expand to show them. */
+  hiddenBy: Map<string, string[]>;
   refsByOid: Map<string, RefInfo[]>;
   total: number;
   hasMore: boolean;
@@ -84,6 +88,11 @@ export interface HistoryController {
   loadingMore: boolean;
   error: GitError | null;
   loadMore: () => void;
+  /**
+   * Loads the full history up to a commit (and a few beyond it). Resolves false when the
+   * commit is not part of the history.
+   */
+  loadThrough: (oid: string) => Promise<boolean>;
 }
 
 function headOid(repo: RepositoryInfo): string {
@@ -173,11 +182,65 @@ export function useHistory(
       });
   }, [data, key, repo.path, filterKey]);
 
+  const loadThrough = useCallback(
+    async (oid: string) => {
+      if (!data || data.key !== key || data.filtered) return true;
+      if (data.commits.some((c) => c.oid === oid)) return true;
+      // A page is loading: the caller tries again when it is there.
+      if (moreInFlight.current) return true;
+      moreInFlight.current = true;
+      setLoadingMore(true);
+      try {
+        const at = await gitService.historyPosition(repo.path, oid);
+        if (at === null) return false;
+        const from = data.commits.length;
+        const added: LogCommit[] = [];
+        let page = null;
+        while (from + added.length <= at) {
+          page = await gitService.logPage(
+            repo.path,
+            from + added.length,
+            Math.min(MAX_PAGE, at + PAGE_SIZE - from - added.length),
+            null,
+          );
+          if (requestKey.current !== key) return true;
+          added.push(...page.commits);
+          if (!page.hasMore || page.commits.length === 0) break;
+        }
+        const last = page;
+        if (last)
+          setData((prev) =>
+            prev && prev.key === key && prev.commits.length === from
+              ? {
+                  ...prev,
+                  commits: [...prev.commits, ...added],
+                  total: last.total,
+                  hasMore: last.hasMore,
+                }
+              : prev,
+          );
+        return true;
+      } catch (e) {
+        if (requestKey.current === key) setError({ key, error: e as GitError });
+        return false;
+      } finally {
+        moreInFlight.current = false;
+        setLoadingMore(false);
+      }
+    },
+    [data, key, repo.path],
+  );
+
   const { collapse, expanded } = view;
   const shown = useMemo<HistoryData | null>(() => {
     if (!data) return null;
     const graph = data.filtered
-      ? { commits: data.commits, rows: layoutResults(data.commits), folds: new Map() }
+      ? {
+          commits: data.commits,
+          rows: layoutResults(data.commits),
+          folds: new Map(),
+          hiddenBy: new Map(),
+        }
       : historyGraph(data.commits, data.refs, collapse, expanded);
     return {
       key: data.key,
@@ -185,6 +248,7 @@ export function useHistory(
       commits: graph.commits,
       rows: graph.rows,
       folds: graph.folds,
+      hiddenBy: graph.hiddenBy,
       refsByOid: groupRefs(data.refs),
       total: data.total,
       hasMore: data.hasMore,
@@ -200,5 +264,6 @@ export function useHistory(
     loadingMore,
     error: currentError,
     loadMore,
+    loadThrough,
   };
 }

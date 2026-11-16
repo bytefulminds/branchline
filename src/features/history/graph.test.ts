@@ -235,6 +235,8 @@ describe("merged side branches", () => {
     const { folds, commits: shown } = historyGraph(nested, refs, true);
     expect(folds.get("m3")!.count).toBe(3);
     expect(folds.get("s2")!.count).toBe(1);
+    // To show t1, both merges around it open.
+    expect(historyGraph(nested, refs, true).hiddenBy.get("t1")).toEqual(["s2", "m3"]);
     expect(shown.map((x) => x.oid)).toEqual(["m3", "m2", "m1"]);
     const outer = historyGraph(nested, refs, true, new Set(["m3"]));
     expect(outer.commits.map((x) => x.oid)).toEqual(["m3", "s2", "m2", "s1", "m1"]);

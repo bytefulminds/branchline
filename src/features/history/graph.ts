@@ -346,6 +346,8 @@ export interface HistoryGraph<C extends GraphCommit> {
   rows: GraphRow[];
   /** Merge commits with merged side branches: how many commits the side branches hold. */
   folds: Map<string, { count: number; expanded: boolean }>;
+  /** Hidden commits: the merges to expand to show them, outermost last. */
+  hiddenBy: Map<string, string[]>;
 }
 
 /**
@@ -374,13 +376,19 @@ export function historyGraph<C extends GraphCommit>(
       folds.set(m, f);
     }
   });
-  if (!collapse) return { commits, rows: first, folds };
+  if (!collapse) return { commits, rows: first, folds, hiddenBy: new Map() };
 
   // A commit is hidden when the merge that started its side branch is collapsed or hidden.
   const hidden = new Set<string>();
+  const hiddenBy = new Map<string, string[]>();
   commits.forEach((c, i) => {
     const m = first[i]!.mergedBy;
-    if (m !== null && (hidden.has(m) || !expanded.has(m))) hidden.add(c.oid);
+    if (m !== null && (hidden.has(m) || !expanded.has(m))) {
+      hidden.add(c.oid);
+      const chain: string[] = [];
+      for (let x: string | null = m; x !== null; x = mergedByOf.get(x) ?? null) chain.push(x);
+      hiddenBy.set(c.oid, chain);
+    }
   });
   const shown: C[] = [];
   const links: GraphCommit[] = [];
@@ -399,5 +407,5 @@ export function historyGraph<C extends GraphCommit>(
   shown.forEach((c, i) => {
     if (folds.has(c.oid)) rows[i] = { ...rows[i]!, isMerge: true };
   });
-  return { commits: shown, rows, folds };
+  return { commits: shown, rows, folds, hiddenBy };
 }

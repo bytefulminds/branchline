@@ -98,6 +98,9 @@ export const gitService = {
     call<RepositoryInfo>("apply_lines", { repo, request }),
   logPage: (repo: string, skip: number, limit: number, filter: LogFilter | null = null) =>
     call<LogPage>("log_page", { repo, skip, limit, filter }),
+  /** Where a commit is in the full history (0 is the newest), or null when it is not in it. */
+  historyPosition: (repo: string, oid: string) =>
+    call<number | null>("history_position", { repo, oid }),
   listRefs: (repo: string) => call<RefInfo[]>("list_refs", { repo }),
   commitDetails: (repo: string, oid: string) =>
     call<CommitDetails>("commit_details", { repo, oid }),

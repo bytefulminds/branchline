@@ -8,8 +8,8 @@ export interface VirtualWindow {
   end: number;
   totalHeight: number;
   onScroll: (e: React.UIEvent<HTMLElement>) => void;
-  /** Scroll so row `index` is fully visible. */
-  scrollToRow: (index: number) => void;
+  /** Scroll so row `index` is fully visible, or in the middle with `center`. */
+  scrollToRow: (index: number, center?: boolean) => void;
 }
 
 /** Track an element's client size. Pass the returned setter as a callback `ref`. */
@@ -54,12 +54,13 @@ export function useVirtualRows(
   }, []);
 
   const scrollToRow = useCallback(
-    (index: number) => {
+    (index: number, center = false) => {
       if (!element) return;
       const top = index * rowHeight;
       const bottom = top + rowHeight;
       let target: number | null = null;
-      if (top < element.scrollTop) target = top;
+      if (center) target = Math.max(0, top - (element.clientHeight - rowHeight) / 2);
+      else if (top < element.scrollTop) target = top;
       else if (bottom > element.scrollTop + element.clientHeight)
         target = bottom - element.clientHeight;
       if (target === null) return;

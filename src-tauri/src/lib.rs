@@ -50,6 +50,7 @@ pub fn run() {
             commands::discard_files,
             commands::apply_lines,
             commands::log_page,
+            commands::history_position,
             commands::list_refs,
             commands::commit_details,
             commands::commit_file_diff,

@@ -488,6 +488,10 @@ arrives (about 50 ms for 100,000 commits):
 
 ### Search and filters
 
+When a search is cleared, the commit picked from its results stays selected. If it is not
+loaded yet, `history_position` finds its index in the cached order and the History view loads
+up to it in pages of at most 2,000 commits, then scrolls it to the middle.
+
 - `LogFilter` has a text (message, author, start of a commit id, or part of a tag or branch
   name), an author, a file or folder, a date range (`YYYY-MM-DD`, inclusive days) and "current
   branch only". Input is validated: no control characters, at most 200 characters, paths through

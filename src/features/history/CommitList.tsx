@@ -46,6 +46,8 @@ export function CommitList({
   onFollow,
   showFolds = false,
   onToggleFold,
+  revealOid = null,
+  onRevealed,
 }: {
   data: HistoryData;
   head: HeadState;
@@ -73,6 +75,9 @@ export function CommitList({
   showFolds?: boolean;
   /** Collapse or expand a merge's side branch. */
   onToggleFold?: (oid: string) => void;
+  /** A commit to scroll to the middle of the list once it is there. */
+  revealOid?: string | null;
+  onRevealed?: () => void;
 }) {
   const baseId = useId();
   const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
@@ -91,6 +96,14 @@ export function CommitList({
   useEffect(() => {
     if (activeIndex >= 0) scrollToRow(activeIndex);
   }, [activeIndex, scrollToRow]);
+
+  // Show a commit with the ones around it, for example after clearing a search.
+  const revealIndex = revealOid ? data.commits.findIndex((c) => c.oid === revealOid) : -1;
+  useEffect(() => {
+    if (revealIndex < 0 || !scrollEl) return;
+    scrollToRow(revealIndex, true);
+    onRevealed?.();
+  }, [revealIndex, scrollEl, scrollToRow, onRevealed]);
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (count === 0) return;

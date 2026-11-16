@@ -283,11 +283,35 @@ export function HistoryView({
   // A new search starts with nothing selected (the first result is shown).
   const appliedKey = JSON.stringify(applied);
   const [selectionFor, setSelectionFor] = useState(appliedKey);
+  // A commit to show in the middle of the list once it is loaded.
+  const [reveal, setReveal] = useState<string | null>(null);
   if (selectionFor !== appliedKey) {
     setSelectionFor(appliedKey);
-    setSelection(EMPTY_SELECTION);
+    // Clearing the search keeps the commit picked from the results, among its neighbours.
+    const keep = !isFiltering(applied) ? selection.focus : null;
+    setSelection(keep ? single(keep) : EMPTY_SELECTION);
+    setReveal(keep);
     setOpenFile(null);
   }
+  const clearReveal = useCallback(() => setReveal(null), []);
+  // Hidden in a collapsed merged branch: open the merges around it.
+  const revealIn = reveal && data && !data.filtered ? data.hiddenBy.get(reveal) : undefined;
+  if (revealIn && revealIn.some((m) => !expandedOids.has(m))) {
+    setExpanded({ path: repo.path, oids: new Set([...expandedOids, ...revealIn]) });
+  }
+  const { loadThrough } = history;
+  useEffect(() => {
+    if (!reveal || !data || data.filtered) return;
+    if (data.commits.some((c) => c.oid === reveal)) return; // the list scrolls to it
+    if (data.hiddenBy.has(reveal)) return; // opened above
+    let stale = false;
+    void loadThrough(reveal).then((found) => {
+      if (!found && !stale) setReveal(null);
+    });
+    return () => {
+      stale = true;
+    };
+  }, [reveal, data, loadThrough]);
 
   // The followed branch; segment ids belong to one layout, so it ends when that changes.
   const layoutKey = `${data?.key}|${folding}|${[...expandedOids].join(",")}`;
@@ -574,6 +598,8 @@ export function HistoryView({
         onFollow={data.filtered ? undefined : setFollow}
         showFolds={folding}
         onToggleFold={toggleFold}
+        revealOid={data.filtered ? null : reveal}
+        onRevealed={clearReveal}
         rowProps={(oid) =>
           drop(oid, {
             kind: "commit",

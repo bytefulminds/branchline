@@ -4,7 +4,7 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 
-use branchline_lib::git::log::{log_page, LogFilter};
+use branchline_lib::git::log::{history_position, log_page, LogFilter};
 use tempfile::TempDir;
 
 fn git_env(dir: &Path, args: &[&str], env: &[(&str, &str)]) -> String {
@@ -78,6 +78,18 @@ fn find(f: &Fixture, filter: LogFilter) -> Vec<String> {
     let page = log_page(f._dir.path(), 0, 100, Some(&filter)).unwrap();
     assert_eq!(page.total, page.commits.len());
     page.commits.into_iter().map(|c| c.summary).collect()
+}
+
+#[test]
+fn finds_where_a_commit_is_in_the_history() {
+    let f = fixture();
+    let d = f._dir.path();
+    let page = log_page(d, 0, 100, None).unwrap();
+    for (i, c) in page.commits.iter().enumerate() {
+        assert_eq!(history_position(d, &c.oid).unwrap(), Some(i));
+    }
+    assert_eq!(history_position(d, &"0".repeat(40)).unwrap(), None);
+    assert!(history_position(d, "--all").is_err());
 }
 
 #[test]

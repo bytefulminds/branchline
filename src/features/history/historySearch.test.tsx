@@ -147,3 +147,81 @@ describe("history search", () => {
     await waitFor(() => expect(filterCalls(calls).at(-1)).toMatchObject({ path: "src/app.ts" }));
   });
 });
+
+describe("leaving a search", () => {
+  const LONG = makeHistory(700);
+
+  async function openLong() {
+    const user = userEvent.setup();
+    const calls = setup((cmd, args) => {
+      if (cmd === "plugin:dialog|open") return REPO.path;
+      if (cmd === "inspect_repository")
+        return { ...REPO, head: { kind: "branch", name: "main", oid: LONG[0]!.oid } };
+      if (cmd === "list_refs") return [];
+      if (cmd === "history_position") return LONG.findIndex((c) => c.oid === args.oid);
+      if (cmd === "commit_details")
+        return {
+          oid: args.oid,
+          parents: [],
+          authorName: "A",
+          authorEmail: "a@example.com",
+          authorDate: "2023-11-14T22:13:20+00:00",
+          committerName: "A",
+          committerEmail: "a@example.com",
+          committerDate: "2023-11-14T22:13:20+00:00",
+          message: "x",
+          files: [],
+        };
+      if (cmd === "log_page") {
+        const filter = args.filter as LogFilter | null;
+        if (filter) {
+          const commits = LONG.filter((c) => c.summary.endsWith(filter.text));
+          return { commits, hasMore: false, total: commits.length };
+        }
+        const skip = args.skip as number;
+        const limit = args.limit as number;
+        return {
+          commits: LONG.slice(skip, skip + limit),
+          hasMore: skip + limit < LONG.length,
+          total: LONG.length,
+        };
+      }
+      return undefined;
+    });
+    render(<App />);
+    await user.click(openButton());
+    await screen.findByRole("heading", { name: "Changes" });
+    await user.keyboard("{Control>}2{/Control}");
+    await screen.findByRole("listbox", { name: "Commits" });
+    return { user, calls };
+  }
+
+  it("keeps the commit picked from the results, loading history up to it", async () => {
+    const { user, calls } = await openLong();
+    await user.type(screen.getByRole("searchbox", { name: "Search commits" }), "number 650");
+    const list = screen.getByRole("listbox", { name: "Commits" });
+    await user.click(await within(list).findByRole("option", { name: /Commit number 650/ }));
+    await user.click(screen.getByRole("button", { name: "Clear search" }));
+
+    // The whole history again, loaded at once up to the picked commit.
+    expect(await screen.findByText("700 commits")).toBeInTheDocument();
+    const row = await within(list).findByText("Commit number 650");
+    expect(row.closest('[role="option"]')).toHaveAttribute("aria-selected", "true");
+    // Its neighbours are there too.
+    expect(within(list).getByText("Commit number 649")).toBeInTheDocument();
+    expect(within(list).getByText("Commit number 651")).toBeInTheDocument();
+    const pages = calls.filter((c) => c.cmd === "log_page" && !c.args.filter);
+    expect(pages.at(-1)!.args).toMatchObject({ skip: 300 });
+    expect(pages.at(-1)!.args.limit).toBeGreaterThan(350);
+  });
+
+  it("starts at the top again when nothing was picked", async () => {
+    const { user } = await openLong();
+    await user.type(screen.getByRole("searchbox", { name: "Search commits" }), "number 650");
+    const list = screen.getByRole("listbox", { name: "Commits" });
+    await within(list).findByRole("option", { name: /Commit number 650/ });
+    await user.click(screen.getByRole("button", { name: "Clear search" }));
+    expect(await screen.findByText("700 commits")).toBeInTheDocument();
+    expect(within(list).getAllByRole("option")[0]).toHaveAttribute("aria-selected", "true");
+  });
+});

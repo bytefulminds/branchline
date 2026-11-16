@@ -352,6 +352,37 @@ struct Search {
 
 static SEARCH: std::sync::Mutex<Option<Search>> = std::sync::Mutex::new(None);
 
+/// The cached history order, loaded again when the repository state changed.
+fn topology(
+    root: &Path,
+    born: bool,
+    key: &str,
+) -> Result<std::sync::MutexGuard<'static, Option<Topology>>, GitError> {
+    let mut cache = TOPOLOGY.lock().unwrap_or_else(|e| e.into_inner());
+    let fresh = cache
+        .as_ref()
+        .is_some_and(|t| t.root == root && t.key == key);
+    if !fresh {
+        *cache = Some(Topology {
+            root: root.to_path_buf(),
+            key: key.to_string(),
+            order: load_order(root, born)?,
+        });
+    }
+    Ok(cache)
+}
+
+/// Where a commit is in the full history (0 is the newest), so the History view can load
+/// up to it at once. `None` when it is not part of the history.
+pub fn history_position(root: &Path, oid: &str) -> Result<Option<usize>, GitError> {
+    let oid = validate_oid(oid)?.to_ascii_lowercase();
+    let born = head_is_born(root)?;
+    let key = history_key(root, born)?;
+    let cache = topology(root, born, &key)?;
+    let order = &cache.as_ref().expect("just filled").order;
+    Ok(order.iter().position(|o| *o == oid))
+}
+
 /// One page of history across HEAD, local branches, remote branches and tags,
 /// newest first, children always before parents (`--date-order`).
 ///
@@ -376,17 +407,7 @@ pub fn log_page(
     let key = history_key(root, born)?;
 
     let (slice, total): (Vec<String>, usize) = {
-        let mut cache = TOPOLOGY.lock().unwrap_or_else(|e| e.into_inner());
-        let fresh = cache
-            .as_ref()
-            .is_some_and(|t| t.root == root && t.key == key);
-        if !fresh {
-            *cache = Some(Topology {
-                root: root.to_path_buf(),
-                key: key.clone(),
-                order: load_order(root, born)?,
-            });
-        }
+        let cache = topology(root, born, &key)?;
         let order = &cache.as_ref().expect("just filled").order;
         let page = |list: &[String]| {
             let total = list.len();

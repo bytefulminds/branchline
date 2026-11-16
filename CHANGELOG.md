@@ -15,6 +15,8 @@ description on GitLab.
   their merge commit, with "+3" to show them again.
 - History search finds tags and branches by name: "v1.4" lists the commits tagged v1.4.0 and
   v1.4.1, with the tag marked.
+- Clearing a search keeps the commit you picked from the results selected, and shows it in
+  the full history between the commits around it.
 
 ### Changed
 
