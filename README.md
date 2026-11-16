@@ -7,7 +7,7 @@
 **See the flow of your code: a fast, friendly Git desktop client that shows what Git is
 doing and lets you do it with a click.**
 
-**Version 0.3.2** · [download](https://gitlab.com/bytefulminds/branchline/-/releases) for Windows, macOS and Linux
+**Version 0.3.5** · [download](https://gitlab.com/bytefulminds/branchline/-/releases) for Windows, macOS and Linux
 
 [![pipeline](https://gitlab.com/bytefulminds/branchline/badges/main/pipeline.svg)](https://gitlab.com/bytefulminds/branchline/-/pipelines)
 ![license: MIT](https://img.shields.io/badge/license-MIT-00D1A0)
@@ -33,8 +33,8 @@ Bytefulminds.
 
 ### Commit exactly what you mean
 
-Stage whole files, single hunks or just the lines you select, and leave the rest for later.
-Diffs show your code in the colors of your editor, in one column or side by side, and the
+Stage whole files, single hunks or just the lines you select, also of new files, and leave
+the rest for later. Diffs show your code in the colors of your editor, in one column or side by side, and the
 commit box tells you who you commit as before you press Ctrl+Enter.
 
 <p align="center">
@@ -55,13 +55,16 @@ every action, branch and recent repository in a few letters.
 
 ### Branches and history, your way
 
-Create, switch, merge and rebase branches from a right-click, or drag one branch onto
-another. Switch between your local and remote branches with one toggle, and "Clean up
-branches" removes local branches whose upstream is gone once every commit is on the remote,
-with Undo; branches you never published stay. Tidy up before you push with "Rewrite
-history": Branchline finds where your branch started, you drag commits into a new order and
-reword, squash or drop them, and squashed commits are shown grouped under the commit they go
-into. With AI on, it can suggest which commits belong together and write their messages.
+Your default branch keeps its own lane and color in the graph, so you always see where your
+branch left main. Click a branch in the graph to follow it through the history, and fold
+branches that were merged and deleted into their merge commit. Create, switch, merge and
+rebase branches from a right-click, or drag one branch onto another. Switch between your
+local and remote branches with one toggle, and "Clean up branches" removes local branches
+whose upstream is gone once every commit is on the remote, with Undo; branches you never
+published stay. Tidy up before you push with "Rewrite history": Branchline finds where your
+branch started, you drag commits into a new order and reword, squash or drop them, and
+squashed commits are shown grouped under the commit they go into. With AI on, it can suggest
+which commits belong together and write their messages.
 
 <p align="center">
   <img src="docs/screenshots/branches.png" alt="The local branches with a branch menu open: switch, open in a new worktree, merge, rebase, push, rename and delete" width="49%">
@@ -69,6 +72,7 @@ into. With AI on, it can suggest which commits belong together and write their m
 </p>
 
 <p align="center">
+  <img src="docs/screenshots/graph-follow.png" alt="Following main in the graph: its line and commits stay bright, the rest fades, and a merged branch is folded into its merge with +1" width="49%">
   <img src="docs/screenshots/rebase.png" alt="Rewrite history with an AI suggestion: two groups of fixed-up commits, each indented above the commit they go into, with a new message" width="49%">
 </p>
 

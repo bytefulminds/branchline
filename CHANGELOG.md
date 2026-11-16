@@ -7,6 +7,14 @@ description on GitLab.
 
 ## [Unreleased]
 
+## [0.3.5] - 2026-11-16
+
+The graph gets easier to read: main keeps its own lane and color, so it no longer disappears
+into a new branch, you can click a branch to follow it through the history, and branches that
+were merged and deleted can be folded into their merge. History search finds tags and
+branches by name and keeps the commit you picked when you clear it. And you can stage single
+lines of new files.
+
 ### Added
 
 - Follow a branch in the graph: click its line or a commit (or use the commit menu) and the
