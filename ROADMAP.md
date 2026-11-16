@@ -21,7 +21,7 @@ Milestones are only marked complete when the behavior works against real Git and
 - [x] Invalid paths, non-repositories, bare repositories and Git errors handled without crashing
 - [x] Backend tests with temporary repositories; frontend interaction tests
 - [x] Runs on macOS and Linux
-- [ ] Run and verify on Windows
+- [x] Run and verify on Windows
 
 ## Milestone 2: Working tree and diffs (done)
 
