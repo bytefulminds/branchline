@@ -471,6 +471,21 @@ lanes to the right, and lanes that expect the same commit converge at its row. T
 over between pages. A randomized test lays out 500 random histories in random page sizes and
 checks that every line leaving a row enters the next one and that all lanes close.
 
+`historyGraph` adds what needs the refs, and runs over all loaded commits each time a page
+arrives (about 50 ms for 100,000 commits):
+
+- The default branch (`trunkTips`: main, master, trunk or develop, local or on a remote) keeps
+  lane 0 and color 0. Lane 0 stays reserved until the first of its tips appears, then follows
+  its first parents; any lane that reaches one of those commits curves into lane 0.
+- Every run of a branch is a segment with its own id. A segment starts at a branch tip, at a
+  merge parent that opens a lane, or where a lane reaches a commit with another branch name
+  (`origin/x` counts as `x`). Following a branch fades every line and commit of other segments.
+- A segment opened for a merge parent without a branch name is a merged side branch and
+  remembers its merge (`mergedBy`). Collapsing hides those commits unless their merge is
+  expanded, drops the lines to them, and lays the rest out a second time. Nested side branches
+  fold into the outermost collapsed merge. A randomized test checks continuity with branch
+  names, a default branch and random collapsed merges.
+
 ### Search and filters
 
 - `LogFilter` has a text (message, author or start of a commit id), an author, a file or folder,

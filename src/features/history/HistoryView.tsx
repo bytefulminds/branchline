@@ -1,6 +1,8 @@
 import {
   Check,
   Cherry,
+  ChevronsDownUp,
+  ChevronsUpDown,
   CircleAlert,
   Copy,
   FolderPlus,
@@ -10,6 +12,7 @@ import {
   GitPullRequestArrow,
   ListOrdered,
   LogIn,
+  Route,
   PanelRightClose,
   PanelRightOpen,
   Tag,
@@ -43,8 +46,32 @@ import { useWorktreeActions } from "../worktrees/WorktreeActions";
 import { CommitList, graphColumnWidth, WorkInProgressRow } from "./CommitList";
 import { cherryPickProblem, MultiSelectionPanel } from "./MultiSelectionPanel";
 import { EMPTY_SELECTION, nextSelection, oldestFirst, single, type SelectMode } from "./selection";
-import { EMPTY_FILTER, isFiltering, useHistory } from "./useHistory";
+import { EMPTY_FILTER, isFiltering, useHistory, type HistoryData } from "./useHistory";
+import { TRUNK_SEGMENT } from "./graph";
 import "./HistoryView.css";
+
+const NO_OIDS: ReadonlySet<string> = new Set();
+
+/** A name for a followed branch segment: a branch at its tip, or the merge that merged it. */
+export function followedName(data: HistoryData, segment: number, current: string | null): string {
+  const index = data.rows.findIndex((r) => r.segment === segment);
+  if (index < 0) return "this branch";
+  const row = data.rows[index]!;
+  const refs = (data.refsByOid.get(data.commits[index]!.oid) ?? []).filter((r) => r.kind !== "tag");
+  const local = refs.filter((r) => r.kind === "branch");
+  const named =
+    local.find((r) => r.name === current) ?? local[0] ?? refs.find((r) => r.kind === "remote");
+  if (named) return named.name;
+  if (row.mergedBy) {
+    const merge = data.commits.find((c) => c.oid === row.mergedBy);
+    const from = merge?.summary.match(
+      /^Merge (?:branch|remote-tracking branch) '([^']+)'|^Merge pull request #\d+ from \S+?\/(\S+)/,
+    );
+    const name = from?.[1] ?? from?.[2];
+    return name ? `${name} (merged)` : "a merged branch";
+  }
+  return segment === TRUNK_SEGMENT ? "the default branch" : "a branch without a name";
+}
 
 /** Search and filters per repository, kept while switching views. */
 const savedFilters = new Map<string, { filter: LogFilter; open: boolean }>();
@@ -178,7 +205,31 @@ export function HistoryView({
   // Typing only searches once it pauses; clearing everything applies at once.
   const debounced = useDebouncedValue(filter, 300);
   const applied = isFiltering(filter) ? debounced : EMPTY_FILTER;
-  const history = useHistory(repo, applied);
+  const [collapseMerged, setCollapseMerged] = usePersistentFlag(
+    "branchline.history.collapseMerged",
+    false,
+  );
+  // Merges whose side branch is shown although merged branches are collapsed.
+  const [expanded, setExpanded] = useState<{ path: string; oids: ReadonlySet<string> }>({
+    path: repo.path,
+    oids: new Set(),
+  });
+  const expandedOids = expanded.path === repo.path ? expanded.oids : NO_OIDS;
+  const toggleFold = useCallback(
+    (oid: string) =>
+      setExpanded((e) => {
+        const oids = new Set(e.path === repo.path ? e.oids : []);
+        if (!oids.delete(oid)) oids.add(oid);
+        return { path: repo.path, oids };
+      }),
+    [repo.path],
+  );
+  const folding = collapseMerged && !isFiltering(applied);
+  const view = useMemo(
+    () => ({ collapse: folding, expanded: expandedOids }),
+    [folding, expandedOids],
+  );
+  const history = useHistory(repo, applied, view);
   const searchRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -237,6 +288,19 @@ export function HistoryView({
     setSelection(EMPTY_SELECTION);
     setOpenFile(null);
   }
+
+  // The followed branch; segment ids belong to one layout, so it ends when that changes.
+  const layoutKey = `${data?.key}|${folding}|${[...expandedOids].join(",")}`;
+  const [followed, setFollowed] = useState<{ key: string; segment: number } | null>(null);
+  const follow = followed?.key === layoutKey ? followed.segment : null;
+  const setFollow = useCallback(
+    (segment: number | null) => setFollowed(segment === null ? null : { key: layoutKey, segment }),
+    [layoutKey],
+  );
+  const followCount = useMemo(
+    () => (follow === null || !data ? 0 : data.rows.filter((r) => r.segment === follow).length),
+    [data, follow],
+  );
 
   const order = useMemo(() => data?.commits.map((c) => c.oid) ?? [], [data]);
   const select = useCallback(
@@ -311,7 +375,37 @@ export function HistoryView({
     const short = oid.slice(0, 7);
     const localBranches = (data?.refsByOid.get(oid) ?? []).filter((r) => r.kind === "branch");
     const headOid = repo.head.kind === "unborn" ? null : repo.head.oid;
+    const index = data ? data.commits.findIndex((c) => c.oid === oid) : -1;
+    const segment = index >= 0 && data && !data.filtered ? data.rows[index]!.segment : null;
+    const fold = folding ? data?.folds.get(oid) : undefined;
+    const graphEntries: MenuEntry[] = [
+      ...(segment !== null
+        ? [
+            {
+              id: "follow",
+              label: follow === segment ? "Stop following this branch" : "Follow this branch",
+              description: follow === segment ? undefined : "Highlight its commits in the graph",
+              icon: <Route size={16} />,
+              onSelect: () => setFollow(follow === segment ? null : segment),
+            },
+          ]
+        : []),
+      ...(fold
+        ? [
+            {
+              id: "fold",
+              label: fold.expanded
+                ? "Hide the merged commits"
+                : `Show the ${fold.count.toLocaleString()} merged ${fold.count === 1 ? "commit" : "commits"}`,
+              icon: fold.expanded ? <ChevronsDownUp size={16} /> : <ChevronsUpDown size={16} />,
+              onSelect: () => toggleFold(oid),
+            },
+          ]
+        : []),
+    ];
     return [
+      ...graphEntries,
+      ...(graphEntries.length ? [{ type: "separator" as const, id: "sep-graph" }] : []),
       ...localBranches.map<MenuEntry>((r) => ({
         id: `switch:${r.name}`,
         label: `Switch to ${r.name}`,
@@ -476,6 +570,10 @@ export function HistoryView({
         onNearEnd={loadMore}
         loadingMore={history.loadingMore}
         highlight={data.filtered ? applied.text : ""}
+        follow={follow}
+        onFollow={data.filtered ? undefined : setFollow}
+        showFolds={folding}
+        onToggleFold={toggleFold}
         rowProps={(oid) =>
           drop(oid, {
             kind: "commit",
@@ -548,6 +646,19 @@ export function HistoryView({
                 onToggleFilters={() => setFiltersOpen((o) => !o)}
               />
               <IconButton
+                label={collapseMerged ? "Show merged branches" : "Collapse merged branches"}
+                icon={
+                  collapseMerged ? (
+                    <ChevronsUpDown size={16} aria-hidden />
+                  ) : (
+                    <ChevronsDownUp size={16} aria-hidden />
+                  )
+                }
+                aria-pressed={collapseMerged}
+                disabled={isFiltering(applied)}
+                onClick={() => setCollapseMerged(!collapseMerged)}
+              />
+              <IconButton
                 label={detailsOpen ? "Hide commit details" : "Show commit details"}
                 icon={
                   detailsOpen ? (
@@ -573,6 +684,22 @@ export function HistoryView({
                 <CircleAlert size={14} aria-hidden />
                 {history.error.message}
               </p>
+            )}
+            {follow !== null && data && (
+              <div className="bl-history__follow" role="status">
+                <Route size={14} aria-hidden />
+                <span className="truncate">
+                  Following <strong>{followedName(data, follow, current)}</strong>
+                  <span className="text-muted">
+                    {" "}
+                    · {followCount.toLocaleString()} {followCount === 1 ? "commit" : "commits"}
+                    {data.hasMore ? " loaded" : ""}
+                  </span>
+                </span>
+                <Button size="sm" variant="ghost" onClick={() => setFollow(null)}>
+                  Stop following
+                </Button>
+              </div>
             )}
             {repo.totalChanges > 0 && (
               <WorkInProgressRow count={repo.totalChanges} onOpen={onShowChanges} />

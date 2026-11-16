@@ -1,11 +1,12 @@
-import { FilePen } from "lucide-react";
+import { ChevronsUpDown, ChevronsDownUp, FilePen } from "lucide-react";
 import { useEffect, useId, useState } from "react";
 import { Spinner } from "../../components/Spinner";
 import { relativeTime } from "../../lib/format";
 import { useVirtualRows } from "../../lib/useVirtualRows";
 import type { HeadState } from "../../types/git";
 import { Avatar } from "./Avatar";
-import { GraphCell } from "./GraphCell";
+import { GRAPH_PAD, GraphCell, LANE_WIDTH } from "./GraphCell";
+import { laneAt, segmentAt } from "./graph";
 import { Highlight } from "./HistoryFilters";
 import { RefBadges } from "./RefBadges";
 import type { SelectMode } from "./selection";
@@ -41,6 +42,10 @@ export function CommitList({
   onContextMenu,
   rowProps,
   highlight = "",
+  follow = null,
+  onFollow,
+  showFolds = false,
+  onToggleFold,
 }: {
   data: HistoryData;
   head: HeadState;
@@ -60,6 +65,14 @@ export function CommitList({
   rowProps?: (oid: string) => Record<string, unknown>;
   /** Search text to mark in the commit summaries. */
   highlight?: string;
+  /** The followed branch segment: other commits are faded. */
+  follow?: number | null;
+  /** Follow the segment clicked in the graph (null stops following). */
+  onFollow?: (segment: number | null) => void;
+  /** Show the "+N" control on merges whose side branch can be collapsed. */
+  showFolds?: boolean;
+  /** Collapse or expand a merge's side branch. */
+  onToggleFold?: (oid: string) => void;
 }) {
   const baseId = useId();
   const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
@@ -93,6 +106,21 @@ export function CommitList({
     if (e.key === "Escape" && selectedOids.size > 1) {
       e.preventDefault();
       onClearSelection?.();
+      return;
+    }
+    if (e.key === "Escape" && follow !== null) {
+      e.preventDefault();
+      onFollow?.(null);
+      return;
+    }
+    // Like a tree: Right shows a collapsed merge's side branch, Left hides it again.
+    const focused = activeIndex >= 0 ? data.commits[activeIndex]!.oid : null;
+    const fold = focused && showFolds ? data.folds.get(focused) : undefined;
+    if (fold && (e.key === "ArrowRight" || e.key === "ArrowLeft")) {
+      if ((e.key === "ArrowRight") !== fold.expanded) {
+        e.preventDefault();
+        onToggleFold?.(focused!);
+      }
       return;
     }
     if (e.key === " " && (e.metaKey || e.ctrlKey) && activeIndex >= 0) {
@@ -133,6 +161,8 @@ export function CommitList({
           const index = virtual.start + i;
           const row = data.rows[index]!;
           const isHead = commit.oid === headOid;
+          const fold = showFolds ? data.folds.get(commit.oid) : undefined;
+          const faded = follow !== null && row.segment !== follow;
           return (
             <div
               key={commit.oid}
@@ -143,7 +173,8 @@ export function CommitList({
               aria-posinset={index + 1}
               className={`bl-commit-row${isHead ? " bl-commit-row--head" : ""}${
                 multi && commit.oid === selectedOid ? " bl-commit-row--focus" : ""
-              }`}
+              }${faded ? " bl-commit-row--faded" : ""}`}
+              aria-expanded={fold ? fold.expanded : undefined}
               style={{ transform: `translateY(${index * HISTORY_ROW_HEIGHT}px)` }}
               {...rowProps?.(commit.oid)}
               onClick={(e) =>
@@ -159,8 +190,29 @@ export function CommitList({
                 onContextMenu?.(commit.oid, { x: e.clientX, y: e.clientY });
               }}
             >
-              <span className="bl-commit-row__graph">
-                <GraphCell row={row} height={HISTORY_ROW_HEIGHT} lanes={lanes} isHead={isHead} />
+              <span
+                className="bl-commit-row__graph"
+                onClick={(e) => {
+                  if (!onFollow) return;
+                  const lane = laneAt(
+                    e.clientX - e.currentTarget.getBoundingClientRect().left,
+                    GRAPH_PAD,
+                    LANE_WIDTH,
+                  );
+                  const segment = segmentAt(row, lane);
+                  if (segment === null) return;
+                  // A click on a line passing by follows that branch without selecting.
+                  if (lane !== row.lane) e.stopPropagation();
+                  onFollow(segment === follow ? null : segment);
+                }}
+              >
+                <GraphCell
+                  row={row}
+                  height={HISTORY_ROW_HEIGHT}
+                  lanes={lanes}
+                  isHead={isHead}
+                  follow={follow}
+                />
               </span>
               <span className="bl-commit-row__message" title={commit.summary}>
                 <RefBadges
@@ -171,6 +223,26 @@ export function CommitList({
                 <span className={`truncate${row.isMerge ? " bl-commit-row__merge" : ""}`}>
                   <Highlight text={commit.summary} query={highlight} />
                 </span>
+                {fold && (
+                  // The row itself says whether it is expanded (Right and Left toggle it), so
+                  // this mouse shortcut stays out of the accessibility tree.
+                  <span
+                    aria-hidden
+                    className={`bl-fold${fold.expanded ? " bl-fold--open" : ""}`}
+                    title={
+                      fold.expanded
+                        ? "Hide the commits of this merged branch (Left)"
+                        : `Show the ${fold.count.toLocaleString()} ${fold.count === 1 ? "commit" : "commits"} of this merged branch (Right)`
+                    }
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onToggleFold?.(commit.oid);
+                    }}
+                  >
+                    {fold.expanded ? <ChevronsDownUp size={12} /> : <ChevronsUpDown size={12} />}
+                    {fold.expanded ? "Hide" : `+${fold.count.toLocaleString()}`}
+                  </span>
+                )}
               </span>
               <span className="bl-commit-row__author" title={commit.authorName}>
                 <Avatar name={commit.authorName} email={commit.authorEmail} />

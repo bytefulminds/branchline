@@ -7,6 +7,23 @@ description on GitLab.
 
 ## [Unreleased]
 
+### Added
+
+- Follow a branch in the graph: click its line or a commit (or use the commit menu) and the
+  rest of the history fades, with the branch named in a bar above the list.
+- Collapse merged branches: the commits of branches that were merged and deleted fold into
+  their merge commit, with "+3" to show them again.
+
+### Changed
+
+- The default branch (main, master, trunk or develop) keeps the first lane and its own color
+  in the graph, and every branch gets its own color where its name starts.
+
+### Fixed
+
+- After making a branch from main with one commit, main no longer disappeared into that
+  branch's line in the graph.
+
 ## [0.3.2] - 2026-11-13
 
 The review quest gets faster: the AI prepares the questions in the background while you play,

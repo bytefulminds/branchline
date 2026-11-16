@@ -43,7 +43,8 @@ Milestones are only marked complete when the behavior works against real Git and
 - [x] Initial commit graph with lane tokens (randomized continuity test)
 - [x] macOS app icon on Apple's icon grid
 - [x] History search and filters, file history
-- [ ] Graph: click a lane to follow a branch, collapse merged branches
+- [x] Graph: click a lane to follow a branch, collapse merged branches; the default branch keeps
+      its own lane
 
 ## Milestone 4: Branches and remotes
 

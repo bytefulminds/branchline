@@ -95,6 +95,21 @@ Updates are signed with Branchline's own update key, so only genuine releases ar
 
 - History of all branches, remote branches and tags with a commit graph, ref badges, authors and
   dates. Fast on large repositories: the list is virtualized and loads page by page.
+- The default branch keeps the first lane and its own color from top to bottom: main, or
+  master, trunk or develop when there is no main (your local branch or its copy on the
+  remote, whichever is newer). A branch made from it curves into it, so main stays visible
+  even when a new branch has only one commit on top of it. Every other branch gets its own
+  color where its name starts.
+- Follow a branch: click its line or one of its commits in the graph (or choose "Follow this
+  branch" in a commit's menu). Its commits and lines stay bright, the rest fades, and a bar
+  above the list names the branch and counts its commits. A merged branch without a name is
+  named after its merge ("fix/empty-city (merged)"). Click it again, press `Esc` or choose
+  "Stop following" to see everything again.
+- Collapse merged branches with the button next to Filters: the commits of branches that
+  were merged and have no branch name left (their branch was deleted after the merge) are
+  hidden behind their merge commit, which shows how many with "+3". Click it (or press `Right`
+  on the merge) to show them, and "Hide" (or `Left`) to fold them away again. Branches that
+  still exist always stay visible. Branchline remembers the setting.
 - Commit details: full message, author and committer, parents, changed files with line counts,
   and a read-only diff per file.
 - Search History (`Ctrl+F` / `⌘F`) by message, author or commit id, and filter by author, file
@@ -517,6 +532,9 @@ by page. Method and all numbers per platform: [docs/performance.md](docs/perform
   cancelling stops Git itself; its SSH or HTTPS helper exits shortly after.
 - The graph shows up to 12 lanes; further lanes are clipped. Merge commits list the files
   changed relative to their first parent.
+- Collapsing merged branches looks at the commits loaded so far, so the "+3" of an old merge
+  can grow while more history loads. A side branch merged twice (into develop and into main)
+  is counted at the newest merge.
 - Search results are shown without graph lines, because the commits in between are hidden.
   File history follows the path given and does not follow renames.
 - Syntax highlighting colors each hunk on its own, so a comment or string that starts above a
