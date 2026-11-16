@@ -1,6 +1,7 @@
 import { Cloud, GitBranch, Tag } from "lucide-react";
 import type { HeadState, RefInfo } from "../../types/git";
 import { refDragProps } from "../integrate/refDrag";
+import { Highlight } from "./HistoryFilters";
 
 const ICON = { branch: GitBranch, remote: Cloud, tag: Tag } as const;
 const ORDER = { branch: 0, remote: 1, tag: 2 } as const;
@@ -11,17 +12,24 @@ export function RefBadges({
   head,
   isHeadCommit,
   max = 3,
+  highlight = "",
 }: {
   refs: RefInfo[] | undefined;
   head: HeadState;
   isHeadCommit: boolean;
   max?: number;
+  /** Search text to mark; matching names come first so they are not cut off. */
+  highlight?: string;
 }) {
   const current = head.kind === "branch" ? head.name : null;
+  const q = highlight.trim().toLowerCase();
+  const matches = (r: RefInfo) => Number(q !== "" && r.name.toLowerCase().includes(q));
   const sorted = [...(refs ?? [])].sort(
     (a, b) =>
       Number(b.name === current && b.kind === "branch") -
-        Number(a.name === current && a.kind === "branch") || ORDER[a.kind] - ORDER[b.kind],
+        Number(a.name === current && a.kind === "branch") ||
+      matches(b) - matches(a) ||
+      ORDER[a.kind] - ORDER[b.kind],
   );
   const shown = sorted.slice(0, max);
   const hidden = sorted.length - shown.length;
@@ -43,7 +51,9 @@ export function RefBadges({
               : refDragProps({ name: r.name, remote: r.kind === "remote" }))}
           >
             <Icon size={11} aria-hidden />
-            <span className="truncate">{r.name}</span>
+            <span className="truncate">
+              <Highlight text={r.name} query={highlight} />
+            </span>
           </span>
         );
       })}

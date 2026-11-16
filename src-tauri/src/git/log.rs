@@ -284,8 +284,9 @@ fn rev_list_set(
 /// The commits matching `filter`, in history order.
 ///
 /// Fields other than the text are combined in one `rev-list` (all must match). The text
-/// matches the message, the author or the commit id, so those are separate lookups whose
-/// results are combined; Git would otherwise require both message and author to match.
+/// matches the message, the author, the commit id or the name of a tag or branch at the
+/// commit, so those are separate lookups whose results are combined; Git would otherwise
+/// require both message and author to match.
 fn matching(
     root: &Path,
     born: bool,
@@ -330,6 +331,7 @@ fn matching(
         if id.len() >= 4 && id.bytes().all(|b| b.is_ascii_hexdigit()) {
             set.extend(order.iter().filter(|o| o.starts_with(&id)).cloned());
         }
+        set.extend(refs_named(&list_refs(root)?, t));
         Some(set)
     };
 
@@ -487,6 +489,15 @@ pub fn parse_refs(output: &[u8]) -> Vec<RefInfo> {
         });
     }
     refs
+}
+
+/// Commits with a tag or branch whose name contains `text` (case-insensitive).
+fn refs_named(refs: &[RefInfo], text: &str) -> Vec<String> {
+    let text = text.to_lowercase();
+    refs.iter()
+        .filter(|r| r.name.to_lowercase().contains(&text))
+        .map(|r| r.oid.clone())
+        .collect()
 }
 
 pub fn list_refs(root: &Path) -> Result<Vec<RefInfo>, GitError> {
@@ -779,6 +790,18 @@ mod tests {
             }
         );
         assert_eq!(r[3].oid, "666");
+    }
+
+    #[test]
+    fn finds_commits_by_tag_and_branch_name() {
+        let refs = parse_refs(
+            b"111\x00\x00refs/tags/v1.0.1\n222\x00333\x00refs/tags/Release-2\n444\x00\x00refs/heads/hotfix/login\n",
+        );
+        assert_eq!(refs_named(&refs, "v1.0"), vec!["111"]);
+        // Annotated tags point at their commit, and case does not matter.
+        assert_eq!(refs_named(&refs, "release"), vec!["333"]);
+        assert_eq!(refs_named(&refs, "HOTFIX"), vec!["444"]);
+        assert!(refs_named(&refs, "v2").is_empty());
     }
 
     #[test]

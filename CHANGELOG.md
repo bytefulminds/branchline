@@ -13,6 +13,8 @@ description on GitLab.
   rest of the history fades, with the branch named in a bar above the list.
 - Collapse merged branches: the commits of branches that were merged and deleted fold into
   their merge commit, with "+3" to show them again.
+- History search finds tags and branches by name: "v1.4" lists the commits tagged v1.4.0 and
+  v1.4.1, with the tag marked.
 
 ### Changed
 

@@ -44,9 +44,9 @@ commit box tells you who you commit as before you press Ctrl+Enter.
 
 ### Find anything, fast
 
-Search the whole history by message, author or commit id, and narrow it down by author,
-file or folder and dates. Every match is marked. The command palette (Ctrl+K) finds every
-action, branch and recent repository in a few letters.
+Search the whole history by message, author, commit id, tag or branch, and narrow it down by
+author, file or folder and dates. Every match is marked. The command palette (Ctrl+K) finds
+every action, branch and recent repository in a few letters.
 
 <p align="center">
   <img src="docs/screenshots/history-search.png" alt="History search for the word city, filtered on one author, with every match highlighted" width="49%">

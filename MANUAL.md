@@ -112,9 +112,11 @@ Updates are signed with Branchline's own update key, so only genuine releases ar
   still exist always stay visible. Branchline remembers the setting.
 - Commit details: full message, author and committer, parents, changed files with line counts,
   and a read-only diff per file.
-- Search History (`Ctrl+F` / `⌘F`) by message, author or commit id, and filter by author, file
-  or folder, date range and the current branch only. Results load page by page like the full
-  history, and matches are marked.
+- Search History (`Ctrl+F` / `⌘F`) by message, author, commit id, or the name of a tag or
+  branch (part of it is enough: "v1.4" finds the commits tagged v1.4.0 and v1.4.1, handy to
+  find where to start a hotfix), and filter by author, file or folder, date range and the
+  current branch only. Results load page by page like the full history, and matches are
+  marked.
 - "Show file history" on a diff opens the commits that changed that file.
 - Make room in a small window: drag the left edge of the Author, Date and Commit column
   headings to resize them (double-click resets one), and right-click the headings to hide or

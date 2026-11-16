@@ -219,6 +219,7 @@ export function CommitList({
                   refs={data.refsByOid.get(commit.oid)}
                   head={head}
                   isHeadCommit={isHead}
+                  highlight={highlight}
                 />
                 <span className={`truncate${row.isMerge ? " bl-commit-row__merge" : ""}`}>
                   <Highlight text={commit.summary} query={highlight} />

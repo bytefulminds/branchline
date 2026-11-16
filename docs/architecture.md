@@ -488,12 +488,12 @@ arrives (about 50 ms for 100,000 commits):
 
 ### Search and filters
 
-- `LogFilter` has a text (message, author or start of a commit id), an author, a file or folder,
-  a date range (`YYYY-MM-DD`, inclusive days) and "current branch only". Input is validated:
-  no control characters, at most 200 characters, paths through `validate_relative`, dates in
-  that exact form. Values are passed as `--grep=`, `--author=` and `--since=` arguments and after
-  `--`, so text can never become an option; `--fixed-strings` and `--regexp-ignore-case` make
-  them plain, case-insensitive text.
+- `LogFilter` has a text (message, author, start of a commit id, or part of a tag or branch
+  name), an author, a file or folder, a date range (`YYYY-MM-DD`, inclusive days) and "current
+  branch only". Input is validated: no control characters, at most 200 characters, paths through
+  `validate_relative`, dates in that exact form. Values are passed as `--grep=`, `--author=` and
+  `--since=` arguments and after `--`, so text can never become an option; `--fixed-strings` and
+  `--regexp-ignore-case` make them plain, case-insensitive text.
 - The author, path, dates and branch go into one `rev-list` (all must match). The text is matched
   in separate lookups (message, author, commit id prefix) and combined, because Git requires
   both `--grep` and `--author` to match when given together.

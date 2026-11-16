@@ -112,6 +112,39 @@ fn text_matches_message_author_or_commit_id() {
 }
 
 #[test]
+fn text_matches_tag_and_branch_names() {
+    let f = fixture();
+    let d = f._dir.path();
+    git(d, &["tag", "v1.0.0", &f.ids[0]]);
+    git(
+        d,
+        &["tag", "-a", "-m", "Hotfix release", "v1.0.1", &f.ids[1]],
+    );
+    let text = |t: &str| LogFilter {
+        text: t.into(),
+        ..LogFilter::default()
+    };
+    // A lightweight and an annotated tag, found by part of their name.
+    assert_eq!(
+        find(&f, text("v1.0")),
+        vec!["Write the guide", "Add login screen"]
+    );
+    assert_eq!(find(&f, text("V1.0.1")), vec!["Write the guide"]);
+    // Branch names too, together with the messages that match.
+    assert_eq!(find(&f, text("feature")), vec!["Fix LOGIN crash"]);
+    // Limits still apply to commits found by name.
+    assert!(find(
+        &f,
+        LogFilter {
+            text: "v1.0.0".into(),
+            author: "bob".into(),
+            ..LogFilter::default()
+        }
+    )
+    .is_empty());
+}
+
+#[test]
 fn limits_combine_with_each_other_and_the_text() {
     let f = fixture();
     let author = LogFilter {

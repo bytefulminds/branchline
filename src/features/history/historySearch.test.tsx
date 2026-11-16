@@ -17,6 +17,10 @@ installTauriTestEnvironment();
 beforeEach(resetHistoryFilters);
 
 const COMMITS = makeHistory(40);
+const REFS = [
+  { name: "hotfix-base", kind: "branch", oid: COMMITS[30]!.oid },
+  { name: "v2.0.1", kind: "tag", oid: COMMITS[30]!.oid },
+];
 const REPO_AT_HEAD: RepositoryInfo = {
   ...REPO,
   head: { kind: "branch", name: "main", oid: COMMITS[0]!.oid },
@@ -27,7 +31,7 @@ async function openHistory(view = "2") {
   const calls = setup((cmd, args) => {
     if (cmd === "plugin:dialog|open") return REPO.path;
     if (cmd === "inspect_repository") return REPO_AT_HEAD;
-    if (cmd === "list_refs") return [];
+    if (cmd === "list_refs") return REFS;
     if (cmd === "file_diff") return diffFor(args as { path: string; area: DiffArea });
     if (cmd === "commit_details")
       return {
@@ -47,7 +51,11 @@ async function openHistory(view = "2") {
       if (filter?.path === "../bad")
         throw { kind: "invalidPath", message: "Invalid file path: ../bad" };
       const text = filter?.text.toLowerCase() ?? "";
-      const commits = COMMITS.filter((c) => c.summary.toLowerCase().includes(text));
+      const commits = COMMITS.filter(
+        (c) =>
+          c.summary.toLowerCase().includes(text) ||
+          (text && REFS.some((r) => r.oid === c.oid && r.name.toLowerCase().includes(text))),
+      );
       return { commits, hasMore: false, total: commits.length };
     }
     return undefined;
@@ -65,6 +73,19 @@ const filterCalls = (calls: { cmd: string; args: Record<string, unknown> }[]) =>
   calls.filter((c) => c.cmd === "log_page" && c.args.filter).map((c) => c.args.filter as LogFilter);
 
 describe("history search", () => {
+  it("finds a commit by its tag and marks the tag", async () => {
+    const { user } = await openHistory();
+    await user.type(screen.getByRole("searchbox", { name: "Search commits" }), "v2.0");
+    expect(await screen.findByText("1 matching commit")).toBeInTheDocument();
+    const list = screen.getByRole("listbox", { name: "Commits" });
+    const [only] = within(list).getAllByRole("option");
+    expect(only).toHaveTextContent("Commit number 30");
+    const tag = within(only!).getByTitle("Tag v2.0.1");
+    expect(within(tag).getByText("v2.0").tagName).toBe("MARK");
+    // The matching tag comes before the branch, so it is never cut off.
+    expect(only!.querySelector(".bl-ref")).toBe(tag);
+  });
+
   it("searches after typing pauses, marks matches and clears with Escape", async () => {
     const { user, calls } = await openHistory();
     expect(screen.getByText("40 commits")).toBeInTheDocument();
