@@ -244,7 +244,7 @@ fn diffs_for_each_area() {
     let untracked = diff(d, "new file.md", DiffArea::Untracked);
     assert_eq!(untracked.change.as_deref(), Some("new"));
     assert_eq!(untracked.additions, 2);
-    assert!(!untracked.supports_partial);
+    assert!(untracked.supports_partial);
 }
 
 #[test]
@@ -501,6 +501,138 @@ fn partial_new_and_deleted_files() {
     let info = inspect(&s(d)).unwrap();
     let n = info.changes.iter().find(|c| c.path == "new.txt").unwrap();
     assert_eq!(n.worktree_status, Some(ChangeKind::Untracked));
+}
+
+fn one_line(path: &str, action: LineAction, d: &FileDiff, text: &str) -> LineRequest {
+    let idx = line_index(d, 0, LineKind::Add, text);
+    lines(
+        path,
+        action,
+        d,
+        vec![HunkSelection {
+            hunk: 0,
+            lines: Some(vec![idx]),
+        }],
+    )
+}
+
+fn status_of(d: &Path, path: &str) -> (Option<ChangeKind>, Option<ChangeKind>) {
+    let info = inspect(&s(d)).unwrap();
+    info.changes
+        .iter()
+        .find(|c| c.path == path)
+        .map(|c| (c.index_status, c.worktree_status))
+        .unwrap_or((None, None))
+}
+
+#[test]
+fn line_staging_for_untracked_files() {
+    let r = repo();
+    let d = r.path();
+    commit(d, "keep.txt", b"k\n");
+    fs::write(d.join("my notes.md"), "a\nb\nc\n").unwrap();
+
+    // Stage one line of an untracked file: only that line is in the index.
+    let u = diff(d, "my notes.md", DiffArea::Untracked);
+    apply_lines(&s(d), &one_line("my notes.md", LineAction::Stage, &u, "b")).unwrap();
+    assert_eq!(index(d, "my notes.md"), "b\n");
+    assert_eq!(worktree(d, "my notes.md"), "a\nb\nc\n");
+    let (staged, unstaged) = status_of(d, "my notes.md");
+    assert_eq!(staged, Some(ChangeKind::Added));
+    assert_eq!(unstaged, Some(ChangeKind::Modified));
+
+    // The rest is now an ordinary unstaged change.
+    let rest = diff(d, "my notes.md", DiffArea::Unstaged);
+    assert_eq!((rest.additions, rest.deletions), (2, 0));
+    apply_lines(
+        &s(d),
+        &one_line("my notes.md", LineAction::Stage, &rest, "c"),
+    )
+    .unwrap();
+    assert_eq!(index(d, "my notes.md"), "b\nc\n");
+
+    // Unstaging every line makes it untracked again, not an empty added file.
+    let st = diff(d, "my notes.md", DiffArea::Staged);
+    apply_lines(
+        &s(d),
+        &lines(
+            "my notes.md",
+            LineAction::Unstage,
+            &st,
+            vec![HunkSelection {
+                hunk: 0,
+                lines: None,
+            }],
+        ),
+    )
+    .unwrap();
+    assert_eq!(
+        status_of(d, "my notes.md"),
+        (None, Some(ChangeKind::Untracked))
+    );
+
+    // Selecting every line of an untracked file stages it whole.
+    let u = diff(d, "my notes.md", DiffArea::Untracked);
+    apply_lines(
+        &s(d),
+        &lines(
+            "my notes.md",
+            LineAction::Stage,
+            &u,
+            vec![HunkSelection {
+                hunk: 0,
+                lines: None,
+            }],
+        ),
+    )
+    .unwrap();
+    assert_eq!(index(d, "my notes.md"), "a\nb\nc\n");
+    assert_eq!(status_of(d, "my notes.md"), (Some(ChangeKind::Added), None));
+}
+
+#[test]
+fn discard_lines_of_untracked_files() {
+    let r = repo();
+    let d = r.path();
+    commit(d, "keep.txt", b"k\n");
+    fs::write(d.join("draft.txt"), "a\nb\nc\n").unwrap();
+
+    // Discarding a line edits the file and leaves it untracked.
+    let u = diff(d, "draft.txt", DiffArea::Untracked);
+    apply_lines(&s(d), &one_line("draft.txt", LineAction::Discard, &u, "a")).unwrap();
+    assert_eq!(worktree(d, "draft.txt"), "b\nc\n");
+    assert_eq!(
+        status_of(d, "draft.txt"),
+        (None, Some(ChangeKind::Untracked))
+    );
+
+    // Discarding every line deletes it, like discarding the whole file.
+    let u = diff(d, "draft.txt", DiffArea::Untracked);
+    apply_lines(
+        &s(d),
+        &lines(
+            "draft.txt",
+            LineAction::Discard,
+            &u,
+            vec![HunkSelection {
+                hunk: 0,
+                lines: None,
+            }],
+        ),
+    )
+    .unwrap();
+    assert!(!d.join("draft.txt").exists());
+}
+
+#[test]
+fn line_staging_for_untracked_files_without_commits() {
+    let t = TempDir::new().unwrap();
+    let d = t.path();
+    git(d, &["init", "-q"]);
+    fs::write(d.join("first.txt"), "one\ntwo\n").unwrap();
+    let u = diff(d, "first.txt", DiffArea::Untracked);
+    apply_lines(&s(d), &one_line("first.txt", LineAction::Stage, &u, "two")).unwrap();
+    assert_eq!(index(d, "first.txt"), "two\n");
 }
 
 #[test]

@@ -17,6 +17,10 @@ installTauriTestEnvironment();
 beforeEach(resetHistoryFilters);
 
 const COMMITS = makeHistory(40);
+const REFS = [
+  { name: "hotfix-base", kind: "branch", oid: COMMITS[30]!.oid },
+  { name: "v2.0.1", kind: "tag", oid: COMMITS[30]!.oid },
+];
 const REPO_AT_HEAD: RepositoryInfo = {
   ...REPO,
   head: { kind: "branch", name: "main", oid: COMMITS[0]!.oid },
@@ -27,7 +31,7 @@ async function openHistory(view = "2") {
   const calls = setup((cmd, args) => {
     if (cmd === "plugin:dialog|open") return REPO.path;
     if (cmd === "inspect_repository") return REPO_AT_HEAD;
-    if (cmd === "list_refs") return [];
+    if (cmd === "list_refs") return REFS;
     if (cmd === "file_diff") return diffFor(args as { path: string; area: DiffArea });
     if (cmd === "commit_details")
       return {
@@ -47,7 +51,11 @@ async function openHistory(view = "2") {
       if (filter?.path === "../bad")
         throw { kind: "invalidPath", message: "Invalid file path: ../bad" };
       const text = filter?.text.toLowerCase() ?? "";
-      const commits = COMMITS.filter((c) => c.summary.toLowerCase().includes(text));
+      const commits = COMMITS.filter(
+        (c) =>
+          c.summary.toLowerCase().includes(text) ||
+          (text && REFS.some((r) => r.oid === c.oid && r.name.toLowerCase().includes(text))),
+      );
       return { commits, hasMore: false, total: commits.length };
     }
     return undefined;
@@ -65,6 +73,19 @@ const filterCalls = (calls: { cmd: string; args: Record<string, unknown> }[]) =>
   calls.filter((c) => c.cmd === "log_page" && c.args.filter).map((c) => c.args.filter as LogFilter);
 
 describe("history search", () => {
+  it("finds a commit by its tag and marks the tag", async () => {
+    const { user } = await openHistory();
+    await user.type(screen.getByRole("searchbox", { name: "Search commits" }), "v2.0");
+    expect(await screen.findByText("1 matching commit")).toBeInTheDocument();
+    const list = screen.getByRole("listbox", { name: "Commits" });
+    const [only] = within(list).getAllByRole("option");
+    expect(only).toHaveTextContent("Commit number 30");
+    const tag = within(only!).getByTitle("Tag v2.0.1");
+    expect(within(tag).getByText("v2.0").tagName).toBe("MARK");
+    // The matching tag comes before the branch, so it is never cut off.
+    expect(only!.querySelector(".bl-ref")).toBe(tag);
+  });
+
   it("searches after typing pauses, marks matches and clears with Escape", async () => {
     const { user, calls } = await openHistory();
     expect(screen.getByText("40 commits")).toBeInTheDocument();
@@ -124,5 +145,83 @@ describe("history search", () => {
     expect(screen.getByLabelText("File or folder")).toHaveValue("src/app.ts");
     expect(screen.getByRole("button", { name: "Filters (1)" })).toBeInTheDocument();
     await waitFor(() => expect(filterCalls(calls).at(-1)).toMatchObject({ path: "src/app.ts" }));
+  });
+});
+
+describe("leaving a search", () => {
+  const LONG = makeHistory(700);
+
+  async function openLong() {
+    const user = userEvent.setup();
+    const calls = setup((cmd, args) => {
+      if (cmd === "plugin:dialog|open") return REPO.path;
+      if (cmd === "inspect_repository")
+        return { ...REPO, head: { kind: "branch", name: "main", oid: LONG[0]!.oid } };
+      if (cmd === "list_refs") return [];
+      if (cmd === "history_position") return LONG.findIndex((c) => c.oid === args.oid);
+      if (cmd === "commit_details")
+        return {
+          oid: args.oid,
+          parents: [],
+          authorName: "A",
+          authorEmail: "a@example.com",
+          authorDate: "2023-11-14T22:13:20+00:00",
+          committerName: "A",
+          committerEmail: "a@example.com",
+          committerDate: "2023-11-14T22:13:20+00:00",
+          message: "x",
+          files: [],
+        };
+      if (cmd === "log_page") {
+        const filter = args.filter as LogFilter | null;
+        if (filter) {
+          const commits = LONG.filter((c) => c.summary.endsWith(filter.text));
+          return { commits, hasMore: false, total: commits.length };
+        }
+        const skip = args.skip as number;
+        const limit = args.limit as number;
+        return {
+          commits: LONG.slice(skip, skip + limit),
+          hasMore: skip + limit < LONG.length,
+          total: LONG.length,
+        };
+      }
+      return undefined;
+    });
+    render(<App />);
+    await user.click(openButton());
+    await screen.findByRole("heading", { name: "Changes" });
+    await user.keyboard("{Control>}2{/Control}");
+    await screen.findByRole("listbox", { name: "Commits" });
+    return { user, calls };
+  }
+
+  it("keeps the commit picked from the results, loading history up to it", async () => {
+    const { user, calls } = await openLong();
+    await user.type(screen.getByRole("searchbox", { name: "Search commits" }), "number 650");
+    const list = screen.getByRole("listbox", { name: "Commits" });
+    await user.click(await within(list).findByRole("option", { name: /Commit number 650/ }));
+    await user.click(screen.getByRole("button", { name: "Clear search" }));
+
+    // The whole history again, loaded at once up to the picked commit.
+    expect(await screen.findByText("700 commits")).toBeInTheDocument();
+    const row = await within(list).findByText("Commit number 650");
+    expect(row.closest('[role="option"]')).toHaveAttribute("aria-selected", "true");
+    // Its neighbours are there too.
+    expect(within(list).getByText("Commit number 649")).toBeInTheDocument();
+    expect(within(list).getByText("Commit number 651")).toBeInTheDocument();
+    const pages = calls.filter((c) => c.cmd === "log_page" && !c.args.filter);
+    expect(pages.at(-1)!.args).toMatchObject({ skip: 300 });
+    expect(pages.at(-1)!.args.limit).toBeGreaterThan(350);
+  });
+
+  it("starts at the top again when nothing was picked", async () => {
+    const { user } = await openLong();
+    await user.type(screen.getByRole("searchbox", { name: "Search commits" }), "number 650");
+    const list = screen.getByRole("listbox", { name: "Commits" });
+    await within(list).findByRole("option", { name: /Commit number 650/ });
+    await user.click(screen.getByRole("button", { name: "Clear search" }));
+    expect(await screen.findByText("700 commits")).toBeInTheDocument();
+    expect(within(list).getAllByRole("option")[0]).toHaveAttribute("aria-selected", "true");
   });
 });

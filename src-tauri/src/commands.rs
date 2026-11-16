@@ -109,6 +109,12 @@ pub async fn apply_lines(repo: String, request: LineRequest) -> Result<Repositor
     write_then_inspect(repo, move |r| ops::apply_lines(r, &request)).await
 }
 
+/// Where a commit is in the full history, to load up to it.
+#[tauri::command]
+pub async fn history_position(repo: String, oid: String) -> Result<Option<usize>, GitError> {
+    blocking(move || log::history_position(&repository::resolve_root(&repo)?, &oid)).await
+}
+
 /// One page of history (newest first).
 #[tauri::command]
 pub async fn log_page(

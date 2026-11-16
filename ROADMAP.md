@@ -21,7 +21,7 @@ Milestones are only marked complete when the behavior works against real Git and
 - [x] Invalid paths, non-repositories, bare repositories and Git errors handled without crashing
 - [x] Backend tests with temporary repositories; frontend interaction tests
 - [x] Runs on macOS and Linux
-- [ ] Run and verify on Windows
+- [x] Run and verify on Windows
 
 ## Milestone 2: Working tree and diffs (done)
 
@@ -33,7 +33,7 @@ Milestones are only marked complete when the behavior works against real Git and
 - [x] Randomized test that checks partial staging, unstaging and discarding byte-for-byte
 - [x] Side-by-side diff view
 - [x] Syntax highlighting in diffs
-- [ ] Line staging for untracked files (via intent-to-add)
+- [x] Line staging for untracked files (via intent-to-add)
 
 ## Milestone 3: Commits and history (done)
 
@@ -43,7 +43,8 @@ Milestones are only marked complete when the behavior works against real Git and
 - [x] Initial commit graph with lane tokens (randomized continuity test)
 - [x] macOS app icon on Apple's icon grid
 - [x] History search and filters, file history
-- [ ] Graph: click a lane to follow a branch, collapse merged branches
+- [x] Graph: click a lane to follow a branch, collapse merged branches; the default branch keeps
+      its own lane
 
 ## Milestone 4: Branches and remotes
 

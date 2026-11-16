@@ -273,6 +273,16 @@ describe("accessibility (axe)", () => {
     await screen.findByRole("group", { name: "Filters" });
     await audit("history filters");
 
+    await user.click(screen.getByRole("button", { name: "Collapse merged branches" }));
+    const commits = screen.getByRole("listbox", { name: "Commits" });
+    await user.pointer({
+      keys: "[MouseRight]",
+      target: within(commits).getAllByRole("option")[1]!,
+    });
+    await user.click(await screen.findByRole("menuitem", { name: /Follow this branch/ }));
+    await screen.findByText(/Following/);
+    await audit("history following a branch");
+
     await user.keyboard("{Control>}j{/Control}");
     const consolePanel = await screen.findByRole("region", { name: "Git console" });
     await user.click(await within(consolePanel).findByRole("button", { name: /git commit/ }));

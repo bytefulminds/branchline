@@ -36,7 +36,7 @@ export const HistorySearch = forwardRef<
           ref={ref}
           type="search"
           placeholder={`Search commits (${modKeyLabel}F)`}
-          title="Message, author or commit id"
+          title="Message, author, commit id, tag or branch"
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={(e) => {

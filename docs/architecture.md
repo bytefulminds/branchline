@@ -420,6 +420,12 @@ changes the working tree.
    opposite, so the side Git matches against is always the real file.
 4. `git apply --cached [--reverse] --recount` applies it; discard applies to the working tree.
 
+Untracked files have no index entry for a patch to apply to. When only part of one is staged,
+`git add --intent-to-add` first adds an empty entry, then the selected lines are applied to it
+as a modification; if that fails, `git rm --cached` makes the file untracked again. Selecting
+every line simply runs `git add`. Discarding lines edits the file in the working tree, and
+discarding all of them deletes it.
+
 A randomized integration test edits a file, picks random line selections across hunks and checks
 the resulting index and working tree byte-for-byte against an independent computation.
 
@@ -471,14 +477,33 @@ lanes to the right, and lanes that expect the same commit converge at its row. T
 over between pages. A randomized test lays out 500 random histories in random page sizes and
 checks that every line leaving a row enters the next one and that all lanes close.
 
+`historyGraph` adds what needs the refs, and runs over all loaded commits each time a page
+arrives (about 50 ms for 100,000 commits):
+
+- The default branch (`trunkTips`: main, master, trunk or develop, local or on a remote) keeps
+  lane 0 and color 0. Lane 0 stays reserved until the first of its tips appears, then follows
+  its first parents; any lane that reaches one of those commits curves into lane 0.
+- Every run of a branch is a segment with its own id. A segment starts at a branch tip, at a
+  merge parent that opens a lane, or where a lane reaches a commit with another branch name
+  (`origin/x` counts as `x`). Following a branch fades every line and commit of other segments.
+- A segment opened for a merge parent without a branch name is a merged side branch and
+  remembers its merge (`mergedBy`). Collapsing hides those commits unless their merge is
+  expanded, drops the lines to them, and lays the rest out a second time. Nested side branches
+  fold into the outermost collapsed merge. A randomized test checks continuity with branch
+  names, a default branch and random collapsed merges.
+
 ### Search and filters
 
-- `LogFilter` has a text (message, author or start of a commit id), an author, a file or folder,
-  a date range (`YYYY-MM-DD`, inclusive days) and "current branch only". Input is validated:
-  no control characters, at most 200 characters, paths through `validate_relative`, dates in
-  that exact form. Values are passed as `--grep=`, `--author=` and `--since=` arguments and after
-  `--`, so text can never become an option; `--fixed-strings` and `--regexp-ignore-case` make
-  them plain, case-insensitive text.
+When a search is cleared, the commit picked from its results stays selected. If it is not
+loaded yet, `history_position` finds its index in the cached order and the History view loads
+up to it in pages of at most 2,000 commits, then scrolls it to the middle.
+
+- `LogFilter` has a text (message, author, start of a commit id, or part of a tag or branch
+  name), an author, a file or folder, a date range (`YYYY-MM-DD`, inclusive days) and "current
+  branch only". Input is validated: no control characters, at most 200 characters, paths through
+  `validate_relative`, dates in that exact form. Values are passed as `--grep=`, `--author=` and
+  `--since=` arguments and after `--`, so text can never become an option; `--fixed-strings` and
+  `--regexp-ignore-case` make them plain, case-insensitive text.
 - The author, path, dates and branch go into one `rev-list` (all must match). The text is matched
   in separate lookups (message, author, commit id prefix) and combined, because Git requires
   both `--grep` and `--author` to match when given together.

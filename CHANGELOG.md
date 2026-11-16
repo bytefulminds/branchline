@@ -7,6 +7,36 @@ description on GitLab.
 
 ## [Unreleased]
 
+## [0.3.5] - 2026-11-16
+
+The graph gets easier to read: main keeps its own lane and color, so it no longer disappears
+into a new branch, you can click a branch to follow it through the history, and branches that
+were merged and deleted can be folded into their merge. History search finds tags and
+branches by name and keeps the commit you picked when you clear it. And you can stage single
+lines of new files.
+
+### Added
+
+- Follow a branch in the graph: click its line or a commit (or use the commit menu) and the
+  rest of the history fades, with the branch named in a bar above the list.
+- Collapse merged branches: the commits of branches that were merged and deleted fold into
+  their merge commit, with "+3" to show them again.
+- History search finds tags and branches by name: "v1.4" lists the commits tagged v1.4.0 and
+  v1.4.1, with the tag marked.
+- Clearing a search keeps the commit you picked from the results selected, and shows it in
+  the full history between the commits around it.
+- Stage, discard and select hunks and lines of untracked files, like any other change.
+
+### Changed
+
+- The default branch (main, master, trunk or develop) keeps the first lane and its own color
+  in the graph, and every branch gets its own color where its name starts.
+
+### Fixed
+
+- After making a branch from main with one commit, main no longer disappeared into that
+  branch's line in the graph.
+
 ## [0.3.2] - 2026-11-13
 
 The review quest gets faster: the AI prepares the questions in the background while you play,

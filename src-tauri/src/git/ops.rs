@@ -157,16 +157,28 @@ pub struct LineRequest {
     pub selections: Vec<HunkSelection>,
 }
 
+/// True when `path` is not in the index (an untracked file).
+fn is_untracked(root: &Path, path: &str) -> Result<bool, GitError> {
+    let out = run_git(root, &["ls-files", "-z", "--", path], DEFAULT_TIMEOUT)?;
+    Ok(out.stdout.is_empty())
+}
+
 /// Stage, unstage or discard selected hunks or lines of one file.
+///
+/// An untracked file is compared with an empty file. Staging part of it first adds it with
+/// `git add --intent-to-add` (an empty entry in the index), so the selected lines can be
+/// applied to that entry; if that fails, the file is left untracked again.
 pub fn apply_lines(repo: &str, req: &LineRequest) -> Result<(), GitError> {
     let root = resolve_root(repo)?;
     let _guard = write_lock();
 
+    let untracked = req.action != LineAction::Unstage && is_untracked(&root, &req.path)?;
     let (area, direction, cached) = match req.action {
         LineAction::Stage => (DiffArea::Unstaged, Direction::Forward, true),
         LineAction::Unstage => (DiffArea::Staged, Direction::Reverse, true),
         LineAction::Discard => (DiffArea::Unstaged, Direction::Reverse, false),
     };
+    let area = if untracked { DiffArea::Untracked } else { area };
     // Recompute the diff now; never trust line content sent by the UI.
     let diff = file_diff(&root, &req.path, None, area, true)?;
     if diff.fingerprint != req.fingerprint {
@@ -178,7 +190,42 @@ pub fn apply_lines(repo: &str, req: &LineRequest) -> Result<(), GitError> {
         ));
     }
     let patch = build_patch(&diff.parsed, &req.selections, direction)?;
+    // Every line selected: the patch still creates (or for Discard, deletes) the file.
+    let whole = patch
+        .split(|b| *b == b'\n')
+        .take_while(|l| !l.starts_with(b"@@"))
+        .any(|l| l.starts_with(b"new file mode"));
 
+    if untracked && req.action == LineAction::Stage {
+        if whole {
+            run_git(&root, &["add", "--", &req.path], DEFAULT_TIMEOUT)?;
+            return Ok(());
+        }
+        run_git(
+            &root,
+            &["add", "--intent-to-add", "--", &req.path],
+            DEFAULT_TIMEOUT,
+        )?;
+        let applied = apply_patch(&root, &patch, direction, cached);
+        if applied.is_err() {
+            // Leave the file untracked, as it was.
+            let _ = run_git(
+                &root,
+                &["rm", "--cached", "-q", "--", &req.path],
+                DEFAULT_TIMEOUT,
+            );
+        }
+        return applied;
+    }
+    apply_patch(&root, &patch, direction, cached)
+}
+
+fn apply_patch(
+    root: &Path,
+    patch: &[u8],
+    direction: Direction,
+    cached: bool,
+) -> Result<(), GitError> {
     let mut args = vec!["apply", "--recount", "--whitespace=nowarn"];
     if cached {
         args.push("--cached");
@@ -188,11 +235,11 @@ pub fn apply_lines(repo: &str, req: &LineRequest) -> Result<(), GitError> {
     }
     args.push("-");
     match run_git_with(
-        &root,
+        root,
         &args,
         &RunOptions {
             timeout: DEFAULT_TIMEOUT,
-            stdin: Some(&patch),
+            stdin: Some(patch),
             ..RunOptions::default()
         },
     ) {

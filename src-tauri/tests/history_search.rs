@@ -4,7 +4,7 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 
-use branchline_lib::git::log::{log_page, LogFilter};
+use branchline_lib::git::log::{history_position, log_page, LogFilter};
 use tempfile::TempDir;
 
 fn git_env(dir: &Path, args: &[&str], env: &[(&str, &str)]) -> String {
@@ -81,6 +81,18 @@ fn find(f: &Fixture, filter: LogFilter) -> Vec<String> {
 }
 
 #[test]
+fn finds_where_a_commit_is_in_the_history() {
+    let f = fixture();
+    let d = f._dir.path();
+    let page = log_page(d, 0, 100, None).unwrap();
+    for (i, c) in page.commits.iter().enumerate() {
+        assert_eq!(history_position(d, &c.oid).unwrap(), Some(i));
+    }
+    assert_eq!(history_position(d, &"0".repeat(40)).unwrap(), None);
+    assert!(history_position(d, "--all").is_err());
+}
+
+#[test]
 fn empty_filter_lists_everything() {
     let f = fixture();
     let page = log_page(f._dir.path(), 0, 100, Some(&LogFilter::default())).unwrap();
@@ -109,6 +121,39 @@ fn text_matches_message_author_or_commit_id() {
     assert_eq!(find(&f, text(&f.ids[1][..8])), vec!["Write the guide"]);
     // Not a pattern: regex characters are literal.
     assert!(find(&f, text("log.n")).is_empty());
+}
+
+#[test]
+fn text_matches_tag_and_branch_names() {
+    let f = fixture();
+    let d = f._dir.path();
+    git(d, &["tag", "v1.0.0", &f.ids[0]]);
+    git(
+        d,
+        &["tag", "-a", "-m", "Hotfix release", "v1.0.1", &f.ids[1]],
+    );
+    let text = |t: &str| LogFilter {
+        text: t.into(),
+        ..LogFilter::default()
+    };
+    // A lightweight and an annotated tag, found by part of their name.
+    assert_eq!(
+        find(&f, text("v1.0")),
+        vec!["Write the guide", "Add login screen"]
+    );
+    assert_eq!(find(&f, text("V1.0.1")), vec!["Write the guide"]);
+    // Branch names too, together with the messages that match.
+    assert_eq!(find(&f, text("feature")), vec!["Fix LOGIN crash"]);
+    // Limits still apply to commits found by name.
+    assert!(find(
+        &f,
+        LogFilter {
+            text: "v1.0.0".into(),
+            author: "bob".into(),
+            ..LogFilter::default()
+        }
+    )
+    .is_empty());
 }
 
 #[test]
