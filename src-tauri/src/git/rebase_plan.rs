@@ -389,10 +389,7 @@ pub fn build_todo(
         .iter()
         .filter(|s| s.action != PlanAction::Drop)
         .collect();
-    if kept.is_empty() {
-        return invalid("Keep at least one commit, or reset the branch instead.".into());
-    }
-    if matches!(kept[0].action, PlanAction::Squash | PlanAction::Fixup) {
+    if !kept.is_empty() && matches!(kept[0].action, PlanAction::Squash | PlanAction::Fixup) {
         return invalid(
             "The first commit to keep cannot be squashed or fixed up: there is nothing before it to combine with.".into(),
         );
@@ -431,6 +428,11 @@ pub fn build_todo(
     }
     if let Some(exec) = pending {
         todo.push_str(&exec);
+    }
+    // Every commit dropped: the branch ends at the base. Git needs `noop` to accept a plan
+    // without any commit to apply.
+    if kept.is_empty() {
+        todo.push_str("noop\n");
     }
     Ok((todo, messages))
 }
@@ -561,6 +563,14 @@ mod tests {
     }
 
     #[test]
+    fn dropping_every_commit_ends_the_branch_at_the_base() {
+        let commits = [commit(A), commit(B)];
+        let plan = [step(A, PlanAction::Drop), step(B, PlanAction::Drop)];
+        let (todo, _) = build_todo(&commits, &plan, Path::new("/g")).unwrap();
+        assert_eq!(todo, format!("drop {A}\ndrop {B}\nnoop\n"));
+    }
+
+    #[test]
     fn rejects_plans_that_do_not_match_or_cannot_work() {
         let commits = [commit(A), commit(B)];
         let dir = Path::new("/g");
@@ -568,9 +578,6 @@ mod tests {
         assert!(err(&[step(A, PlanAction::Pick)]).contains("does not match"));
         assert!(
             err(&[step(A, PlanAction::Pick), step(A, PlanAction::Pick)]).contains("does not match")
-        );
-        assert!(
-            err(&[step(A, PlanAction::Drop), step(B, PlanAction::Drop)]).contains("at least one")
         );
         assert!(
             err(&[step(B, PlanAction::Squash), step(A, PlanAction::Pick)]).contains("first commit")

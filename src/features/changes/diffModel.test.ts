@@ -77,6 +77,15 @@ describe("nextSelection", () => {
     expect(nextSelection([a], [aStaged], a.id)).toBe(aStaged.id);
     expect(nextSelection([a], [], a.id)).toBeNull();
   });
+  it("follows an untracked file when part of it was staged", () => {
+    const n = entry({ id: "untracked:n", path: "n", area: "untracked", status: "untracked" });
+    const m = entry({ id: "untracked:m", path: "m", area: "untracked", status: "untracked" });
+    const nStaged = entry({ id: "staged:n", path: "n", area: "staged", status: "added" });
+    const nRest = entry({ id: "unstaged:n", path: "n" });
+    expect(nextSelection([n, m], [nStaged, nRest, m], n.id)).toBe(nRest.id);
+    // Staged whole, it leaves the group: the next untracked file is selected.
+    expect(nextSelection([n, m], [nStaged, m], n.id)).toBe(m.id);
+  });
 
   it("pairs removed and added lines side by side", () => {
     const diff = diffFor({ path: "f", area: "unstaged" });

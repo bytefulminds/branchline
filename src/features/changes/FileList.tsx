@@ -121,9 +121,9 @@ function RowActions({
   }
   return (
     <span className="bl-file-row__actions" aria-hidden="true">
-      {entry.area === "unstaged" && (
+      {(entry.area === "unstaged" || entry.area === "untracked") && (
         <RowAction
-          label="Discard changes"
+          label={entry.area === "untracked" ? "Delete file" : "Discard changes"}
           danger
           disabled={busy}
           onClick={() => onAction("discard", [entry])}
@@ -161,6 +161,8 @@ export function FileList({
     conflicted: false,
     unstaged: false,
     staged: false,
+    // New files are often build output or notes: shown when you open the group.
+    untracked: true,
   });
   const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
 
@@ -191,6 +193,18 @@ export function FileList({
   }, [activeRow, scrollToRow]);
 
   const onKeyDown = (e: React.KeyboardEvent) => {
+    // Down from the last file opens a collapsed group below it (Untracked files starts closed).
+    if (e.key === "ArrowDown" && activeIndex === entries.length - 1) {
+      const lastArea = entries[activeIndex]?.area;
+      const after = lastArea ? AREA_ORDER.slice(AREA_ORDER.indexOf(lastArea) + 1) : AREA_ORDER;
+      const area = after.find((a) => collapsed[a] && groups[a].length > 0);
+      if (area) {
+        e.preventDefault();
+        setCollapsed((c) => ({ ...c, [area]: false }));
+        onSelect(groups[area][0]!);
+        return;
+      }
+    }
     if (entries.length === 0) return;
     const current = entries[activeIndex];
     if ((e.key === " " || e.key === "Enter") && current) {
@@ -200,7 +214,8 @@ export function FileList({
     }
     if ((e.key === "Delete" || e.key === "Backspace") && current) {
       e.preventDefault();
-      if (!busy && current.area === "unstaged") onAction("discard", [current]);
+      if (!busy && (current.area === "unstaged" || current.area === "untracked"))
+        onAction("discard", [current]);
       return;
     }
     let next: number;

@@ -111,6 +111,28 @@ fn lists_the_commits_after_the_base_oldest_first() {
 }
 
 #[test]
+fn drops_one_commit_in_the_middle_or_at_the_tip() {
+    let (_t, d, _base, c) = repo_in("r");
+    // Drop commit 2: base is its parent, the commits after it are applied again.
+    let steps = plan(&[
+        (&c[1], PlanAction::Drop),
+        (&c[2], PlanAction::Pick),
+        (&c[3], PlanAction::Pick),
+    ]);
+    interactive_rebase(&s(&d), &c[0], &steps, false).unwrap();
+    assert_eq!(subjects(&d), ["base", "commit 1", "commit 3", "commit 4"]);
+    assert!(!d.join("file2.txt").exists());
+
+    // Drop the newest commit: nothing is left to apply, the branch ends at its parent.
+    let tip = git(&d, &["rev-parse", "HEAD"]);
+    let parent = git(&d, &["rev-parse", "HEAD~1"]);
+    interactive_rebase(&s(&d), &parent, &plan(&[(&tip, PlanAction::Drop)]), false).unwrap();
+    assert_eq!(subjects(&d), ["base", "commit 1", "commit 3"]);
+    assert_eq!(git(&d, &["rev-parse", "HEAD"]), parent);
+    assert!(leftover_files(&d).is_empty());
+}
+
+#[test]
 fn reorders_rewords_squashes_fixes_up_and_drops() {
     // Unusual folder name: the reword file path goes through the shell quoted.
     let (_t, d, base, c) = repo_in("it's a $HOME repo");

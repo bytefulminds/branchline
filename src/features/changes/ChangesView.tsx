@@ -54,6 +54,10 @@ export function nextSelection(
   const index = before.findIndex((e) => e.id === selectedId);
   const old = before[index];
   if (!old) return null;
+  // Part of an untracked file was staged: the rest of it is now an unstaged change.
+  const rest =
+    old.area === "untracked" && after.find((e) => e.path === old.path && e.area === "unstaged");
+  if (rest) return rest.id;
   const sameArea = before.filter((e) => e.area === old.area);
   const pos = sameArea.indexOf(old);
   const candidate =
@@ -84,7 +88,10 @@ export function ChangesView({
 
   const groups = useMemo(() => groupChanges(repo.changes), [repo.changes]);
   const filtered = useMemo(() => filterGroups(groups, query), [groups, query]);
-  const all = useMemo(() => [...groups.conflicted, ...groups.unstaged, ...groups.staged], [groups]);
+  const all = useMemo(
+    () => [...groups.conflicted, ...groups.unstaged, ...groups.staged, ...groups.untracked],
+    [groups],
+  );
 
   // Follow the selection when the list changes underneath it (adjusting state during render).
   const [previousAll, setPreviousAll] = useState(all);
@@ -97,7 +104,10 @@ export function ChangesView({
 
   const selected = all.find((e) => e.id === selectedId) ?? null;
   const filteredCount =
-    filtered.conflicted.length + filtered.unstaged.length + filtered.staged.length;
+    filtered.conflicted.length +
+    filtered.unstaged.length +
+    filtered.staged.length +
+    filtered.untracked.length;
   const busy = controller.operation !== null;
 
   const reportError = useCallback(
@@ -172,6 +182,7 @@ export function ChangesView({
     groups.conflicted.length && plural(groups.conflicted.length, "conflict"),
     groups.staged.length && `${groups.staged.length.toLocaleString()} staged`,
     groups.unstaged.length && `${groups.unstaged.length.toLocaleString()} unstaged`,
+    groups.untracked.length && `${groups.untracked.length.toLocaleString()} untracked`,
   ].filter(Boolean);
 
   const reviewBranch = useSelfReview(repo);

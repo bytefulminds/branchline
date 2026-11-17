@@ -68,7 +68,9 @@ Updates are signed with Branchline's own update key, so only genuine releases ar
 
 - Changed files from `git status`: modified, added, deleted, renamed (with source path), copied,
   type changes, untracked and conflicted files, split into conflicts, staged (what goes
-  into the next commit, on top) and unstaged.
+  into the next commit, on top), unstaged and untracked files. The untracked group starts
+  closed and shows how many files it holds; click it (or press `Down` past the last file) to
+  open it. The Changes count in the sidebar counts staged and unstaged files only.
 - Diff viewer for unstaged, staged and untracked files, with line numbers, hunk headers, CRLF and
   "no newline at end of file" handling, binary detection and a guard for very large diffs.
 - One column or side by side (toggle above every diff, remembered). Side by side pairs removed
@@ -133,7 +135,7 @@ Updates are signed with Branchline's own update key, so only genuine releases ar
   sidebar collapses to icons (`Ctrl+B` / `⌘B`, or the button at its bottom). Branchline
   remembers all of this.
 - Right-click (or `Shift+F10`) on a commit to create a branch, tag or worktree there, check it
-  out, merge, rebase, cherry-pick or revert it, or copy its id.
+  out, merge, rebase, cherry-pick, revert or drop it, or copy its id.
 
 ## Branches
 
@@ -196,6 +198,12 @@ Updates are signed with Branchline's own update key, so only genuine releases ar
 - Merge a branch or commit into the current branch (optionally always with a merge commit),
   rebase onto a branch or commit, cherry-pick and revert commits, from the Branches view and the
   History context menu. Rebasing a published branch warns that a force push will follow.
+- Drop a commit ("Drop commit…" on a commit of the current branch in History): it is removed
+  from the branch and the commits after it are applied again on top of its parent, without
+  opening the rebase window. Branchline asks first, warns when the branch is published (a
+  force push follows), and offers to stash your changes when they are in the way. If a later
+  commit needs the dropped changes, the rebase stops with a conflict that you resolve or
+  abort. Merge commits, the first commit and commits of other branches cannot be dropped.
 - Interactive rebase ("Rebase interactively from here…" on a commit in History): drag commits
   into a new order (or use `Alt+↑` / `Alt+↓`), and pick, reword, squash, fix up or drop each
   one. Branchline checks the plan before Git runs it.

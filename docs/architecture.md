@@ -350,9 +350,12 @@ progress (read from `rebase-merge/msgnum` and `end`).
 `GIT_SEQUENCE_EDITOR='cat "$BRANCHLINE_REBASE_PLAN" >'`: Git's "editor" only copies the prepared
 plan over its todo file. The plan's path is in an environment variable, so it is never parsed by
 the shell. Before anything runs, the plan is checked against the current commits: each commit
-after the base exactly once (a plan made before a new commit appeared is refused), at least one
-commit kept, and no squash or fixup without an earlier kept commit. Ranges with merge commits are
-refused.
+after the base exactly once (a plan made before a new commit appeared is refused), and no
+squash or fixup without an earlier kept commit. Ranges with merge commits are refused. A plan
+that drops every commit ends with `noop`, which Git needs to accept it; the branch then ends at
+the base. The rebase window still asks to keep at least one commit, but "Drop commit" in History
+uses this for the newest commit: its plan is every commit after the dropped one's parent, with
+that commit set to `drop`.
 
 Rewording is a `pick` followed by `exec git commit --amend --no-verify --cleanup=strip
 --file=<path>`; the message is written to a file in the Git directory and the path is quoted for

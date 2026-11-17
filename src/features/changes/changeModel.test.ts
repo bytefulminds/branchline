@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { FileChange } from "../../types/git";
-import { filterGroups, groupChanges } from "./changeModel";
+import { filterGroups, groupChanges, trackedChangeCount } from "./changeModel";
 
 const change = (over: Partial<FileChange>): FileChange => ({
   path: "file.txt",
@@ -31,8 +31,21 @@ describe("groupChanges", () => {
     ]);
     expect(g.conflicted.map((e) => e.path)).toEqual(["c.txt"]);
     expect(g.conflicted[0]!.status).toBe("conflicted");
-    expect(g.unstaged.map((e) => e.path)).toEqual(["u.txt"]);
+    expect(g.untracked.map((e) => e.path)).toEqual(["u.txt"]);
+    expect(g.untracked[0]!.area).toBe("untracked");
+    expect(g.unstaged).toEqual([]);
     expect(g.staged).toEqual([]);
+  });
+
+  it("counts staged and unstaged files, not untracked ones", () => {
+    expect(
+      trackedChangeCount([
+        change({ path: "a", worktreeStatus: "modified", indexStatus: "modified" }),
+        change({ path: "b", indexStatus: "added" }),
+        change({ path: "c", worktreeStatus: "untracked" }),
+        change({ path: "d", conflict: "bothModified" }),
+      ]),
+    ).toBe(3);
   });
 
   it("keeps rename sources", () => {

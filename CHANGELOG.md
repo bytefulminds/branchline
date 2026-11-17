@@ -7,6 +7,16 @@ description on GitLab.
 
 ## [Unreleased]
 
+### Added
+
+- Drop a commit from the History menu: it is removed from the current branch and the commits
+  after it are applied again, without opening the rebase window.
+
+### Changed
+
+- Untracked files have their own group in Changes, closed until you open it, and the Changes
+  count in the sidebar no longer includes them.
+
 ## [0.3.5] - 2026-11-16
 
 The graph gets easier to read: main keeps its own lane and color, so it no longer disappears

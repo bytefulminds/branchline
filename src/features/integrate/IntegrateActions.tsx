@@ -42,6 +42,8 @@ export interface IntegrateActions {
   interactive: (base: string, label: string) => void;
   /** Find where the current branch's own commits start and open the plan for them. */
   rewriteHistory: () => void;
+  /** Ask, then remove one commit of the current branch, keeping the commits after it. */
+  dropCommit: (oid: string, parent: string, summary: string) => void;
 }
 
 const noop = () => {};
@@ -54,6 +56,7 @@ const IntegrateContext = createContext<IntegrateActions>({
   step: noop,
   interactive: noop,
   rewriteHistory: noop,
+  dropCommit: noop,
 });
 
 export function useIntegrateActions(): IntegrateActions {
@@ -101,7 +104,12 @@ export function IntegrateActionsProvider({
   const retry = useRef<{
     merge: (source: StartPoint, label: string, o: { noFf: boolean; autostash: boolean }) => void;
     rebase: (onto: StartPoint, label: string, autostash: boolean) => void;
-    interactive: (base: string, label: string, plan: PlanStep[]) => void;
+    interactive: (
+      base: string,
+      label: string,
+      plan: PlanStep[],
+      messages?: { done: string; failed: string; retry: string },
+    ) => void;
   }>({ merge: () => {}, rebase: () => {}, interactive: () => {} });
 
   const report = useCallback(
@@ -225,20 +233,26 @@ export function IntegrateActionsProvider({
 
   /** Run an interactive rebase plan; plan problems are returned so the dialog can show them. */
   const doInteractive = useCallback(
-    (base: string, label: string, plan: PlanStep[], autostash: boolean) => {
+    (
+      base: string,
+      label: string,
+      plan: PlanStep[],
+      autostash: boolean,
+      messages?: { done: string; failed: string; retry: string },
+    ) => {
       const branch = currentName(repo);
       return perform(
         "Rebasing",
         (path) => gitService.interactiveRebase(path, base, plan, autostash),
         {
-          done: `Rewrote ${branch}`,
-          failed: `Could not rebase ${branch}`,
+          done: messages?.done ?? `Rewrote ${branch}`,
+          failed: messages?.failed ?? `Could not rebase ${branch}`,
           returnErrors: ["unsupported"],
           retryWithStash: autostash
             ? undefined
             : {
-                label: "Stash and rebase",
-                run: () => retry.current.interactive(base, label, plan),
+                label: messages?.retry ?? "Stash and rebase",
+                run: () => retry.current.interactive(base, label, plan, messages),
               },
         },
       );
@@ -250,7 +264,8 @@ export function IntegrateActionsProvider({
     retry.current = {
       merge: doMerge,
       rebase: doRebase,
-      interactive: (base, label, plan) => void doInteractive(base, label, plan, true),
+      interactive: (base, label, plan, messages) =>
+        void doInteractive(base, label, plan, true, messages),
     };
   }, [doMerge, doRebase, doInteractive]);
 
@@ -382,6 +397,54 @@ export function IntegrateActionsProvider({
     }
   }, [repo, report]);
 
+  const dropCommit = useCallback(
+    async (oid: string, parent: string, summary: string) => {
+      if (!repo || repo.head.kind !== "branch") return;
+      const branch = repo.head.name;
+      const short = oid.slice(0, 7);
+      let commits;
+      try {
+        commits = await gitService.rebasePlanCommits(repo.path, parent);
+      } catch (e) {
+        report(`Could not drop commit ${short}`, e as GitError);
+        return;
+      }
+      if (!commits.some((c) => c.oid === oid)) {
+        report(`Could not drop commit ${short}`, {
+          kind: "unsupported",
+          message: `Commit ${short} is not part of ${branch}.`,
+        } as GitError);
+        return;
+      }
+      const after = commits.length - 1;
+      const published = repo.upstream && !repo.upstream.gone;
+      const ok = await confirm({
+        title: `Drop commit ${short} from ${branch}?`,
+        description:
+          `"${summary}" and its changes are removed from ${branch}.` +
+          (after
+            ? ` The ${after === 1 ? "commit" : `${after} commits`} after it ${after === 1 ? "is" : "are"} applied again on top of its parent; if one needs its changes, the rebase stops so you can resolve the conflict or abort.`
+            : "") +
+          (published
+            ? ` Since ${branch} is published to ${repo.upstream!.name}, you will need to force push afterwards, which affects anyone else using it.`
+            : ""),
+        confirmLabel: "Drop commit",
+        destructive: true,
+      });
+      if (!ok) return;
+      const plan: PlanStep[] = commits.map((c) => ({
+        oid: c.oid,
+        action: c.oid === oid ? "drop" : "pick",
+      }));
+      void doInteractive(parent, `commit ${short}`, plan, false, {
+        done: `Dropped ${short} from ${branch}`,
+        failed: `Could not drop commit ${short}`,
+        retry: "Stash and drop",
+      });
+    },
+    [repo, report, confirm, doInteractive],
+  );
+
   const value = useMemo<IntegrateActions>(
     () => ({
       merge: (source, label) => {
@@ -395,8 +458,9 @@ export function IntegrateActionsProvider({
       step: (s) => void step(s),
       interactive: (base, label) => setIrebase({ base, label }),
       rewriteHistory: () => void rewriteHistory(),
+      dropCommit: (oid, parent, summary) => void dropCommit(oid, parent, summary),
     }),
-    [rebase, cherryPick, cherryPickMany, revert, step, rewriteHistory],
+    [rebase, cherryPick, cherryPickMany, revert, step, rewriteHistory, dropCommit],
   );
 
   return (

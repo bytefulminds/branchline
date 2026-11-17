@@ -22,6 +22,7 @@ import { useTagActions } from "../features/tags/TagActions";
 import { useWorktreeActions } from "../features/worktrees/WorktreeActions";
 import { displayPath } from "../lib/format";
 import { modKeyLabel } from "../services/platform";
+import { trackedChangeCount } from "../features/changes/changeModel";
 import "./Sidebar.css";
 
 export type WorkspaceView =
@@ -94,6 +95,8 @@ export function Sidebar({
   const repo = state.status === "ready" ? state.repo : null;
   const currentPath = currentRepositoryPath(state);
   const conflicts = repo?.changes.filter((c) => c.conflict).length ?? 0;
+  // Untracked files are left out: the Changes view lists them in a group of their own.
+  const changed = repo ? trackedChangeCount(repo.changes) : 0;
   const { tags } = useTagActions();
   const { worktrees } = useWorktreeActions();
   const reviews = useReviews();
@@ -141,8 +144,8 @@ export function Sidebar({
                 title={`Changes (${modKeyLabel}1)`}
                 active={view === "changes"}
                 onClick={() => onView("changes")}
-                count={repo.totalChanges}
-                countTone={conflicts > 0 ? "error" : repo.totalChanges > 0 ? "accent" : "neutral"}
+                count={changed}
+                countTone={conflicts > 0 ? "error" : changed > 0 ? "accent" : "neutral"}
               />
               <NavItem
                 icon={<GitCommitHorizontal size={16} />}

@@ -17,6 +17,7 @@ import {
   PanelRightOpen,
   Tag,
   SearchX,
+  Trash2,
   Sparkles,
   Undo2,
   X,
@@ -327,6 +328,25 @@ export function HistoryView({
   );
 
   const order = useMemo(() => data?.commits.map((c) => c.oid) ?? [], [data]);
+  // Commits reachable from HEAD among those loaded: the ones "Drop commit" can remove.
+  const headOid = repo.head.kind === "unborn" ? null : repo.head.oid;
+  const onCurrentBranch = useCallback(
+    (oid: string) => {
+      if (!data || !headOid) return false;
+      const byOid = new Map(data.commits.map((c) => [c.oid, c]));
+      const seen = new Set<string>();
+      const todo = [headOid];
+      while (todo.length) {
+        const o = todo.pop()!;
+        if (o === oid) return true;
+        if (seen.has(o)) continue;
+        seen.add(o);
+        todo.push(...(byOid.get(o)?.parents ?? []));
+      }
+      return false;
+    },
+    [data, headOid],
+  );
   const select = useCallback(
     (oid: string, mode: SelectMode = "replace") => {
       setSelection((current) =>
@@ -395,6 +415,29 @@ export function HistoryView({
       onSelect: clearSelection,
     },
   ];
+  /** "Drop commit": remove a commit of the current branch without opening the whole plan. */
+  const dropEntry = (oid: string): MenuEntry => {
+    const commit = data?.commits.find((c) => c.oid === oid);
+    const why = !current
+      ? "Switch to a branch first"
+      : !commit || !onCurrentBranch(oid)
+        ? `Not a commit of ${current}`
+        : commit.parents.length === 0
+          ? "The first commit cannot be dropped"
+          : commit.parents.length > 1
+            ? "Merge commits cannot be dropped"
+            : null;
+    return {
+      id: "drop",
+      label: "Drop commit…",
+      description: why ?? `Remove it from ${current}, keep the commits after it`,
+      icon: <Trash2 size={16} />,
+      danger: true,
+      disabled: !!why || busyOp,
+      onSelect: () => integrate.dropCommit(oid, commit!.parents[0]!, commit!.summary),
+    };
+  };
+
   const commitMenu = (oid: string): MenuEntry[] => {
     const short = oid.slice(0, 7);
     const localBranches = (data?.refsByOid.get(oid) ?? []).filter((r) => r.kind === "branch");
@@ -528,6 +571,7 @@ export function HistoryView({
         disabled: busyOp || repo.head.kind === "unborn",
         onSelect: () => integrate.revert(oid),
       },
+      dropEntry(oid),
       { type: "separator", id: "sep-tag" },
       {
         id: "tag",
