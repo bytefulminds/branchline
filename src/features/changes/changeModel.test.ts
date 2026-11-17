@@ -37,15 +37,19 @@ describe("groupChanges", () => {
     expect(g.staged).toEqual([]);
   });
 
-  it("counts staged and unstaged files, not untracked ones", () => {
-    expect(
-      trackedChangeCount([
-        change({ path: "a", worktreeStatus: "modified", indexStatus: "modified" }),
-        change({ path: "b", indexStatus: "added" }),
-        change({ path: "c", worktreeStatus: "untracked" }),
-        change({ path: "d", conflict: "bothModified" }),
-      ]),
-    ).toBe(3);
+  it("counts what the conflict, staged and unstaged lists show, not untracked files", () => {
+    const changes = [
+      change({ path: "a", worktreeStatus: "modified", indexStatus: "modified" }),
+      change({ path: "b", indexStatus: "added" }),
+      change({ path: "c", worktreeStatus: "untracked" }),
+      change({ path: "d", conflict: "bothModified" }),
+    ];
+    const g = groupChanges(changes);
+    // "a" is in both lists, like in the Changes view: 1 conflict + 2 staged + 1 unstaged.
+    expect(trackedChangeCount(changes)).toBe(4);
+    expect(trackedChangeCount(changes)).toBe(
+      g.conflicted.length + g.staged.length + g.unstaged.length,
+    );
   });
 
   it("keeps rename sources", () => {

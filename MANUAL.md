@@ -70,7 +70,9 @@ Updates are signed with Branchline's own update key, so only genuine releases ar
   type changes, untracked and conflicted files, split into conflicts, staged (what goes
   into the next commit, on top), unstaged and untracked files. The untracked group starts
   closed and shows how many files it holds; click it (or press `Down` past the last file) to
-  open it. The Changes count in the sidebar counts staged and unstaged files only.
+  open it. The Changes count in the sidebar adds up the Conflicts, Staged and Unstaged
+  lists (a file that is partly staged is in both lists, and counts twice), without untracked
+  files.
 - Diff viewer for unstaged, staged and untracked files, with line numbers, hunk headers, CRLF and
   "no newline at end of file" handling, binary detection and a guard for very large diffs.
 - One column or side by side (toggle above every diff, remembered). Side by side pairs removed

@@ -103,11 +103,19 @@ export function filterGroups(groups: GroupedChanges, query: string): GroupedChan
 }
 
 /**
- * Files with staged or unstaged changes (or conflicts), counted once each. Untracked files
- * are left out: they are new files Git does not know yet, often build output or notes.
+ * The number of entries in the Conflicts, Staged and Unstaged lists together, so it matches
+ * what those lists show: a file with staged and unstaged changes is in both and counts twice.
+ * Untracked files are left out: they are new files Git does not know yet, often build output
+ * or notes.
  */
 export function trackedChangeCount(changes: FileChange[]): number {
-  return changes.filter(
-    (c) => c.conflict || c.indexStatus || (c.worktreeStatus && c.worktreeStatus !== "untracked"),
-  ).length;
+  let n = 0;
+  for (const c of changes) {
+    if (c.conflict) n += 1;
+    else {
+      if (c.indexStatus) n += 1;
+      if (c.worktreeStatus && c.worktreeStatus !== "untracked") n += 1;
+    }
+  }
+  return n;
 }

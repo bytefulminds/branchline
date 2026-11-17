@@ -14,8 +14,9 @@ description on GitLab.
 
 ### Changed
 
-- Untracked files have their own group in Changes, closed until you open it, and the Changes
-  count in the sidebar no longer includes them.
+- Untracked files have their own group in Changes, closed until you open it. The Changes
+  count in the sidebar now adds up the Conflicts, Staged and Unstaged lists, without untracked
+  files.
 
 ## [0.3.5] - 2026-11-16
 
