@@ -10,13 +10,18 @@ description on GitLab.
 ### Added
 
 - Drop a commit from the History menu: it is removed from the current branch and the commits
-  after it are applied again, without opening the rebase window.
+  after it are applied again, without opening the rebase window. Select several commits to
+  drop them together.
+- Reset the current branch to a commit from its menu: soft, mixed or hard.
+- Edit a commit's message, or move it up or down, from its menu in History.
+- Changed files are shown as a tree of folders, and a whole folder can be staged, unstaged or
+  discarded at once. A button switches back to a flat list.
 
 ### Changed
 
 - Untracked files have their own group in Changes, closed until you open it. The Changes
-  count in the sidebar now adds up the Conflicts, Staged and Unstaged lists, without untracked
-  files.
+  count in the sidebar now adds up the Conflicts, Staged and Unstaged lists, with the number
+  of untracked files shown apart, as "+2".
 
 ## [0.3.5] - 2026-11-16
 

@@ -19,6 +19,7 @@ import type {
   OperationStep,
   PlanStep,
   RepoOperation,
+  ResetMode,
   RewriteBase,
   RepositoryInfo,
   StartPoint,
@@ -26,6 +27,7 @@ import type {
 import type { RepositoryController } from "../repository/useRepository";
 import { useSettings } from "../settings/SettingsProvider";
 import { InteractiveRebaseDialog } from "./InteractiveRebaseDialog";
+import { RewordDialog } from "./RewordDialog";
 
 export interface IntegrateActions {
   /** Ask, then merge `source` into the current branch. `label` names it ("feature", "commit a1b2c3d"). */
@@ -42,8 +44,20 @@ export interface IntegrateActions {
   interactive: (base: string, label: string) => void;
   /** Find where the current branch's own commits start and open the plan for them. */
   rewriteHistory: () => void;
-  /** Ask, then remove one commit of the current branch, keeping the commits after it. */
-  dropCommit: (oid: string, parent: string, summary: string) => void;
+  /**
+   * Ask, then remove commits of the current branch, keeping the commits after them. `base` is
+   * the parent of the oldest one.
+   */
+  dropCommits: (oids: string[], base: string) => void;
+  /** Ask, then reset the current branch to a commit. */
+  resetTo: (oid: string, mode: ResetMode) => void;
+  /** Ask for a new message for a commit of the current branch, then rewrite it. */
+  reword: (oid: string, parent: string) => void;
+  /**
+   * Swap a commit with the one after it ("up", newer) or before it ("down", older). `base` is
+   * the parent of the older of the two.
+   */
+  move: (oid: string, direction: "up" | "down", base: string) => void;
 }
 
 const noop = () => {};
@@ -56,7 +70,10 @@ const IntegrateContext = createContext<IntegrateActions>({
   step: noop,
   interactive: noop,
   rewriteHistory: noop,
-  dropCommit: noop,
+  dropCommits: noop,
+  resetTo: noop,
+  reword: noop,
+  move: noop,
 });
 
 export function useIntegrateActions(): IntegrateActions {
@@ -397,52 +414,156 @@ export function IntegrateActionsProvider({
     }
   }, [repo, report]);
 
-  const dropCommit = useCallback(
-    async (oid: string, parent: string, summary: string) => {
-      if (!repo || repo.head.kind !== "branch") return;
-      const branch = repo.head.name;
-      const short = oid.slice(0, 7);
-      let commits;
+  const published = !!repo?.upstream && !repo.upstream.gone;
+  const forcePushNote = useCallback(
+    (branch: string) =>
+      published
+        ? ` Since ${branch} is published to ${repo!.upstream!.name}, you will need to force push afterwards, which affects anyone else using it.`
+        : "",
+    [published, repo],
+  );
+
+  /** The commits after `base` on the current branch, or null (after reporting why). */
+  const planFrom = useCallback(
+    async (base: string, failed: string, need: string[]) => {
+      if (!repo || repo.head.kind !== "branch") return null;
       try {
-        commits = await gitService.rebasePlanCommits(repo.path, parent);
+        const commits = await gitService.rebasePlanCommits(repo.path, base);
+        const missing = need.find((o) => !commits.some((c) => c.oid === o));
+        if (missing) {
+          report(failed, {
+            kind: "unsupported",
+            message: `Commit ${missing.slice(0, 7)} is not part of ${repo.head.name}.`,
+          } as GitError);
+          return null;
+        }
+        return commits;
       } catch (e) {
-        report(`Could not drop commit ${short}`, e as GitError);
-        return;
+        report(failed, e as GitError);
+        return null;
       }
-      if (!commits.some((c) => c.oid === oid)) {
-        report(`Could not drop commit ${short}`, {
-          kind: "unsupported",
-          message: `Commit ${short} is not part of ${branch}.`,
-        } as GitError);
-        return;
-      }
-      const after = commits.length - 1;
-      const published = repo.upstream && !repo.upstream.gone;
+    },
+    [repo, report],
+  );
+
+  const dropCommits = useCallback(
+    async (oids: string[], base: string) => {
+      if (!repo || repo.head.kind !== "branch" || oids.length === 0) return;
+      const branch = repo.head.name;
+      const n = oids.length;
+      const what = n === 1 ? `commit ${oids[0]!.slice(0, 7)}` : `${n} commits`;
+      const commits = await planFrom(base, `Could not drop ${what}`, oids);
+      if (!commits) return;
+      const drop = new Set(oids);
+      const after = commits.filter((c) => !drop.has(c.oid)).length;
+      const one = commits.find((c) => drop.has(c.oid))!;
       const ok = await confirm({
-        title: `Drop commit ${short} from ${branch}?`,
+        title: `Are you sure you want to drop ${n === 1 ? "1 commit" : `${n} commits`}?`,
         description:
-          `"${summary}" and its changes are removed from ${branch}.` +
+          (n === 1
+            ? `"${one.summary}" and its changes are removed from ${branch}.`
+            : `They and their changes are removed from ${branch}.`) +
           (after
-            ? ` The ${after === 1 ? "commit" : `${after} commits`} after it ${after === 1 ? "is" : "are"} applied again on top of its parent; if one needs its changes, the rebase stops so you can resolve the conflict or abort.`
+            ? ` The ${after === 1 ? "commit" : `${after} commits`} after ${n === 1 ? "it" : "them"} ${after === 1 ? "is" : "are"} applied again; if one needs the dropped changes, the rebase stops so you can resolve the conflict or abort.`
             : "") +
-          (published
-            ? ` Since ${branch} is published to ${repo.upstream!.name}, you will need to force push afterwards, which affects anyone else using it.`
-            : ""),
-        confirmLabel: "Drop commit",
+          forcePushNote(branch),
+        confirmLabel: n === 1 ? "Drop commit" : `Drop ${n} commits`,
         destructive: true,
       });
       if (!ok) return;
       const plan: PlanStep[] = commits.map((c) => ({
         oid: c.oid,
-        action: c.oid === oid ? "drop" : "pick",
+        action: drop.has(c.oid) ? "drop" : "pick",
       }));
-      void doInteractive(parent, `commit ${short}`, plan, false, {
-        done: `Dropped ${short} from ${branch}`,
-        failed: `Could not drop commit ${short}`,
+      void doInteractive(base, what, plan, false, {
+        done: `Dropped ${what} from ${branch}`,
+        failed: `Could not drop ${what}`,
         retry: "Stash and drop",
       });
     },
-    [repo, report, confirm, doInteractive],
+    [repo, planFrom, confirm, doInteractive, forcePushNote],
+  );
+
+  const move = useCallback(
+    async (oid: string, direction: "up" | "down", base: string) => {
+      if (!repo || repo.head.kind !== "branch") return;
+      const branch = repo.head.name;
+      const short = oid.slice(0, 7);
+      const commits = await planFrom(base, `Could not move ${short}`, [oid]);
+      if (!commits) return;
+      // Oldest first: the pair to swap is the first two commits after the base.
+      if (commits.length < 2) {
+        report(`Could not move ${short}`, {
+          kind: "unsupported",
+          message:
+            direction === "up"
+              ? `${short} is the newest commit of ${branch}.`
+              : `${short} is the oldest commit that can be moved.`,
+        } as GitError);
+        return;
+      }
+      if (published && settings.safety.confirmRebasePublished) {
+        const ok = await confirm({
+          title: `Move ${short} ${direction}?`,
+          description: `The two commits swap places and the commits after them are applied again.${forcePushNote(branch)}`,
+          confirmLabel: `Move ${direction}`,
+        });
+        if (!ok) return;
+      }
+      const order = [commits[1]!, commits[0]!, ...commits.slice(2)];
+      const plan: PlanStep[] = order.map((c) => ({ oid: c.oid, action: "pick" }));
+      void doInteractive(base, `commit ${short}`, plan, false, {
+        done: `Moved ${short} ${direction}`,
+        failed: `Could not move ${short}`,
+        retry: "Stash and move",
+      });
+    },
+    [repo, planFrom, confirm, doInteractive, report, published, settings.safety, forcePushNote],
+  );
+
+  const [rewording, setRewording] = useState<{
+    oid: string;
+    base: string;
+    message: string;
+    commits: PlanStep[];
+  } | null>(null);
+  const reword = useCallback(
+    async (oid: string, parent: string) => {
+      const short = oid.slice(0, 7);
+      const commits = await planFrom(parent, `Could not edit the message of ${short}`, [oid]);
+      if (!commits) return;
+      setRewording({
+        oid,
+        base: parent,
+        message: commits.find((c) => c.oid === oid)!.message,
+        commits: commits.map((c) => ({ oid: c.oid, action: "pick" })),
+      });
+    },
+    [planFrom],
+  );
+
+  const resetTo = useCallback(
+    async (oid: string, mode: ResetMode) => {
+      if (!repo) return;
+      const target = currentName(repo);
+      const short = oid.slice(0, 7);
+      const description = {
+        soft: `${target} moves to ${short}. The changes of the commits after it stay staged, ready to commit again. Your other changes are kept.`,
+        mixed: `${target} moves to ${short}. The changes of the commits after it stay in your files, unstaged. Your other changes are kept.`,
+        hard: `${target} moves to ${short}, and every file goes back to how it was there. The commits after it and all uncommitted changes are discarded. This cannot be undone from Branchline.`,
+      }[mode];
+      const ok = await confirm({
+        title: `Reset ${target} to ${short} (${mode})?`,
+        description: description + forcePushNote(target),
+        confirmLabel: mode === "hard" ? "Reset and discard" : "Reset",
+        destructive: mode === "hard",
+      });
+      if (!ok) return;
+      const error = await run("Resetting", (path) => gitService.resetToCommit(path, oid, mode));
+      if (error) report(`Could not reset ${target}`, error);
+      else toast({ tone: "success", title: `Reset ${target} to ${short} (${mode})` });
+    },
+    [repo, confirm, run, report, toast, forcePushNote],
   );
 
   const value = useMemo<IntegrateActions>(
@@ -458,9 +579,23 @@ export function IntegrateActionsProvider({
       step: (s) => void step(s),
       interactive: (base, label) => setIrebase({ base, label }),
       rewriteHistory: () => void rewriteHistory(),
-      dropCommit: (oid, parent, summary) => void dropCommit(oid, parent, summary),
+      dropCommits: (oids, base) => void dropCommits(oids, base),
+      resetTo: (oid, mode) => void resetTo(oid, mode),
+      reword: (oid, parent) => void reword(oid, parent),
+      move: (oid, direction, base) => void move(oid, direction, base),
     }),
-    [rebase, cherryPick, cherryPickMany, revert, step, rewriteHistory, dropCommit],
+    [
+      rebase,
+      cherryPick,
+      cherryPickMany,
+      revert,
+      step,
+      rewriteHistory,
+      dropCommits,
+      resetTo,
+      reword,
+      move,
+    ],
   );
 
   return (
@@ -478,6 +613,32 @@ export function IntegrateActionsProvider({
             const error = await doInteractive(irebase.base, irebase.label, plan, false);
             if (error) return error.message;
             setIrebase(null);
+            return null;
+          }}
+        />
+      )}
+      {rewording && repo && (
+        <RewordDialog
+          short={rewording.oid.slice(0, 7)}
+          message={rewording.message}
+          note={
+            published
+              ? `The commits after it are applied again unchanged.${forcePushNote(currentName(repo))}`
+              : undefined
+          }
+          onCancel={() => setRewording(null)}
+          onSubmit={async (message) => {
+            const short = rewording.oid.slice(0, 7);
+            const plan = rewording.commits.map((c) =>
+              c.oid === rewording.oid ? { ...c, action: "reword" as const, message } : c,
+            );
+            const error = await doInteractive(rewording.base, `commit ${short}`, plan, false, {
+              done: `Edited the message of ${short}`,
+              failed: `Could not edit the message of ${short}`,
+              retry: "Stash and edit",
+            });
+            if (error) return error.message;
+            setRewording(null);
             return null;
           }}
         />

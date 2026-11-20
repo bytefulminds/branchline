@@ -1,5 +1,14 @@
-import { Check } from "lucide-react";
-import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { Check, ChevronRight } from "lucide-react";
+import { createPortal } from "react-dom";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import "./Menu.css";
 
 export type MenuEntry =
@@ -19,7 +28,18 @@ export type MenuEntry =
       onSelect: () => void;
     }
   | { type: "separator"; id: string }
-  | { type: "header"; id: string; label: string };
+  | { type: "header"; id: string; label: string }
+  | {
+      /** An item that opens a menu of its own beside it. */
+      type: "submenu";
+      id: string;
+      label: string;
+      description?: string;
+      icon?: ReactNode;
+      disabled?: boolean;
+      danger?: boolean;
+      entries: MenuEntry[];
+    };
 
 export interface MenuProps {
   entries: MenuEntry[];
@@ -56,7 +76,8 @@ export function Menu({ entries, trigger, align = "start", minWidth = 260, emptyL
     items()[0]?.focus();
     const onPointer = (e: PointerEvent) => {
       const t = e.target as Node;
-      if (!menuRef.current?.contains(t) && !triggerRef.current?.contains(t)) close(false);
+      const inSub = (t as Element).closest?.(".bl-menu--sub");
+      if (!menuRef.current?.contains(t) && !triggerRef.current?.contains(t) && !inSub) close(false);
     };
     const onBlur = () => close(false);
     document.addEventListener("pointerdown", onPointer);
@@ -105,9 +126,10 @@ export function Menu({ entries, trigger, align = "start", minWidth = 260, emptyL
 
 /** Enabled, focusable items of a menu element (plain and checkable). */
 export function menuItems(menu: HTMLElement | null): HTMLButtonElement[] {
+  // Only this menu's own items, not those of a submenu opened inside it.
   return Array.from(
     menu?.querySelectorAll<HTMLButtonElement>(
-      '[role="menuitem"]:not(:disabled), [role="menuitemradio"]:not(:disabled)',
+      ':scope > [role="menuitem"]:not(:disabled), :scope > [role="menuitemradio"]:not(:disabled), :scope > [role="menuitemcheckbox"]:not(:disabled), :scope > .bl-submenu > [role="menuitem"]:not(:disabled)',
     ) ?? [],
   );
 }
@@ -149,10 +171,125 @@ export function handleMenuKeys(
   }
 }
 
+/** An item that opens its own menu beside it: on hover, click, Enter, Space or Right. */
+function SubmenuItem({
+  entry,
+  onClose,
+}: {
+  entry: Extract<MenuEntry, { type: "submenu" }>;
+  onClose: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+  const itemRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const menuId = useId();
+
+  const show = (focusFirst: boolean) => {
+    if (entry.disabled) return;
+    const r = itemRef.current?.getBoundingClientRect();
+    if (r) setPos({ left: r.right + 2, top: r.top - 4 });
+    setOpen(true);
+    if (focusFirst) window.setTimeout(() => menuItems(menuRef.current)[0]?.focus(), 0);
+  };
+  const hide = (refocus: boolean) => {
+    window.clearTimeout(leaveTimer.current);
+    setOpen(false);
+    if (refocus) itemRef.current?.focus();
+  };
+  // Leaving closes after a moment, so the pointer can cross the gap into the submenu.
+  const leaveTimer = useRef<number | undefined>(undefined);
+  const stay = () => window.clearTimeout(leaveTimer.current);
+  const leave = () => {
+    window.clearTimeout(leaveTimer.current);
+    leaveTimer.current = window.setTimeout(() => setOpen(false), 250);
+  };
+  useEffect(() => () => window.clearTimeout(leaveTimer.current), []);
+
+  // Keep the submenu inside the window: flip it to the left of the item when needed.
+  useLayoutEffect(() => {
+    const el = menuRef.current;
+    const item = itemRef.current;
+    if (!open || !el || !item || !pos) return;
+    const m = el.getBoundingClientRect();
+    const r = item.getBoundingClientRect();
+    const left =
+      pos.left + m.width > window.innerWidth - 4 ? Math.max(4, r.left - m.width - 2) : pos.left;
+    const top = Math.max(4, Math.min(pos.top, window.innerHeight - m.height - 4));
+    if (left !== pos.left || top !== pos.top) setPos({ left, top });
+  }, [open, pos]);
+
+  return (
+    <div className="bl-submenu" onMouseEnter={stay} onMouseLeave={leave}>
+      <button
+        ref={itemRef}
+        type="button"
+        role="menuitem"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-controls={open ? menuId : undefined}
+        disabled={entry.disabled}
+        className={`bl-menu__item${entry.danger ? " bl-menu__item--danger" : ""}`}
+        onMouseEnter={() => {
+          stay();
+          show(false);
+        }}
+        onClick={() => show(true)}
+        onKeyDown={(e) => {
+          if (e.key === "ArrowRight" || e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            e.stopPropagation();
+            show(true);
+          }
+        }}
+      >
+        <span className="bl-menu__icon">{entry.icon}</span>
+        <span className="bl-menu__text">
+          <span className="truncate">{entry.label}</span>
+          {entry.description && (
+            <span className="bl-menu__description truncate">{entry.description}</span>
+          )}
+        </span>
+        <ChevronRight size={14} aria-hidden className="bl-submenu__chevron" />
+      </button>
+      {open &&
+        pos &&
+        // Rendered at the end of the page, so the parent menu can neither contain nor clip it.
+        createPortal(
+          <div
+            ref={menuRef}
+            id={menuId}
+            role="menu"
+            aria-label={entry.label}
+            className="bl-menu bl-menu--sub"
+            style={{ left: pos.left, top: pos.top, minWidth: 200 }}
+            onMouseEnter={stay}
+            onMouseLeave={leave}
+            onPointerDown={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              e.stopPropagation();
+              if (e.key === "ArrowLeft") {
+                e.preventDefault();
+                hide(true);
+                return;
+              }
+              handleMenuKeys(e, menuRef.current, (refocus) => hide(refocus ?? true));
+            }}
+          >
+            <MenuItems entries={entry.entries} onClose={onClose} />
+          </div>,
+          document.body,
+        )}
+    </div>
+  );
+}
+
 export function MenuItems({ entries, onClose }: { entries: MenuEntry[]; onClose: () => void }) {
   return (
     <>
       {entries.map((entry) => {
+        if (entry.type === "submenu")
+          return <SubmenuItem key={entry.id} entry={entry} onClose={onClose} />;
         if (entry.type === "separator")
           return <div key={entry.id} role="separator" className="bl-menu__separator" />;
         if (entry.type === "header")

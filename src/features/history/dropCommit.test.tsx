@@ -35,7 +35,7 @@ const ok = { outcome: { conflicts: false, upToDate: false, fastForward: false },
 
 async function openHistory() {
   const user = userEvent.setup();
-  const calls = setup((cmd) => {
+  const calls = setup((cmd, args) => {
     if (cmd === "plugin:dialog|open") return REPO.path;
     if (cmd === "inspect_repository") return ON_MAIN;
     if (cmd === "log_page") return { commits: COMMITS, hasMore: false, total: COMMITS.length };
@@ -44,14 +44,18 @@ async function openHistory() {
         { name: "main", kind: "branch", oid: id(1) },
         { name: "other", kind: "branch", oid: id(6) },
       ];
-    if (cmd === "rebase_plan_commits")
-      return [2, 1].map((n) => ({
+    if (cmd === "rebase_plan_commits") {
+      // Oldest first after the base: main is 3 <- 2 <- 1.
+      const after = args.base === id(3) ? [2, 1] : args.base === id(2) ? [1] : [];
+      return after.map((n) => ({
         oid: id(n),
         summary: COMMITS.find((c) => c.oid === id(n))!.summary,
-        message: "",
+        message: `${COMMITS.find((c) => c.oid === id(n))!.summary}\n\nWhy it matters.`,
         authorName: "Grace Hopper",
         authorTime: 0,
       }));
+    }
+    if (cmd === "reset_to_commit") return ON_MAIN;
     if (cmd === "interactive_rebase") return ok;
     return undefined;
   });
@@ -63,6 +67,17 @@ async function openHistory() {
   await within(list).findByText("Add login form");
   return { user, calls, list };
 }
+
+const itemFor = async (
+  user: ReturnType<typeof userEvent.setup>,
+  list: HTMLElement,
+  text: string,
+  name: RegExp,
+) => {
+  const row = within(list).getByText(text).closest<HTMLElement>('[role="option"]')!;
+  await user.pointer({ keys: "[MouseRight]", target: row });
+  return screen.findByRole("menuitem", { name });
+};
 
 const menuFor = async (
   user: ReturnType<typeof userEvent.setup>,
@@ -79,7 +94,7 @@ describe("dropping a commit from the history", () => {
     const { user, calls, list } = await openHistory();
     await user.click(await menuFor(user, list, "Debug logging"));
     const dialog = await screen.findByRole("alertdialog", {
-      name: `Drop commit ${id(2).slice(0, 7)} from main?`,
+      name: "Are you sure you want to drop 1 commit?",
     });
     expect(dialog).toHaveTextContent('"Debug logging" and its changes are removed from main.');
     expect(dialog).toHaveTextContent("The commit after it is applied again");
@@ -101,15 +116,119 @@ describe("dropping a commit from the history", () => {
     const { user, list } = await openHistory();
     expect(await menuFor(user, list, "Merge branch 'side'")).toBeDisabled();
     expect(screen.getByRole("menuitem", { name: /Drop commit/ })).toHaveTextContent(
-      "Merge commits cannot be dropped",
+      "Merge commits cannot be changed here",
     );
     await user.keyboard("{Escape}");
     expect(await menuFor(user, list, "Initial commit")).toHaveTextContent(
-      "The first commit cannot be dropped",
+      "The first commit cannot be changed here",
     );
     await user.keyboard("{Escape}");
     expect(await menuFor(user, list, "Other branch work")).toHaveTextContent(
       "Not a commit of main",
+    );
+  });
+});
+
+describe("rewriting one commit from the history", () => {
+  it("edits a commit message", async () => {
+    const { user, calls, list } = await openHistory();
+    await user.click(await itemFor(user, list, "Debug logging", /Edit commit message/));
+    const dialog = await screen.findByRole("dialog", {
+      name: `Edit the message of ${id(2).slice(0, 7)}`,
+    });
+    const summary = within(dialog).getByLabelText("Summary");
+    expect(summary).toHaveValue("Debug logging");
+    expect(within(dialog).getByLabelText(/Description/)).toHaveValue("Why it matters.");
+    await user.clear(summary);
+    await user.type(summary, "Add debug logging");
+    await user.click(within(dialog).getByRole("button", { name: "Save message" }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.cmd === "interactive_rebase")?.args).toMatchObject({
+        base: id(3),
+        plan: [
+          { oid: id(2), action: "reword", message: "Add debug logging\n\nWhy it matters." },
+          { oid: id(1), action: "pick" },
+        ],
+      }),
+    );
+  });
+
+  it("moves a commit up and down by swapping it with its neighbour", async () => {
+    const { user, calls, list } = await openHistory();
+    await user.click(await itemFor(user, list, "Debug logging", /Move commit up/));
+    await waitFor(() =>
+      expect(calls.find((c) => c.cmd === "interactive_rebase")?.args).toMatchObject({
+        base: id(3),
+        plan: [
+          { oid: id(1), action: "pick" },
+          { oid: id(2), action: "pick" },
+        ],
+      }),
+    );
+    // The newest commit cannot move up; one above a merge cannot move down.
+    expect(await itemFor(user, list, "Add login form", /Move commit up/)).toBeDisabled();
+    await user.keyboard("{Escape}");
+    expect(await itemFor(user, list, "Debug logging", /Move commit down/)).toBeDisabled();
+  });
+
+  it("resets the branch from a submenu, soft, mixed or hard", async () => {
+    const { user, calls, list } = await openHistory();
+    const reset = await itemFor(user, list, "Debug logging", /Reset main to this commit/);
+    expect(reset).toHaveAttribute("aria-haspopup", "menu");
+    await user.click(reset);
+    const sub = await screen.findByRole("menu", { name: "Reset main to this commit" });
+    await user.click(within(sub).getByRole("menuitem", { name: /Hard/ }));
+    const dialog = await screen.findByRole("alertdialog", {
+      name: `Reset main to ${id(2).slice(0, 7)} (hard)?`,
+    });
+    expect(dialog).toHaveTextContent("all uncommitted changes are discarded");
+    await user.click(within(dialog).getByRole("button", { name: "Reset and discard" }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.cmd === "reset_to_commit")?.args).toEqual({
+        repo: REPO.path,
+        oid: id(2),
+        mode: "hard",
+      }),
+    );
+  });
+
+  it("opens the reset submenu with the keyboard", async () => {
+    const { user, list } = await openHistory();
+    const reset = await itemFor(user, list, "Debug logging", /Reset main to this commit/);
+    reset.focus();
+    await user.keyboard("{ArrowRight}");
+    const sub = await screen.findByRole("menu", { name: "Reset main to this commit" });
+    await waitFor(() => expect(within(sub).getByRole("menuitem", { name: /Soft/ })).toHaveFocus());
+    await user.keyboard("{ArrowDown}");
+    expect(within(sub).getByRole("menuitem", { name: /Mixed/ })).toHaveFocus();
+    await user.keyboard("{ArrowLeft}");
+    expect(
+      screen.queryByRole("menu", { name: "Reset main to this commit" }),
+    ).not.toBeInTheDocument();
+    expect(reset).toHaveFocus();
+  });
+
+  it("drops several selected commits at once", async () => {
+    const { user, calls, list } = await openHistory();
+    const row = (t: string) => within(list).getByText(t).closest<HTMLElement>('[role="option"]')!;
+    await user.click(row("Add login form"));
+    await user.keyboard("{Control>}");
+    await user.click(row("Debug logging"));
+    await user.keyboard("{/Control}");
+    await user.pointer({ keys: "[MouseRight]", target: row("Debug logging") });
+    await user.click(await screen.findByRole("menuitem", { name: /Drop 2 commits/ }));
+    const dialog = await screen.findByRole("alertdialog", {
+      name: "Are you sure you want to drop 2 commits?",
+    });
+    await user.click(within(dialog).getByRole("button", { name: "Drop 2 commits" }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.cmd === "interactive_rebase")?.args).toMatchObject({
+        base: id(3),
+        plan: [
+          { oid: id(2), action: "drop" },
+          { oid: id(1), action: "drop" },
+        ],
+      }),
     );
   });
 });

@@ -71,8 +71,13 @@ Updates are signed with Branchline's own update key, so only genuine releases ar
   into the next commit, on top), unstaged and untracked files. The untracked group starts
   closed and shows how many files it holds; click it (or press `Down` past the last file) to
   open it. The Changes count in the sidebar adds up the Conflicts, Staged and Unstaged
-  lists (a file that is partly staged is in both lists, and counts twice), without untracked
-  files.
+  lists (a file that is partly staged is in both lists, and counts twice), with the untracked
+  files as a quieter "+2" next to it.
+- The lists show files in a tree of folders (switch to a flat list with the button next to the
+  filter; remembered). Folders open and close, show how many files they hold, and stage,
+  unstage or discard every file below them with the buttons on their row. With the keyboard,
+  `Shift+Space` stages or unstages, and `Shift+Delete` discards, all files in the selected
+  file's folder.
 - Diff viewer for unstaged, staged and untracked files, with line numbers, hunk headers, CRLF and
   "no newline at end of file" handling, binary detection and a guard for very large diffs.
 - One column or side by side (toggle above every diff, remembered). Side by side pairs removed
@@ -137,7 +142,9 @@ Updates are signed with Branchline's own update key, so only genuine releases ar
   sidebar collapses to icons (`Ctrl+B` / `⌘B`, or the button at its bottom). Branchline
   remembers all of this.
 - Right-click (or `Shift+F10`) on a commit to create a branch, tag or worktree there, check it
-  out, merge, rebase, cherry-pick, revert or drop it, or copy its id.
+  out, merge, rebase, cherry-pick or revert it, reset the current branch to it, edit its message,
+  move it up or down, drop it, or copy its id. Select several commits with `Ctrl`/`⌘`-click or
+  `Shift`-click to cherry-pick or drop them together.
 
 ## Branches
 
@@ -200,12 +207,21 @@ Updates are signed with Branchline's own update key, so only genuine releases ar
 - Merge a branch or commit into the current branch (optionally always with a merge commit),
   rebase onto a branch or commit, cherry-pick and revert commits, from the Branches view and the
   History context menu. Rebasing a published branch warns that a force push will follow.
+- Reset the current branch to a commit ("Reset … to this commit" in a commit's menu), with a
+  choice of **Soft** (the changes of the commits after it stay staged), **Mixed** (they stay in
+  your files, unstaged) or **Hard** (they and all uncommitted changes are discarded). Branchline
+  asks first, and Hard says plainly that it cannot be undone.
+- Edit the message of a commit, or move it up or down (swapped with the newer or older commit
+  next to it), straight from its menu in History. The commits after it are applied again, like
+  a small interactive rebase; a published branch warns about the force push.
 - Drop a commit ("Drop commit…" on a commit of the current branch in History): it is removed
   from the branch and the commits after it are applied again on top of its parent, without
   opening the rebase window. Branchline asks first, warns when the branch is published (a
   force push follows), and offers to stash your changes when they are in the way. If a later
   commit needs the dropped changes, the rebase stops with a conflict that you resolve or
-  abort. Merge commits, the first commit and commits of other branches cannot be dropped.
+  abort. "Are you sure you want to drop 1 commit?" asks first; with several commits selected,
+  "Drop 2 commits…" drops them all at once. Merge commits, the first commit and commits of
+  other branches cannot be edited, moved or dropped this way.
 - Interactive rebase ("Rebase interactively from here…" on a commit in History): drag commits
   into a new order (or use `Alt+↑` / `Alt+↓`), and pick, reword, squash, fix up or drop each
   one. Branchline checks the plan before Git runs it.

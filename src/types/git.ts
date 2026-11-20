@@ -499,6 +499,9 @@ export interface RebaseSuggestion {
 
 export type PlanAction = "pick" | "reword" | "squash" | "fixup" | "drop";
 
+/** Mirrors `ResetMode` in `src-tauri/src/git/integrate.rs`. */
+export type ResetMode = "soft" | "mixed" | "hard";
+
 export interface PlanStep {
   oid: string;
   action: PlanAction;

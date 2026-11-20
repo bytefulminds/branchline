@@ -121,3 +121,55 @@
 .bl-file-row[aria-selected="true"] .bl-file-row__actions {
   opacity: 1;
 }
+
+/* Tree: folder rows open and close, and stage, unstage or discard every file below them. */
+.bl-folder-row {
+  gap: var(--space-1);
+  color: var(--color-text-secondary);
+}
+.bl-folder-row .bl-file-row__name {
+  color: var(--color-text-secondary);
+}
+.bl-folder-row__chevron,
+.bl-folder-row__icon {
+  flex: none;
+  color: var(--color-text-muted);
+}
+.bl-folder-row__count {
+  flex: none;
+  margin-left: var(--space-1);
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Group headers stand apart from folders: a band with a colored edge, small caps, and a
+   little space above it. */
+.bl-file-group {
+  inset: 4px 0 auto;
+  height: calc(var(--row-height) - 4px);
+  border-left: 3px solid var(--bl-group-color, var(--color-border-strong));
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-elevated);
+}
+.bl-file-group__toggle {
+  color: var(--color-text-primary);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.bl-file-group__toggle svg {
+  color: var(--color-text-muted);
+}
+.bl-file-group--staged {
+  --bl-group-color: var(--git-added);
+}
+.bl-file-group--unstaged {
+  --bl-group-color: var(--git-modified);
+}
+.bl-file-group--untracked {
+  --bl-group-color: var(--git-untracked);
+}
+.bl-file-group--conflicted {
+  --bl-group-color: var(--git-conflict);
+}

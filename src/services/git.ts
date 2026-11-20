@@ -30,6 +30,7 @@ import type {
   StashResult,
   TagInfo,
   RepositoryInfo,
+  ResetMode,
   StartPoint,
   WorktreeInfo,
   WorktreeTarget,
@@ -253,6 +254,9 @@ export const gitService = {
   /** Cherry-pick several commits in the order given (oldest first). */
   cherryPickMany: (repo: string, oids: string[]) =>
     call<IntegrateResult>("cherry_pick_many", { repo, oids }),
+  /** Move the current branch to a commit: soft keeps the changes staged, mixed unstaged, hard drops them. */
+  resetToCommit: (repo: string, oid: string, mode: ResetMode) =>
+    call<RepositoryInfo>("reset_to_commit", { repo, oid, mode }),
   revertCommit: (repo: string, oid: string) =>
     call<IntegrateResult>("revert_commit", { repo, oid }),
   /** Commits after `base` on the current branch, oldest first. */

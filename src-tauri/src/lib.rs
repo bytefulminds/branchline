@@ -100,6 +100,7 @@ pub fn run() {
             commands::cherry_pick,
             commands::cherry_pick_many,
             commands::revert_commit,
+            commands::reset_to_commit,
             commands::operation_step,
             commands::conflict_file,
             commands::list_worktrees,

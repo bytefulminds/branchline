@@ -6,7 +6,8 @@ use std::process::Command;
 
 use branchline_lib::git::branches::StartPoint;
 use branchline_lib::git::integrate::{
-    cherry_pick, cherry_pick_many, merge, rebase, revert, step, MergeRequest, Step, MAX_PICK,
+    cherry_pick, cherry_pick_many, merge, rebase, reset_to, revert, step, MergeRequest, ResetMode,
+    Step, MAX_PICK,
 };
 use branchline_lib::git::repository::{inspect, RepoOperation};
 use tempfile::TempDir;
@@ -522,4 +523,41 @@ fn several_commits_are_validated_before_anything_runs() {
     assert!(unsupported(vec![ids[0].clone(), merge_commit]).contains("merge commit"));
     assert!(!d.join("f1.txt").exists());
     assert_eq!(operation(d), None);
+}
+
+#[test]
+fn resets_soft_mixed_and_hard() {
+    let t = repo();
+    let d = t.path();
+    let base = git(d, &["rev-parse", "HEAD"]);
+    let more = |d: &Path| {
+        commit(d, "b.txt", "b\n", "add b");
+        git(d, &["rev-parse", "HEAD"])
+    };
+
+    // Soft: the branch moves back, the commit's changes stay staged.
+    more(d);
+    reset_to(&s(d), &base, ResetMode::Soft).unwrap();
+    assert_eq!(git(d, &["rev-parse", "HEAD"]), base);
+    assert_eq!(git(d, &["status", "--porcelain"]), "A  b.txt");
+    git(d, &["commit", "-q", "-m", "add b again"]);
+
+    // Mixed: the changes stay in the working tree, unstaged.
+    reset_to(&s(d), &base, ResetMode::Mixed).unwrap();
+    assert_eq!(git(d, &["status", "--porcelain"]), "?? b.txt");
+    git(d, &["add", "b.txt"]);
+    git(d, &["commit", "-q", "-m", "add b once more"]);
+
+    // Hard: the changes are gone, and so are uncommitted edits.
+    write(d, "a.txt", "edited\n");
+    reset_to(&s(d), &base, ResetMode::Hard).unwrap();
+    assert_eq!(git(d, &["status", "--porcelain"]), "");
+    assert!(!d.join("b.txt").exists());
+    assert_eq!(
+        fs::read_to_string(d.join("a.txt")).unwrap(),
+        "one\ntwo\nthree\n"
+    );
+
+    // Only commit ids are accepted.
+    assert!(reset_to(&s(d), "HEAD~1", ResetMode::Hard).is_err());
 }

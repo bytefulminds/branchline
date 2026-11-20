@@ -109,4 +109,22 @@
 .bl-menu--context {
   position: fixed;
   top: auto;
+  /* As tall as the window allows, so a long commit menu does not need scrolling. */
+  max-height: calc(100vh - 8px);
+}
+
+/* A submenu opens beside its item; fixed, so the parent menu's scrolling does not clip it. */
+.bl-submenu {
+  position: relative;
+}
+.bl-menu--sub {
+  position: fixed;
+  z-index: calc(var(--z-popover) + 1);
+}
+.bl-submenu__chevron {
+  flex: none;
+  color: var(--color-text-muted);
+}
+.bl-submenu > .bl-menu__item[aria-expanded="true"] {
+  background: var(--color-hover);
 }
