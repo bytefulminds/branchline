@@ -17,6 +17,9 @@ description on GitLab.
 - After rewriting a pushed branch, Push becomes Force push, pinned to the commit you rewrote
   from: commits someone pushed after your rewrite are never overwritten, and Branchline offers
   to bring them in on top of your rewrite first.
+- Clean up branches recognizes branches that were squashed or rebased into main on the
+  server, and offers branches with commits only on this computer unticked, to delete them
+  anyway when you choose.
 - Changed files are shown as a tree of folders, and a whole folder can be staged, unstaged or
   discarded at once. A button switches back to a flat list.
 
@@ -28,6 +31,11 @@ description on GitLab.
 - Untracked files have their own group in Changes, closed until you open it. The Changes
   count in the sidebar now adds up the Conflicts, Staged and Unstaged lists, with the number
   of untracked files shown apart, as "+2".
+
+### Fixed
+
+- Bitbucket: Reviews no longer offers "All projects" for pull requests to review, which
+  Bitbucket cannot list, and showed an error.
 
 ## [0.3.5] - 2026-11-16
 

@@ -28,7 +28,8 @@ export interface BranchActions {
   remove: (name: string) => void;
   checkoutCommit: (oid: string) => void;
   /** Delete branches whose upstream is gone and that lose nothing, with Undo. */
-  deleteGone: (names: string[]) => Promise<GitError | null>;
+  /** `withLocalCommits`: those of `names` that may lose commits that are only here. */
+  deleteGone: (names: string[], withLocalCommits?: string[]) => Promise<GitError | null>;
 }
 
 const noop = () => {};
@@ -210,10 +211,10 @@ export function BranchActionsProvider({
   );
 
   const deleteGone = useCallback(
-    async (names: string[]) => {
+    async (names: string[], withLocalCommits: string[] = []) => {
       let deleted: GoneBranch[] = [];
       const error = await run("Cleaning up branches", async (path) => {
-        const [gone, info] = await gitService.deleteGoneBranches(path, names);
+        const [gone, info] = await gitService.deleteGoneBranches(path, names, withLocalCommits);
         deleted = gone;
         return info;
       });

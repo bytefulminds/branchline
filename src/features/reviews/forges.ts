@@ -21,6 +21,11 @@ export interface ForgeInfo {
   access: Record<Access, string>;
   /** New and not yet tried widely: marked Beta in Settings. */
   beta: boolean;
+  /**
+   * The service can list what waits for your review across all projects. Bitbucket cannot: it
+   * only lists the pull requests you created everywhere, and reviews per repository.
+   */
+  reviewsEverywhere: boolean;
 }
 
 /** Services Branchline can connect to. */
@@ -42,6 +47,7 @@ export const FORGES: Record<ForgeKind, ForgeInfo> = {
       unknown: "Connected (this server version does not say what the token may do)",
     },
     beta: false,
+    reviewsEverywhere: true,
   },
   bitbucket: {
     name: "Bitbucket",
@@ -61,6 +67,7 @@ export const FORGES: Record<ForgeKind, ForgeInfo> = {
       unknown: "Connected",
     },
     beta: true,
+    reviewsEverywhere: false,
   },
 };
 

@@ -297,6 +297,8 @@ export interface GoneBranch {
   tipTime: number;
   /** Commits that no remote branch has; with 0 deleting it loses nothing. */
   localOnly: number;
+  /** Those commits' changes are on this remote branch anyway (squashed or rebased in). */
+  mergedInto?: string | null;
   /** Checked out here or in another worktree. */
   inUse: boolean;
 }

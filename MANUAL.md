@@ -157,9 +157,14 @@ Updates are signed with Branchline's own update key, so only genuine releases ar
 - Sort by name or by last commit (remembered); the current branch stays on top.
 - **Clean up branches…** (above the local list, when there is something to clean up):
   deletes local branches whose upstream was deleted on the remote, usually after their merge
-  request was merged, and whose commits are all on the remote, so nothing is lost. Branches
-  with commits that exist only on this computer, and the branch you are on, are listed but
-  kept. Branches you never published never show up. Branches deleted on the remote are known
+  request was merged, and whose changes are all on the remote, so nothing is lost. That
+  includes branches that were squashed or rebased into the target branch on the server: their
+  own commits are not on the remote, but their changes are (Branchline compares the changes
+  with `origin/main`, or whatever `origin/HEAD` points at, and main, master, develop and
+  trunk). Branches with commits that really exist only on this computer are listed unticked:
+  tick one to delete it anyway, and the dialog says how many commits go with it. The branch
+  you are on is kept. Branches you never published, or whose upstream still exists, never
+  show up. Branches deleted on the remote are known
   after a fetch that prunes (Settings > Git, on by default; **Fetch first** in the dialog).
   **Undo** in the message afterwards puts the branches back on the same commits.
 - Quick branch switcher in the title bar: your most recent local branches, and below them
@@ -332,7 +337,9 @@ Updates are signed with Branchline's own update key, so only genuine releases ar
   (from the fork when it comes from one, at the same kind of address as your remote) and its
   target branch into `refs/branchline/pull-requests/<number>/`, and the diff starts where the
   branch forked from the target. Pull requests to review are listed per repository: across
-  all of Bitbucket only **Created by you** is available; Branchline asks each of your
+  all of Bitbucket only **Created by you** is available, so with **To review** the project
+  choice stays on the repository (and To review is not offered for a repository that is not
+  on Bitbucket); Branchline asks each of your
   workspaces for it (up to 20). Build statuses show as the pipeline.
 - Bitbucket does not say whether a pull request merges cleanly, so when you open one,
   Branchline tries the merge on this computer (`git merge-tree`, which touches neither your

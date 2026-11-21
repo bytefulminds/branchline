@@ -302,17 +302,20 @@ describe("cleaning up branches", () => {
     const dialog = await screen.findByRole("dialog", { name: "Clean up branches" });
     const old = await within(dialog).findByRole("checkbox", { name: /old/ });
     expect(old).toBeChecked();
-    // Commits only here, or checked out: listed, never offered.
+    // Commits only here: offered, but not ticked. Checked out: listed, never offered.
+    const wip = within(dialog).getByRole("checkbox", { name: /wip/ });
+    expect(wip).not.toBeChecked();
+    expect(wip.closest("label")).toHaveTextContent("2 commits only on this computer");
     const kept = within(dialog).getByRole("region", { name: "Kept" });
-    expect(kept).toHaveTextContent("2 commits only on this computer");
     expect(kept).toHaveTextContent("checked out");
-    expect(within(dialog).getAllByRole("checkbox")).toHaveLength(1);
+    expect(within(dialog).getAllByRole("checkbox")).toHaveLength(2);
 
     await user.click(within(dialog).getByRole("button", { name: "Delete 1 branch" }));
     await waitFor(() =>
       expect(calls.find((c) => c.cmd === "delete_gone_branches")?.args).toEqual({
         repo: REPO.path,
         names: ["old"],
+        withLocalCommits: [],
       }),
     );
     expect(await screen.findByText("Deleted 1 branch")).toBeInTheDocument();
@@ -323,6 +326,31 @@ describe("cleaning up branches", () => {
         name: "old",
         start: { kind: "commit", oid: "o".repeat(40) },
         checkout: false,
+      }),
+    );
+  });
+
+  it("deletes a branch with local commits only when ticked, and says what is lost", async () => {
+    const { user, calls, view } = await openBranchesView((cmd) => {
+      if (cmd === "gone_branches")
+        return [GONE("wip", 2), { ...GONE("squashed", 3), mergedInto: "origin/main" }];
+      if (cmd === "delete_gone_branches") return [[GONE("wip", 2)], REPO];
+    });
+    await user.click(within(view).getByRole("button", { name: "Clean up branches…" }));
+    const dialog = await screen.findByRole("dialog", { name: "Clean up branches" });
+    // Squash-merged: its changes are on the remote, so it can go like a merged branch.
+    const squashed = await within(dialog).findByRole("checkbox", { name: /squashed/ });
+    expect(squashed).toBeChecked();
+    expect(squashed.closest("label")).toHaveTextContent("squashed or rebased into origin/main");
+    await user.click(squashed);
+    await user.click(within(dialog).getByRole("checkbox", { name: /wip/ }));
+    expect(dialog).toHaveTextContent("2 commits that only exist on this computer will be deleted");
+    await user.click(within(dialog).getByRole("button", { name: "Delete 1 branch" }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.cmd === "delete_gone_branches")?.args).toEqual({
+        repo: REPO.path,
+        names: ["wip"],
+        withLocalCommits: ["wip"],
       }),
     );
   });

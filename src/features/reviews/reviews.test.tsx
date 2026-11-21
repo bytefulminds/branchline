@@ -281,6 +281,45 @@ describe("Bitbucket Cloud", () => {
     access: "unknown",
   };
 
+  it("lists pull requests to review per repository only, and created by you everywhere", async () => {
+    window.localStorage.setItem("branchline.reviews.allProjects", "true");
+    const user = userEvent.setup();
+    const calls = setup((cmd, args) => {
+      if (cmd === "plugin:dialog|open") return REPO.path;
+      if (cmd === "inspect_repository") return REPO;
+      if (cmd === "forge_accounts") return [BB];
+      if (cmd === "review_source")
+        return { remote: "origin", host: "bitbucket.org", project: "acme/demo", account: BB };
+      if (cmd === "review_requests")
+        return {
+          account: BB,
+          project: args.allProjects ? null : "acme/demo",
+          items: [],
+          truncated: false,
+        };
+    });
+    render(<App />);
+    await user.click(openButton());
+    await user.click(await screen.findByRole("button", { name: /^Reviews/ }));
+    const scope = await screen.findByLabelText(/Show pull requests from/);
+    // To review: this repository only, even with "All projects" chosen before.
+    expect(scope).toBeDisabled();
+    expect(scope).toHaveValue("project");
+    expect(scope).toHaveAttribute(
+      "title",
+      "Bitbucket lists pull requests to review per repository",
+    );
+    await waitFor(() =>
+      expect(
+        calls.filter((c) => c.cmd === "review_requests").every((c) => c.args.allProjects === false),
+      ).toBe(true),
+    );
+    // Created by you works across all projects.
+    await user.click(screen.getByRole("button", { name: "Created by you" }));
+    expect(scope).toBeEnabled();
+    expect(scope).toHaveValue("all");
+  });
+
   it("connects with email and API token, then lists and opens pull requests", async () => {
     const user = userEvent.setup();
     const state = { accounts: [] as Account[] };

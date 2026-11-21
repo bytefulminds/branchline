@@ -11,6 +11,7 @@ import type {
   ReviewSource,
 } from "../../types/forge";
 import { useSettings } from "../settings/SettingsProvider";
+import { forgeInfo } from "./forges";
 
 const ALL_PROJECTS_KEY = "branchline.reviews.allProjects";
 const FILTER_KEY = "branchline.reviews.filter";
@@ -36,6 +37,10 @@ export interface ReviewsState {
   matched: boolean;
   allProjects: boolean;
   setAllProjects: (all: boolean) => void;
+  /** "All projects" works for this list (not for Bitbucket's To review). */
+  canListEverywhere: (filter: RequestFilter) => boolean;
+  /** The lists that can be shown (To review needs the project on Bitbucket). */
+  filters: RequestFilter[];
   filter: RequestFilter;
   setFilter: (filter: RequestFilter) => void;
   /** The list shown in the Reviews view. */
@@ -65,6 +70,8 @@ const ReviewsContext = createContext<ReviewsState>({
   matched: false,
   allProjects: false,
   setAllProjects: noop,
+  canListEverywhere: () => true,
+  filters: FILTERS,
   filter: "reviewRequested",
   setFilter: noop,
   list: { status: "idle" },
@@ -170,16 +177,24 @@ export function useReviewsState(repoPath: string | null): ReviewsState {
   const matched = !!current?.account;
   // Shown once the repository's remotes are known, so the first list is the right one.
   const available = accounts.length > 0 && source?.path === repoPath;
-  // Without the repository's own project, "All open" (one project only) is not offered.
-  const shownFilter: RequestFilter = !matched && filter === "allOpen" ? "reviewRequested" : filter;
-  const scopeAll = !matched || (allProjects && shownFilter !== "allOpen");
+  const kind = current?.account?.kind ?? accounts[0]?.kind;
+  const reviewsEverywhere = forgeInfo(kind).reviewsEverywhere;
+  const canListEverywhere = useCallback(
+    (f: RequestFilter) => f === "createdByYou" || (f === "reviewRequested" && reviewsEverywhere),
+    [reviewsEverywhere],
+  );
+  // Without the repository's own project only lists that work everywhere are offered: never
+  // "All open", and on Bitbucket not "To review" either.
+  const filters = FILTERS.filter((f) => matched || canListEverywhere(f));
+  const shownFilter: RequestFilter = filters.includes(filter) ? filter : filters[0]!;
+  const scopeAll = !matched || (allProjects && canListEverywhere(shownFilter));
 
   const list = useRequestList(repoPath, available, scopeAll, shownFilter, round);
   // The sidebar counts what waits for your review; reuse the list when it is that one.
   const badge = useRequestList(
     repoPath,
-    available && shownFilter !== "reviewRequested",
-    !matched || allProjects,
+    available && shownFilter !== "reviewRequested" && (matched || reviewsEverywhere),
+    !matched || (allProjects && reviewsEverywhere),
     "reviewRequested",
     round,
   );
@@ -234,6 +249,8 @@ export function useReviewsState(repoPath: string | null): ReviewsState {
     matched,
     allProjects: scopeAll,
     setAllProjects,
+    canListEverywhere,
+    filters,
     filter: shownFilter,
     setFilter,
     list,

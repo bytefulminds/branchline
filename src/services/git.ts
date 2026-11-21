@@ -134,8 +134,13 @@ export const gitService = {
   /** Local branches whose upstream was deleted on the remote. */
   goneBranches: (repo: string) => call<GoneBranch[]>("gone_branches", { repo }),
   /** Delete those that lose nothing (checked again in the backend); returns the deleted ones. */
-  deleteGoneBranches: (repo: string, names: string[]) =>
-    call<[GoneBranch[], RepositoryInfo]>("delete_gone_branches", { repo, names }),
+  /** `withLocalCommits`: of `names`, those the user chose to delete with their local commits. */
+  deleteGoneBranches: (repo: string, names: string[], withLocalCommits: string[] = []) =>
+    call<[GoneBranch[], RepositoryInfo]>("delete_gone_branches", {
+      repo,
+      names,
+      withLocalCommits,
+    }),
   listRemotes: (repo: string) => call<RemoteInfo[]>("list_remotes", { repo }),
   /** Fetch `remote`, or every remote when null. `opId` identifies it for `cancelRemote`. */
   fetchRemote: (

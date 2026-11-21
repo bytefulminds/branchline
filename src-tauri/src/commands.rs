@@ -263,9 +263,11 @@ pub async fn gone_branches(repo: String) -> Result<Vec<branches::GoneBranch>, Gi
 pub async fn delete_gone_branches(
     repo: String,
     names: Vec<String>,
+    with_local_commits: Option<Vec<String>>,
 ) -> Result<(Vec<branches::GoneBranch>, RepositoryInfo), GitError> {
     blocking(move || {
-        let deleted = branches::delete_gone_branches(&repo, &names)?;
+        let with_local = with_local_commits.unwrap_or_default();
+        let deleted = branches::delete_gone_branches(&repo, &names, &with_local)?;
         Ok((deleted, repository::inspect(&repo)?))
     })
     .await
