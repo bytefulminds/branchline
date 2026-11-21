@@ -14,6 +14,9 @@ description on GitLab.
   drop them together.
 - Reset the current branch to a commit from its menu: soft, mixed or hard.
 - Edit a commit's message, or move it up or down, from its menu in History.
+- After rewriting a pushed branch, Push becomes Force push, pinned to the commit you rewrote
+  from: commits someone pushed after your rewrite are never overwritten, and Branchline offers
+  to bring them in on top of your rewrite first.
 - Changed files are shown as a tree of folders, and a whole folder can be staged, unstaged or
   discarded at once. A button switches back to a flat list.
 

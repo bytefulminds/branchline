@@ -344,6 +344,20 @@ progress (read from `rebase-merge/msgnum` and `end`).
   holds its own HEAD, index and in-progress operations, while branches, tags and stashes are
   shared.
 
+## Force push after a rewrite
+
+`git/rewrite.rs`: before a reset, rebase, interactive rebase or amend, Branchline stores the
+upstream commit in the repository's configuration as `branch.<name>.branchlineRewrittenFrom`,
+but only when the branch contains everything on its upstream (otherwise you are behind, and
+should pull, not force). A branch counts as rewritten while that commit is no longer part of it.
+`inspect` reports it (only reading the setting when the configuration file mentions it) with
+the number of replaced commits and of commits pushed since. The UI then turns Push into a force
+push with `--force-with-lease=<branch>:<stored commit>`, which is refused when the remote moved,
+also when the new commits were fetched (a plain lease compares with the fetched state and would
+let them be overwritten). `bring_in_pushed` cherry-picks the commits between the stored commit
+and the upstream onto the branch and moves the stored commit to the upstream. A push to the
+upstream removes the setting; Git renames it with the branch and drops it with the branch.
+
 ## Interactive rebase
 
 `git/rebase_plan.rs` builds the rebase plan itself and runs `git rebase --interactive` with

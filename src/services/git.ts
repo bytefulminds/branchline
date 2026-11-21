@@ -250,6 +250,8 @@ export const gitService = {
   ) => call<IntegrateResult>("merge_into_current", { repo, request: { source, ...options } }),
   rebaseCurrent: (repo: string, onto: StartPoint, autostash: boolean) =>
     call<IntegrateResult>("rebase_current", { repo, onto, autostash }),
+  /** Apply the commits pushed after a rewrite on top of the rewritten branch. */
+  bringInPushed: (repo: string) => call<IntegrateResult>("bring_in_pushed", { repo }),
   cherryPick: (repo: string, oid: string) => call<IntegrateResult>("cherry_pick", { repo, oid }),
   /** Cherry-pick several commits in the order given (oldest first). */
   cherryPickMany: (repo: string, oids: string[]) =>

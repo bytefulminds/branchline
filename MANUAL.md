@@ -173,6 +173,14 @@ Updates are signed with Branchline's own update key, so only genuine releases ar
 - Fetch, Pull and Push in the title bar, with ahead/behind counts. Pull fast-forwards by
   default, or merges or rebases on request; a branch without upstream is published to the
   remote you choose. Force push is only possible with lease, after a confirmation.
+- After you rewrite a pushed branch in Branchline (reset, edit a message, move, drop, rebase,
+  interactive rebase or amend), **Push turns into Force push** (in amber) for that branch, so
+  you cannot forget it. That force push only replaces the commits you rewrote: if anyone pushed
+  to the branch after your rewrite, it is refused, even when you fetched their commits since.
+  Branchline then fetches and offers **Bring in their commits** (their new commits are applied
+  on top of your rewritten branch, then you force push both) or **Overwrite anyway…**. Once
+  pushed, Push is an ordinary push again. A branch that was already behind its remote when you
+  rewrote it is not turned into a force push: pull first.
 - Live progress (phase and percentage) in the status bar, and Cancel for every fetch, pull and
   push.
 - Clear messages for failed sign-in, unknown SSH hosts, unreachable or missing remotes, rejected
@@ -506,7 +514,8 @@ select lines), dialogs and panels. See [docs/accessibility.md](docs/accessibilit
   command, and HTTPS uses your credential helper. Credentials in remote URLs are removed before
   anything reaches the UI, including error messages.
 - Force push always uses `--force-with-lease`, so it cannot overwrite commits you have not
-  fetched.
+  fetched. After a rewrite in Branchline the lease is pinned to the remote commit you rewrote
+  from, so commits pushed after it are not overwritten either.
 - AI features only contact the provider you chose (your Ollama or OpenAI-compatible server,
   or the API of Anthropic or OpenAI), only when you use one (or test the connection), and
   only send what that feature needs: the staged diff for a commit message (unstaged files

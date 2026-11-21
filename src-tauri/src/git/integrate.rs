@@ -228,6 +228,7 @@ pub fn rebase(
             "Switch to a branch first; a detached HEAD cannot be rebased.".into(),
         ));
     }
+    super::rewrite::remember_before_rewrite(&root)?;
     if matches!(onto, StartPoint::Head) {
         return Err(GitError::Unsupported(
             "Choose a branch or commit to rebase onto.".into(),
@@ -378,6 +379,7 @@ pub fn reset_to(repo: &str, oid: &str, mode: ResetMode) -> Result<(), GitError> 
     validate_oid(oid)?;
     let _guard = write_lock();
     ready(repo)?;
+    super::rewrite::remember_before_rewrite(&root)?;
     let flag = match mode {
         ResetMode::Soft => "--soft",
         ResetMode::Mixed => "--mixed",

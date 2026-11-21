@@ -500,6 +500,12 @@ pub async fn revert_commit(repo: String, oid: String) -> Result<IntegrateResult,
     integrate_then_inspect(repo, move |r| integrate::revert(r, &oid)).await
 }
 
+/// Someone pushed after a rewrite: apply their commits on top of the rewritten branch.
+#[tauri::command]
+pub async fn bring_in_pushed(repo: String) -> Result<IntegrateResult, GitError> {
+    integrate_then_inspect(repo, crate::git::rewrite::bring_in_pushed).await
+}
+
 /// Reset the current branch to a commit: soft, mixed or hard.
 #[tauri::command]
 pub async fn reset_to_commit(

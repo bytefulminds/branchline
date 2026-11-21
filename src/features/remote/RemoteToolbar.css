@@ -81,3 +81,11 @@
     display: none;
   }
 }
+
+/* Push after a rewrite of a pushed branch: a force push, in the warning color. */
+.bl-tool--warning {
+  color: var(--color-warning);
+}
+.bl-tool--warning:hover:not(:disabled) {
+  background: var(--color-warning-subtle);
+}

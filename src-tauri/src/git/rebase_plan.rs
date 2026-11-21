@@ -474,6 +474,7 @@ pub fn interactive_rebase(
     }
     let commits = range(&root, base)?;
     let (todo, messages) = build_todo(&commits, plan, &git_dir)?;
+    super::rewrite::remember_before_rewrite(&root)?;
     let io =
         |e: std::io::Error| GitError::Internal(format!("could not write the rebase plan: {e}"));
     for (file, message) in &messages {

@@ -16,6 +16,7 @@ pub mod paths;
 pub mod rebase_plan;
 pub mod remote;
 pub mod repository;
+pub mod rewrite;
 pub mod runner;
 pub mod stash;
 pub mod status;

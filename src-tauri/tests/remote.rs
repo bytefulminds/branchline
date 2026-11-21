@@ -275,6 +275,7 @@ fn push_req(branch: &str) -> PushRequest {
         set_upstream: false,
         force: false,
         follow_tags: false,
+        lease: None,
     }
 }
 

@@ -17,6 +17,7 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 
 use super::branches::validate_branch_name;
+use super::log::validate_oid;
 use super::ops::write_lock;
 use super::repository::{inspect, resolve_root, HeadState};
 use super::runner::{
@@ -75,6 +76,10 @@ pub struct PushRequest {
     /// Also push annotated tags that point at the pushed commits.
     #[serde(default)]
     pub follow_tags: bool,
+    /// With `force`: the remote commit the branch may replace. The push is refused when the
+    /// remote branch is anywhere else, also when newer commits were fetched since.
+    #[serde(default)]
+    pub lease: Option<String>,
 }
 
 /// What a network operation changed, for a short confirmation in the UI.
@@ -1191,7 +1196,10 @@ pub fn push(
     }
 
     let refspec = format!("{local}:{dest}");
-    let lease = format!("--force-with-lease={dest}");
+    let lease = match &request.lease {
+        Some(oid) => format!("--force-with-lease={dest}:{}", validate_oid(oid)?),
+        None => format!("--force-with-lease={dest}"),
+    };
     let mut args = vec!["push", "--progress", "--porcelain"];
     if request.set_upstream {
         args.push("--set-upstream");
@@ -1216,6 +1224,10 @@ pub fn push(
     let up_to_date = stdout
         .lines()
         .any(|l| l.starts_with('=') && l.contains(&refspec));
+    // Pushed to its upstream: a rewrite of this branch is on the remote now.
+    if upstream.as_ref().is_some_and(|u| u.remote == remote) {
+        super::rewrite::forget(&root, &request.branch)?;
+    }
     Ok(RemoteOutcome {
         up_to_date,
         target: Some(format!(

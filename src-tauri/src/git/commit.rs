@@ -153,6 +153,7 @@ pub fn commit(repo: &str, req: &CommitRequest) -> Result<String, GitError> {
     let mut args = vec!["commit", "--file=-", "--cleanup=whitespace"];
     if req.amend {
         args.push("--amend");
+        super::rewrite::remember_before_rewrite(&root)?;
     }
     let input = format!("{message}\n");
     let result = run_git_with(
