@@ -19,6 +19,9 @@ description on GitLab.
 
 ### Changed
 
+- Stashing no longer takes untracked files along by default. "Stash and switch" only stashes
+  them when one is in the way of the switch, and the stash dialog leaves them out unless you
+  tick "Include untracked files".
 - Untracked files have their own group in Changes, closed until you open it. The Changes
   count in the sidebar now adds up the Conflicts, Staged and Unstaged lists, with the number
   of untracked files shown apart, as "+2".

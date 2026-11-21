@@ -2,6 +2,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import App from "../../App";
+import { blockedByUntracked } from "../branches/BranchActions";
 import { installTauriTestEnvironment, openButton, REPO, setup } from "../../test/harness";
 import type { CommitDetails, RepositoryInfo, StashInfo } from "../../types/git";
 
@@ -73,11 +74,16 @@ describe("stashes", () => {
     }, REPO);
     await user.click(screen.getByRole("button", { name: "Stash changes…" }));
     const dialog = await screen.findByRole("dialog", { name: "Stash changes" });
-    expect(within(dialog).getByText(/3 changed files/)).toBeInTheDocument();
-    expect(within(dialog).getByRole("checkbox", { name: /Include untracked files/ })).toBeChecked();
+    // Untracked files are left out by default: they do not block a switch.
+    expect(dialog).toHaveTextContent("2 changed files are put aside");
+    expect(dialog).toHaveTextContent("Untracked files stay where they are.");
+    const box = within(dialog).getByRole("checkbox", { name: /Include untracked files/ });
+    expect(box).not.toBeChecked();
     expect(within(dialog).getByText("(1)")).toBeInTheDocument();
+    await user.click(box);
+    expect(dialog).toHaveTextContent("3 changed files are put aside");
+    await user.click(box);
     await user.type(within(dialog).getByRole("textbox", { name: /Message/ }), "Try the new layout");
-    await user.click(within(dialog).getByRole("checkbox", { name: /Include untracked/ }));
     await user.click(within(dialog).getByRole("button", { name: "Stash" }));
 
     await waitFor(() =>
@@ -272,8 +278,28 @@ describe("stashes", () => {
         ["switch_branch", "save_stash", "switch_branch"],
       ),
     );
-    expect(calls.find((c) => c.cmd === "save_stash")?.args.includeUntracked).toBe(true);
+    // Only tracked changes were in the way, so untracked files stay out of the stash.
+    expect(calls.find((c) => c.cmd === "save_stash")?.args.includeUntracked).toBe(false);
     expect(await screen.findByText("Switched to feature")).toBeInTheDocument();
+  });
+
+  it("knows when an untracked file blocks a switch", () => {
+    expect(
+      blockedByUntracked({
+        kind: "checkoutConflict",
+        message: "",
+        detail:
+          "error: The following untracked working tree files would be overwritten by checkout:\n\tnotes.md",
+      }),
+    ).toBe(true);
+    expect(
+      blockedByUntracked({
+        kind: "checkoutConflict",
+        message: "",
+        detail:
+          "error: Your local changes to the following files would be overwritten by checkout:",
+      }),
+    ).toBe(false);
   });
 
   it("tells where held changes are during a merge", async () => {

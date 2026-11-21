@@ -187,11 +187,14 @@ Updates are signed with Branchline's own update key, so only genuine releases ar
 
 ## Stashes, tags and worktrees
 
-- **Stashes:** stash changes with a message (untracked files included by choice), then apply,
+- **Stashes:** stash changes with a message (untracked files only when you tick "Include
+  untracked files", or when there is nothing else to stash), then apply,
   pop or delete them. The Stashes view shows every stash with its files and diffs. Stash and
   Pop are also in the title bar.
 - When local changes block a pull or a branch switch, Branchline offers "Stash, pull and
-  reapply" or "Stash and switch" instead of leaving you stuck.
+  reapply" or "Stash and switch" instead of leaving you stuck. "Stash and switch" puts aside
+  only the changes to tracked files: untracked files do not block a switch and simply come
+  along, unless Git says one of them is in the way, and then they are stashed too.
 - **Tags:** create lightweight or annotated tags (from the Tags view or on any commit in
   History), push them, delete them locally or on a remote, check them out or start a branch
   from them. Pushing never overwrites a different tag with the same name on the remote.
