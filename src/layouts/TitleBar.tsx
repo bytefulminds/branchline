@@ -33,7 +33,7 @@ import { FILE_MANAGER, useOpenIn } from "../features/repository/useOpenIn";
 import { displayPath } from "../lib/format";
 import { modKeyLabel, platform } from "../services/platform";
 import { WindowControls } from "./WindowControls";
-import { useEffect, useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 import "./TitleBar.css";
 
 /** Most recently active local branches shown in the quick switcher. */
@@ -63,10 +63,12 @@ export function TitleBar({
   const { state, recent } = controller;
   const repo = state.status === "ready" ? state.repo : null;
   const busy = state.status === "loading" || (state.status === "ready" && state.refreshing);
-  // The spinner replaces Refresh while busy; give focus back when it returns.
+  // The spinner replaces Refresh while busy; give focus back when it returns. A layout
+  // effect does this in the same commit that mounts the button, so focus never lands on
+  // the body in between.
   const refreshRef = useRef<HTMLButtonElement>(null);
   const refocusRefresh = useRef(false);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!busy && refocusRefresh.current) {
       refocusRefresh.current = false;
       refreshRef.current?.focus();
