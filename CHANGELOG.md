@@ -7,6 +7,14 @@ description on GitLab.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-21
+
+History becomes a place to tidy up your branch: reset it to a commit, edit a message, move a
+commit up or down, or drop one or several, straight from the commit menu. After rewriting a
+pushed branch, Push turns into a force push that never overwrites what someone else pushed.
+Changes shows your files as a tree of folders that you can stage at once, with untracked files
+in a group of their own, and Clean up branches now recognizes squash-merged branches.
+
 ### Added
 
 - Drop a commit from the History menu: it is removed from the current branch and the commits

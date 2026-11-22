@@ -7,7 +7,7 @@
 **See the flow of your code: a fast, friendly Git desktop client that shows what Git is
 doing and lets you do it with a click.**
 
-**Version 0.3.5** · [download](https://gitlab.com/bytefulminds/branchline/-/releases) for Windows, macOS and Linux
+**Version 0.4.0** · [download](https://gitlab.com/bytefulminds/branchline/-/releases) for Windows, macOS and Linux
 
 [![pipeline](https://gitlab.com/bytefulminds/branchline/badges/main/pipeline.svg)](https://gitlab.com/bytefulminds/branchline/-/pipelines)
 ![license: MIT](https://img.shields.io/badge/license-MIT-00D1A0)
@@ -34,11 +34,13 @@ Bytefulminds.
 ### Commit exactly what you mean
 
 Stage whole files, single hunks or just the lines you select, also of new files, and leave
-the rest for later. Diffs show your code in the colors of your editor, in one column or side by side, and the
-commit box tells you who you commit as before you press Ctrl+Enter.
+the rest for later. Your changes show as a list or as a tree of folders, so you can stage or
+discard a whole folder at once, and untracked files wait in a group of their own. Diffs show
+your code in the colors of your editor, in one column or side by side, and the commit box
+tells you who you commit as before you press Ctrl+Enter.
 
 <p align="center">
-  <img src="docs/screenshots/changes-lines.png" alt="The Changes view with two lines selected in a Python diff, ready to stage, and a commit message being written" width="49%">
+  <img src="docs/screenshots/changes-lines.png" alt="The Changes view as a tree of folders, with two lines selected in a Python diff, ready to stage, and a commit message being written" width="49%">
   <img src="docs/screenshots/diff-split.png" alt="A side-by-side diff of a Python file with syntax highlighting, removed lines on the left and added lines on the right" width="49%">
 </p>
 
@@ -60,20 +62,28 @@ branch left main. Click a branch in the graph to follow it through the history, 
 branches that were merged and deleted into their merge commit. Create, switch, merge and
 rebase branches from a right-click, or drag one branch onto another. Switch between your
 local and remote branches with one toggle, and "Clean up branches" removes local branches
-whose upstream is gone once every commit is on the remote, with Undo; branches you never
-published stay. Tidy up before you push with "Rewrite history": Branchline finds where your
-branch started, you drag commits into a new order and reword, squash or drop them, and
-squashed commits are shown grouped under the commit they go into. With AI on, it can suggest
-which commits belong together and write their messages.
+whose upstream is gone once every commit is on the remote, also after a squash merge, with
+Undo; branches with commits only on your computer are kept unless you tick them. Right-click
+a commit to reset your branch to it (soft, mixed or hard), edit its message, move it up or
+down, or drop it, or select several commits and drop them at once. Tidy up before you push
+with "Rewrite history": Branchline finds where your branch started, you drag commits into a
+new order and reword, squash or drop them, and squashed commits are shown grouped under the
+commit they go into. With AI on, it can suggest which commits belong together and write
+their messages. After you rewrite a branch you already pushed, Push turns into a force push
+that never overwrites commits someone else pushed in the meantime.
 
 <p align="center">
   <img src="docs/screenshots/branches.png" alt="The local branches with a branch menu open: switch, open in a new worktree, merge, rebase, push, rename and delete" width="49%">
-  <img src="docs/screenshots/branch-cleanup.png" alt="Clean up branches: two branches whose upstream was deleted are ready to delete, two with commits only on this computer are kept" width="49%">
+  <img src="docs/screenshots/branch-cleanup.png" alt="Clean up branches: two branches whose upstream was deleted are ready to delete, one of them squashed into main, and a branch with a commit only on this computer is kept unless you tick it" width="49%">
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/commit-menu.png" alt="The menu of a commit in History with Reset develop to this commit open, offering soft, mixed and hard, next to edit message, move up, move down and drop" width="49%">
+  <img src="docs/screenshots/rebase.png" alt="Rewrite history with an AI suggestion: two groups of fixed-up commits, each indented above the commit they go into, with a new message" width="49%">
 </p>
 
 <p align="center">
   <img src="docs/screenshots/graph-follow.png" alt="Following main in the graph: its line and commits stay bright, the rest fades, and a merged branch is folded into its merge with +1" width="49%">
-  <img src="docs/screenshots/rebase.png" alt="Rewrite history with an AI suggestion: two groups of fixed-up commits, each indented above the commit they go into, with a new message" width="49%">
 </p>
 
 ### Conflicts without the fear
