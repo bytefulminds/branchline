@@ -10,7 +10,7 @@ use crate::git::conflict::{self, ConflictFile, ResolveSide};
 use crate::git::create;
 use crate::git::diff::{self, DiffArea, FileDiff};
 use crate::git::identity::{self, ConfigScope, Identity, IdentityValues};
-use crate::git::integrate::{self, IntegrateOutcome, MergeRequest, Step};
+use crate::git::integrate::{self, IntegrateOutcome, MergeRequest, ResetMode, Step};
 use crate::git::log::{self, CommitDetails, LogFilter, LogPage, RefInfo};
 use crate::git::ops::{self, LineRequest};
 use crate::git::rebase_plan::{self, PlanCommit, PlanStep};
@@ -263,9 +263,11 @@ pub async fn gone_branches(repo: String) -> Result<Vec<branches::GoneBranch>, Gi
 pub async fn delete_gone_branches(
     repo: String,
     names: Vec<String>,
+    with_local_commits: Option<Vec<String>>,
 ) -> Result<(Vec<branches::GoneBranch>, RepositoryInfo), GitError> {
     blocking(move || {
-        let deleted = branches::delete_gone_branches(&repo, &names)?;
+        let with_local = with_local_commits.unwrap_or_default();
+        let deleted = branches::delete_gone_branches(&repo, &names, &with_local)?;
         Ok((deleted, repository::inspect(&repo)?))
     })
     .await
@@ -498,6 +500,22 @@ pub async fn cherry_pick_many(
 #[tauri::command]
 pub async fn revert_commit(repo: String, oid: String) -> Result<IntegrateResult, GitError> {
     integrate_then_inspect(repo, move |r| integrate::revert(r, &oid)).await
+}
+
+/// Someone pushed after a rewrite: apply their commits on top of the rewritten branch.
+#[tauri::command]
+pub async fn bring_in_pushed(repo: String) -> Result<IntegrateResult, GitError> {
+    integrate_then_inspect(repo, crate::git::rewrite::bring_in_pushed).await
+}
+
+/// Reset the current branch to a commit: soft, mixed or hard.
+#[tauri::command]
+pub async fn reset_to_commit(
+    repo: String,
+    oid: String,
+    mode: ResetMode,
+) -> Result<RepositoryInfo, GitError> {
+    write_then_inspect(repo, move |r| integrate::reset_to(r, &oid, mode)).await
 }
 
 /// Commits after `base` on the current branch, oldest first, for an interactive rebase.

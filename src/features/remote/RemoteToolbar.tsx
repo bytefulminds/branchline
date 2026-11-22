@@ -17,6 +17,7 @@ export function ToolButton({
   title,
   onClick,
   split,
+  warning,
 }: {
   icon: ReactNode;
   label: string;
@@ -27,11 +28,13 @@ export function ToolButton({
   title: string;
   onClick: () => void;
   split?: boolean;
+  /** Shown in the warning color, for a force push. */
+  warning?: boolean;
 }) {
   return (
     <button
       type="button"
-      className={`bl-tool${split ? " bl-tool--split" : ""}`}
+      className={`bl-tool${split ? " bl-tool--split" : ""}${warning ? " bl-tool--warning" : ""}`}
       onClick={onClick}
       disabled={disabled}
       aria-busy={running || undefined}
@@ -117,6 +120,13 @@ export function RemoteToolbar({ repo, busy }: { repo: RepositoryInfo; busy: bool
         ? `Push ${tracking.ahead} to ${tracking.name}`
         : `Push to ${upstream!.name}`;
   const canPush = onBranch && (!publish || hasRemotes);
+  // A pushed branch rewritten here: Push becomes Force push, pinned to what was rewritten.
+  const rewrite = tracking && repo.rewrite ? repo.rewrite : null;
+  const forceTitle = rewrite
+    ? rewrite.pushedSince > 0
+      ? `Someone pushed ${rewrite.pushedSince} to ${tracking!.name} after your rewrite`
+      : `You rewrote ${rewrite.replaced} pushed ${rewrite.replaced === 1 ? "commit" : "commits"}: force push to ${tracking!.name}`
+    : "";
 
   const pullEntries: MenuEntry[] = [
     {
@@ -141,7 +151,8 @@ export function RemoteToolbar({ repo, busy }: { repo: RepositoryInfo; busy: bool
   const pushEntries: MenuEntry[] = [
     {
       id: "push",
-      label: publish ? "Publish branch…" : "Push",
+      label: publish ? "Publish branch…" : rewrite ? "Force push your rewrite…" : "Push",
+      description: rewrite ? "Refused if anyone pushed after your rewrite" : undefined,
       icon: <ArrowUpFromLine size={16} aria-hidden />,
       onSelect: actions.push,
     },
@@ -185,10 +196,11 @@ export function RemoteToolbar({ repo, busy }: { repo: RepositoryInfo; busy: bool
           icon={
             publish ? <Upload size={15} aria-hidden /> : <ArrowUpFromLine size={15} aria-hidden />
           }
-          label={publish ? "Publish" : "Push"}
+          label={publish ? "Publish" : rewrite ? "Force push" : "Push"}
           count={tracking?.ahead}
           countLabel={`${tracking?.ahead ?? 0} ahead`}
-          title={pushTitle}
+          title={rewrite ? forceTitle : pushTitle}
+          warning={!!rewrite}
           running={running("push")}
           disabled={locked || !canPush}
           onClick={actions.push}

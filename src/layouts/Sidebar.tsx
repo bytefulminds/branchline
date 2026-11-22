@@ -22,6 +22,7 @@ import { useTagActions } from "../features/tags/TagActions";
 import { useWorktreeActions } from "../features/worktrees/WorktreeActions";
 import { displayPath } from "../lib/format";
 import { modKeyLabel } from "../services/platform";
+import { trackedChangeCount } from "../features/changes/changeModel";
 import "./Sidebar.css";
 
 export type WorkspaceView =
@@ -36,6 +37,7 @@ function NavItem({
   disabled,
   count,
   countTone,
+  extra,
   title,
   onClick,
 }: {
@@ -45,6 +47,8 @@ function NavItem({
   disabled?: boolean;
   count?: number;
   countTone?: "accent" | "error" | "neutral";
+  /** A second, quieter count after the first, such as untracked files. */
+  extra?: { value: number; label: string };
   title?: string;
   onClick?: () => void;
 }) {
@@ -61,6 +65,12 @@ function NavItem({
         <span className="bl-nav-item__icon">{icon}</span>
         <span className="bl-nav-item__label truncate">{label}</span>
         {count !== undefined && <Count value={count} tone={countTone} />}
+        {extra && extra.value > 0 && (
+          <span className="bl-count bl-count--neutral bl-count--extra" title={extra.label}>
+            +{extra.value.toLocaleString()}
+            <span className="visually-hidden"> {extra.label}</span>
+          </span>
+        )}
       </button>
     </li>
   );
@@ -94,6 +104,9 @@ export function Sidebar({
   const repo = state.status === "ready" ? state.repo : null;
   const currentPath = currentRepositoryPath(state);
   const conflicts = repo?.changes.filter((c) => c.conflict).length ?? 0;
+  // Untracked files are left out: the Changes view lists them in a group of their own.
+  const changed = repo ? trackedChangeCount(repo.changes) : 0;
+  const untracked = repo?.changes.filter((c) => c.worktreeStatus === "untracked").length ?? 0;
   const { tags } = useTagActions();
   const { worktrees } = useWorktreeActions();
   const reviews = useReviews();
@@ -141,8 +154,16 @@ export function Sidebar({
                 title={`Changes (${modKeyLabel}1)`}
                 active={view === "changes"}
                 onClick={() => onView("changes")}
-                count={repo.totalChanges}
-                countTone={conflicts > 0 ? "error" : repo.totalChanges > 0 ? "accent" : "neutral"}
+                count={changed}
+                extra={
+                  untracked > 0
+                    ? {
+                        value: untracked,
+                        label: untracked === 1 ? "untracked file" : "untracked files",
+                      }
+                    : undefined
+                }
+                countTone={conflicts > 0 ? "error" : changed > 0 ? "accent" : "neutral"}
               />
               <NavItem
                 icon={<GitCommitHorizontal size={16} />}

@@ -15,6 +15,7 @@ import { plural } from "../../lib/format";
 import { gitService } from "../../services/git";
 import type {
   GitError,
+  IntegrateResult,
   PullMode,
   PushRequest,
   RemoteInfo,
@@ -53,6 +54,12 @@ export interface RemoteActions {
   /** Push the current branch to its upstream, or publish it when it has none. */
   push: () => void;
   forcePush: () => void;
+  /** Internal: a pinned force push after a rewrite was refused. */
+  afterRefusedRewrite: () => Promise<void>;
+  /** Apply the commits pushed after a rewrite on top of it. */
+  bringIn: () => Promise<void>;
+  /** Force push over commits someone else pushed after the rewrite. */
+  overwrite: () => Promise<void>;
   /** Push any local branch (publishing it when it has no upstream). */
   pushBranch: (name: string, upstream: string | null) => void;
   /** Push a tag; asks which remote when there are several. */
@@ -74,6 +81,9 @@ const RemoteActionsContext = createContext<RemoteActions>({
   pull: noop,
   push: noop,
   forcePush: noop,
+  afterRefusedRewrite: async () => {},
+  bringIn: async () => {},
+  overwrite: async () => {},
   pushBranch: noop,
   pushTag: noop,
   deleteRemoteTag: noop,
@@ -378,6 +388,11 @@ export function RemoteActionsProvider({
             : error.kind === "staleLease"
               ? [{ label: "Fetch", onClick: () => actionsRef.current?.fetchAll() }]
               : undefined;
+        // A pinned force push after a rewrite was refused: someone pushed. Fetch to see.
+        if (error.kind === "staleLease" && request.lease) {
+          void actionsRef.current?.afterRefusedRewrite();
+          return;
+        }
         return report("Push failed", error, actions);
       }
       const outcome = result?.outcome;
@@ -439,27 +454,111 @@ export function RemoteActionsProvider({
     [publish, doPush],
   );
 
-  const push = useCallback(() => {
-    if (!branch) return;
-    pushBranch(branch, upstream?.name ?? null);
-  }, [branch, upstream, pushBranch]);
+  const rewrite = repo?.rewrite ?? null;
+
+  /** Someone pushed after the rewrite: offer to bring their commits in, or overwrite them. */
+  const offerBringIn = useCallback(
+    (pushedSince: number) => {
+      if (!branch || !upstream) return;
+      toast({
+        tone: "error",
+        title: `Someone pushed to ${upstream.name} after your rewrite`,
+        description: `${plural(pushedSince, "new commit")} on ${upstream.name} would be lost by a force push. Bring ${pushedSince === 1 ? "it" : "them"} in on top of your rewritten branch, then force push.`,
+        actions: [
+          { label: "Bring in their commits", onClick: () => void actionsRef.current?.bringIn() },
+          {
+            label: "Overwrite anyway…",
+            onClick: () => void actionsRef.current?.overwrite(),
+          },
+        ],
+      });
+    },
+    [branch, upstream, toast],
+  );
 
   const forcePush = useCallback(async () => {
     if (!branch || !upstream) return;
+    if (rewrite && rewrite.pushedSince > 0) return offerBringIn(rewrite.pushedSince);
     const ok =
       !settings.safety.confirmForcePush ||
       (await confirm({
         title: `Force push ${branch}?`,
-        description: `${upstream.name} is replaced by your branch. Commits on the remote that your branch does not contain are removed from it. If someone pushed since your last fetch, the push is refused (force with lease).`,
+        description: rewrite
+          ? `You rewrote ${plural(rewrite.replaced, "pushed commit")} of ${branch}: they are replaced on ${upstream.name}. If anyone pushed after your rewrite, the push is refused, so their work is never lost.`
+          : `${upstream.name} is replaced by your branch. Commits on the remote that your branch does not contain are removed from it. If someone pushed since your last fetch, the push is refused (force with lease).`,
         confirmLabel: "Force push",
-        destructive: true,
+        destructive: !rewrite,
       }));
+    if (!ok) return;
+    void doPush(
+      {
+        branch,
+        remote: null,
+        setUpstream: false,
+        force: true,
+        ...(rewrite ? { lease: rewrite.lease } : {}),
+      },
+      `Force pushing ${branch}`,
+    );
+  }, [branch, upstream, rewrite, offerBringIn, confirm, doPush, settings.safety.confirmForcePush]);
+
+  // After a rewrite of a pushed branch, Push is a force push: you cannot forget it.
+  const push = useCallback(() => {
+    if (!branch) return;
+    if (rewrite && upstream && !upstream.gone) return void forcePush();
+    pushBranch(branch, upstream?.name ?? null);
+  }, [branch, upstream, rewrite, forcePush, pushBranch]);
+
+  /** The pinned force push was refused: fetch, then show what was pushed. */
+  const afterRefusedRewrite = useCallback(async () => {
+    const { result, error } = await runRemote("fetch", "Fetching", (path, opId, onProgress) =>
+      gitService.fetchRemote(path, null, opId, onProgress),
+    );
+    if (error) return report("Fetch failed", error);
+    offerBringIn(result?.repo.rewrite?.pushedSince || 1);
+  }, [runRemote, report, offerBringIn]);
+
+  const bringIn = useCallback(async () => {
+    let result: IntegrateResult | null = null;
+    const error = await run("Bringing in their commits", async (path) => {
+      result = await gitService.bringInPushed(path);
+      return result.repo;
+    });
+    if (error) return report("Could not bring in their commits", error);
+    const r = result as IntegrateResult | null;
+    if (r?.outcome.conflicts) {
+      toast({
+        tone: "error",
+        title: "Their commits conflict with your rewrite",
+        description:
+          "Resolve the conflicts in Changes, then Continue. Force push afterwards; their commits stay on the remote until then.",
+        actions: [{ label: "Show changes", onClick: onShowChanges }],
+      });
+      return;
+    }
+    toast({
+      tone: "success",
+      title: "Brought in their commits",
+      description: "Force push to put your rewrite and their work on the remote.",
+      actions: [{ label: "Force push", onClick: () => void actionsRef.current?.forcePush() }],
+    });
+  }, [run, report, toast, onShowChanges]);
+
+  /** Force push over commits someone else pushed: a plain lease, after asking plainly. */
+  const overwrite = useCallback(async () => {
+    if (!branch || !upstream) return;
+    const ok = await confirm({
+      title: `Overwrite ${upstream.name}?`,
+      description: `The commits someone else pushed to ${upstream.name} after your rewrite are removed from it. Only do this when you know they should go.`,
+      confirmLabel: "Overwrite",
+      destructive: true,
+    });
     if (!ok) return;
     void doPush(
       { branch, remote: null, setUpstream: false, force: true },
       `Force pushing ${branch}`,
     );
-  }, [branch, upstream, confirm, doPush, settings.safety.confirmForcePush]);
+  }, [branch, upstream, confirm, doPush]);
 
   const runTag = useCallback(
     async (name: string, remote: string, remove: boolean) => {
@@ -561,6 +660,9 @@ export function RemoteActionsProvider({
       pull: (mode, autostash) => void pull(mode, autostash),
       push,
       forcePush: () => void forcePush(),
+      afterRefusedRewrite,
+      bringIn,
+      overwrite,
       pushBranch,
       pushTag,
       deleteRemoteTag,
@@ -575,6 +677,9 @@ export function RemoteActionsProvider({
       pull,
       push,
       forcePush,
+      afterRefusedRewrite,
+      bringIn,
+      overwrite,
       pushBranch,
       pushTag,
       deleteRemoteTag,

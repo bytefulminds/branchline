@@ -28,7 +28,8 @@ export interface BranchActions {
   remove: (name: string) => void;
   checkoutCommit: (oid: string) => void;
   /** Delete branches whose upstream is gone and that lose nothing, with Undo. */
-  deleteGone: (names: string[]) => Promise<GitError | null>;
+  /** `withLocalCommits`: those of `names` that may lose commits that are only here. */
+  deleteGone: (names: string[], withLocalCommits?: string[]) => Promise<GitError | null>;
 }
 
 const noop = () => {};
@@ -42,6 +43,11 @@ const BranchActionsContext = createContext<BranchActions>({
   checkoutCommit: noop,
   deleteGone: () => Promise.resolve(null),
 });
+
+/** Git refused the switch because an untracked file would be overwritten. */
+export function blockedByUntracked(error: GitError): boolean {
+  return /untracked working tree files? would be (overwritten|removed)/i.test(error.detail ?? "");
+}
 
 export function useBranchActions(): BranchActions {
   return useContext(BranchActionsContext);
@@ -75,7 +81,7 @@ export function BranchActionsProvider({
   const { run } = controller;
 
   // Set below; lets a toast action start "stash and switch" without a dependency cycle.
-  const stashAndSwitchRef = useRef<(name: string) => void>(() => {});
+  const stashAndSwitchRef = useRef<(name: string, untracked: boolean) => void>(() => {});
 
   const report = useCallback(
     (title: string, error: GitError, switchTarget?: string) => {
@@ -88,7 +94,8 @@ export function BranchActionsProvider({
             ? [
                 {
                   label: "Stash and switch",
-                  onClick: () => stashAndSwitchRef.current(switchTarget),
+                  // Untracked files only go into the stash when Git says one is in the way.
+                  onClick: () => stashAndSwitchRef.current(switchTarget, blockedByUntracked(error)),
                 },
               ]
             : undefined,
@@ -121,11 +128,15 @@ export function BranchActionsProvider({
     [run, report],
   );
 
-  /** Stash everything (untracked files too), then switch. The stash stays in the list. */
+  /**
+   * Stash the changes to tracked files, then switch. Untracked files stay where they are (Git
+   * takes them along to the other branch), unless one of them is in the way. The stash stays in
+   * the list.
+   */
   const stashAndSwitch = useCallback(
-    async (name: string) => {
+    async (name: string, untracked: boolean) => {
       const error = await run("Stashing and switching", async (path) => {
-        await gitService.saveStash(path, `Before switching to ${name}`, true);
+        await gitService.saveStash(path, `Before switching to ${name}`, untracked);
         return gitService.switchBranch(path, name);
       });
       if (error) report(`Could not switch to ${name}`, error);
@@ -139,7 +150,7 @@ export function BranchActionsProvider({
     [run, report, toast],
   );
   useEffect(() => {
-    stashAndSwitchRef.current = (n) => void stashAndSwitch(n);
+    stashAndSwitchRef.current = (n, u) => void stashAndSwitch(n, u);
   }, [stashAndSwitch]);
 
   const checkoutRemote = useCallback(
@@ -200,10 +211,10 @@ export function BranchActionsProvider({
   );
 
   const deleteGone = useCallback(
-    async (names: string[]) => {
+    async (names: string[], withLocalCommits: string[] = []) => {
       let deleted: GoneBranch[] = [];
       const error = await run("Cleaning up branches", async (path) => {
-        const [gone, info] = await gitService.deleteGoneBranches(path, names);
+        const [gone, info] = await gitService.deleteGoneBranches(path, names, withLocalCommits);
         deleted = gone;
         return info;
       });

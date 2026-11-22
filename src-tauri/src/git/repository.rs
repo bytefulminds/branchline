@@ -90,6 +90,8 @@ pub struct RepositoryInfo {
     pub held_changes: bool,
     /// Rebase progress, when a rebase is in progress.
     pub operation_progress: Option<OperationProgress>,
+    /// The branch was rewritten in Branchline after it was pushed: it needs a force push.
+    pub rewrite: Option<super::rewrite::RewriteInfo>,
 }
 
 /// Validate a user-supplied path before handing it to Git.
@@ -342,6 +344,14 @@ pub fn inspect(raw_path: &str) -> Result<RepositoryInfo, GitError> {
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_else(|| root.display().to_string());
 
+    // Only asked when the configuration mentions a rewrite at all, so inspecting stays cheap.
+    let rewrite = match (&head, &upstream) {
+        (HeadState::Branch { name, .. }, Some(u)) if !u.gone && mentions_rewrite(&git_dir) => {
+            super::rewrite::status(&root, name)?
+        }
+        _ => None,
+    };
+
     Ok(RepositoryInfo {
         path: root.display().to_string(),
         name,
@@ -360,5 +370,17 @@ pub fn inspect(raw_path: &str) -> Result<RepositoryInfo, GitError> {
         stash_fingerprint,
         inspected_at: now_ms(),
         duration_ms: started.elapsed().as_millis() as u64,
+        rewrite,
     })
+}
+
+/// The repository's configuration file (shared by its worktrees) records a rewrite.
+fn mentions_rewrite(git_dir: &Path) -> bool {
+    let common = std::fs::read_to_string(git_dir.join("commondir"))
+        .ok()
+        .map(|c| git_dir.join(c.trim()))
+        .unwrap_or_else(|| git_dir.to_path_buf());
+    std::fs::read_to_string(common.join("config"))
+        .map(|c| c.to_ascii_lowercase().contains("branchlinerewrittenfrom"))
+        .unwrap_or(false)
 }

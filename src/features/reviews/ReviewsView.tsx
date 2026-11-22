@@ -203,6 +203,8 @@ export function ReviewsView({ repoPath }: { repoPath: string }) {
     list,
     allProjects,
     setAllProjects,
+    canListEverywhere,
+    filters,
     filter,
     setFilter,
     refresh,
@@ -246,7 +248,7 @@ export function ReviewsView({ repoPath }: { repoPath: string }) {
           </span>
         </div>
         <div className="bl-segmented" role="group" aria-label={`Which ${f.nouns}`}>
-          {FILTER_LABELS.filter((x) => matched || x.id !== "allOpen").map((x) => (
+          {FILTER_LABELS.filter((x) => filters.includes(x.id)).map((x) => (
             <button
               key={x.id}
               type="button"
@@ -264,9 +266,13 @@ export function ReviewsView({ repoPath }: { repoPath: string }) {
             <select
               className="bl-input"
               value={allProjects ? "all" : "project"}
-              disabled={filter === "allOpen"}
+              disabled={!canListEverywhere(filter)}
               title={
-                filter === "allOpen" ? `All open ${f.nouns} are listed per project` : undefined
+                filter === "allOpen"
+                  ? `All open ${f.nouns} are listed per project`
+                  : !canListEverywhere(filter)
+                    ? `${f.name} lists ${f.nouns} to review per repository`
+                    : undefined
               }
               onChange={(e) => setAllProjects(e.target.value === "all")}
             >

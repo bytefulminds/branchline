@@ -18,7 +18,11 @@ export function StashDialog({
 }) {
   const inputId = useId();
   const [message, setMessage] = useState("");
-  const [includeUntracked, setIncludeUntracked] = useState(true);
+  // Untracked files rarely need putting aside (a switch takes them along), so they are left
+  // out unless they are all there is to stash.
+  const tracked = changedFiles - untrackedFiles;
+  const [includeUntracked, setIncludeUntracked] = useState(tracked === 0);
+  const count = tracked + (includeUntracked ? untrackedFiles : 0);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -33,7 +37,9 @@ export function StashDialog({
   return (
     <Dialog
       title="Stash changes"
-      description={`${plural(changedFiles, "changed file")} are put aside and the working tree is cleaned. Bring them back later with Apply or Pop.`}
+      description={`${plural(count, "changed file")} ${count === 1 ? "is" : "are"} put aside. Bring ${count === 1 ? "it" : "them"} back later with Apply or Pop.${
+        includeUntracked || untrackedFiles === 0 ? "" : ` Untracked files stay where they are.`
+      }`}
       onCancel={onCancel}
       onSubmit={() => void submit()}
       actions={
@@ -41,7 +47,7 @@ export function StashDialog({
           <Button variant="ghost" onClick={onCancel}>
             Cancel
           </Button>
-          <Button variant="primary" type="submit" loading={busy}>
+          <Button variant="primary" type="submit" loading={busy} disabled={count === 0}>
             Stash
           </Button>
         </>

@@ -68,7 +68,16 @@ Updates are signed with Branchline's own update key, so only genuine releases ar
 
 - Changed files from `git status`: modified, added, deleted, renamed (with source path), copied,
   type changes, untracked and conflicted files, split into conflicts, staged (what goes
-  into the next commit, on top) and unstaged.
+  into the next commit, on top), unstaged and untracked files. The untracked group starts
+  closed and shows how many files it holds; click it (or press `Down` past the last file) to
+  open it. The Changes count in the sidebar adds up the Conflicts, Staged and Unstaged
+  lists (a file that is partly staged is in both lists, and counts twice), with the untracked
+  files as a quieter "+2" next to it.
+- The lists show files in a tree of folders (switch to a flat list with the button next to the
+  filter; remembered). Folders open and close, show how many files they hold, and stage,
+  unstage or discard every file below them with the buttons on their row. With the keyboard,
+  `Shift+Space` stages or unstages, and `Shift+Delete` discards, all files in the selected
+  file's folder.
 - Diff viewer for unstaged, staged and untracked files, with line numbers, hunk headers, CRLF and
   "no newline at end of file" handling, binary detection and a guard for very large diffs.
 - One column or side by side (toggle above every diff, remembered). Side by side pairs removed
@@ -133,7 +142,9 @@ Updates are signed with Branchline's own update key, so only genuine releases ar
   sidebar collapses to icons (`Ctrl+B` / `⌘B`, or the button at its bottom). Branchline
   remembers all of this.
 - Right-click (or `Shift+F10`) on a commit to create a branch, tag or worktree there, check it
-  out, merge, rebase, cherry-pick or revert it, or copy its id.
+  out, merge, rebase, cherry-pick or revert it, reset the current branch to it, edit its message,
+  move it up or down, drop it, or copy its id. Select several commits with `Ctrl`/`⌘`-click or
+  `Shift`-click to cherry-pick or drop them together.
 
 ## Branches
 
@@ -146,9 +157,14 @@ Updates are signed with Branchline's own update key, so only genuine releases ar
 - Sort by name or by last commit (remembered); the current branch stays on top.
 - **Clean up branches…** (above the local list, when there is something to clean up):
   deletes local branches whose upstream was deleted on the remote, usually after their merge
-  request was merged, and whose commits are all on the remote, so nothing is lost. Branches
-  with commits that exist only on this computer, and the branch you are on, are listed but
-  kept. Branches you never published never show up. Branches deleted on the remote are known
+  request was merged, and whose changes are all on the remote, so nothing is lost. That
+  includes branches that were squashed or rebased into the target branch on the server: their
+  own commits are not on the remote, but their changes are (Branchline compares the changes
+  with `origin/main`, or whatever `origin/HEAD` points at, and main, master, develop and
+  trunk). Branches with commits that really exist only on this computer are listed unticked:
+  tick one to delete it anyway, and the dialog says how many commits go with it. The branch
+  you are on is kept. Branches you never published, or whose upstream still exists, never
+  show up. Branches deleted on the remote are known
   after a fetch that prunes (Settings > Git, on by default; **Fetch first** in the dialog).
   **Undo** in the message afterwards puts the branches back on the same commits.
 - Quick branch switcher in the title bar: your most recent local branches, and below them
@@ -162,6 +178,14 @@ Updates are signed with Branchline's own update key, so only genuine releases ar
 - Fetch, Pull and Push in the title bar, with ahead/behind counts. Pull fast-forwards by
   default, or merges or rebases on request; a branch without upstream is published to the
   remote you choose. Force push is only possible with lease, after a confirmation.
+- After you rewrite a pushed branch in Branchline (reset, edit a message, move, drop, rebase,
+  interactive rebase or amend), **Push turns into Force push** (in amber) for that branch, so
+  you cannot forget it. That force push only replaces the commits you rewrote: if anyone pushed
+  to the branch after your rewrite, it is refused, even when you fetched their commits since.
+  Branchline then fetches and offers **Bring in their commits** (their new commits are applied
+  on top of your rewritten branch, then you force push both) or **Overwrite anyway…**. Once
+  pushed, Push is an ordinary push again. A branch that was already behind its remote when you
+  rewrote it is not turned into a force push: pull first.
 - Live progress (phase and percentage) in the status bar, and Cancel for every fetch, pull and
   push.
 - Clear messages for failed sign-in, unknown SSH hosts, unreachable or missing remotes, rejected
@@ -176,11 +200,14 @@ Updates are signed with Branchline's own update key, so only genuine releases ar
 
 ## Stashes, tags and worktrees
 
-- **Stashes:** stash changes with a message (untracked files included by choice), then apply,
+- **Stashes:** stash changes with a message (untracked files only when you tick "Include
+  untracked files", or when there is nothing else to stash), then apply,
   pop or delete them. The Stashes view shows every stash with its files and diffs. Stash and
   Pop are also in the title bar.
 - When local changes block a pull or a branch switch, Branchline offers "Stash, pull and
-  reapply" or "Stash and switch" instead of leaving you stuck.
+  reapply" or "Stash and switch" instead of leaving you stuck. "Stash and switch" puts aside
+  only the changes to tracked files: untracked files do not block a switch and simply come
+  along, unless Git says one of them is in the way, and then they are stashed too.
 - **Tags:** create lightweight or annotated tags (from the Tags view or on any commit in
   History), push them, delete them locally or on a remote, check them out or start a branch
   from them. Pushing never overwrites a different tag with the same name on the remote.
@@ -196,6 +223,21 @@ Updates are signed with Branchline's own update key, so only genuine releases ar
 - Merge a branch or commit into the current branch (optionally always with a merge commit),
   rebase onto a branch or commit, cherry-pick and revert commits, from the Branches view and the
   History context menu. Rebasing a published branch warns that a force push will follow.
+- Reset the current branch to a commit ("Reset … to this commit" in a commit's menu), with a
+  choice of **Soft** (the changes of the commits after it stay staged), **Mixed** (they stay in
+  your files, unstaged) or **Hard** (they and all uncommitted changes are discarded). Branchline
+  asks first, and Hard says plainly that it cannot be undone.
+- Edit the message of a commit, or move it up or down (swapped with the newer or older commit
+  next to it), straight from its menu in History. The commits after it are applied again, like
+  a small interactive rebase; a published branch warns about the force push.
+- Drop a commit ("Drop commit…" on a commit of the current branch in History): it is removed
+  from the branch and the commits after it are applied again on top of its parent, without
+  opening the rebase window. Branchline asks first, warns when the branch is published (a
+  force push follows), and offers to stash your changes when they are in the way. If a later
+  commit needs the dropped changes, the rebase stops with a conflict that you resolve or
+  abort. "Are you sure you want to drop 1 commit?" asks first; with several commits selected,
+  "Drop 2 commits…" drops them all at once. Merge commits, the first commit and commits of
+  other branches cannot be edited, moved or dropped this way.
 - Interactive rebase ("Rebase interactively from here…" on a commit in History): drag commits
   into a new order (or use `Alt+↑` / `Alt+↓`), and pick, reword, squash, fix up or drop each
   one. Branchline checks the plan before Git runs it.
@@ -295,7 +337,9 @@ Updates are signed with Branchline's own update key, so only genuine releases ar
   (from the fork when it comes from one, at the same kind of address as your remote) and its
   target branch into `refs/branchline/pull-requests/<number>/`, and the diff starts where the
   branch forked from the target. Pull requests to review are listed per repository: across
-  all of Bitbucket only **Created by you** is available; Branchline asks each of your
+  all of Bitbucket only **Created by you** is available, so with **To review** the project
+  choice stays on the repository (and To review is not offered for a repository that is not
+  on Bitbucket); Branchline asks each of your
   workspaces for it (up to 20). Build statuses show as the pipeline.
 - Bitbucket does not say whether a pull request merges cleanly, so when you open one,
   Branchline tries the merge on this computer (`git merge-tree`, which touches neither your
@@ -477,7 +521,8 @@ select lines), dialogs and panels. See [docs/accessibility.md](docs/accessibilit
   command, and HTTPS uses your credential helper. Credentials in remote URLs are removed before
   anything reaches the UI, including error messages.
 - Force push always uses `--force-with-lease`, so it cannot overwrite commits you have not
-  fetched.
+  fetched. After a rewrite in Branchline the lease is pinned to the remote commit you rewrote
+  from, so commits pushed after it are not overwritten either.
 - AI features only contact the provider you chose (your Ollama or OpenAI-compatible server,
   or the API of Anthropic or OpenAI), only when you use one (or test the connection), and
   only send what that feature needs: the staged diff for a commit message (unstaged files

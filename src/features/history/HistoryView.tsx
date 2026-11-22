@@ -17,6 +17,11 @@ import {
   PanelRightOpen,
   Tag,
   SearchX,
+  Trash2,
+  Pencil,
+  ArrowUp,
+  ArrowDown,
+  RotateCcw,
   Sparkles,
   Undo2,
   X,
@@ -327,6 +332,25 @@ export function HistoryView({
   );
 
   const order = useMemo(() => data?.commits.map((c) => c.oid) ?? [], [data]);
+  // Commits reachable from HEAD among those loaded: the ones "Drop commit" can remove.
+  const headOid = repo.head.kind === "unborn" ? null : repo.head.oid;
+  const onCurrentBranch = useCallback(
+    (oid: string) => {
+      if (!data || !headOid) return false;
+      const byOid = new Map(data.commits.map((c) => [c.oid, c]));
+      const seen = new Set<string>();
+      const todo = [headOid];
+      while (todo.length) {
+        const o = todo.pop()!;
+        if (o === oid) return true;
+        if (seen.has(o)) continue;
+        seen.add(o);
+        todo.push(...(byOid.get(o)?.parents ?? []));
+      }
+      return false;
+    },
+    [data, headOid],
+  );
   const select = useCallback(
     (oid: string, mode: SelectMode = "replace") => {
       setSelection((current) =>
@@ -371,6 +395,24 @@ export function HistoryView({
   const pickMany = () => {
     integrate.cherryPickMany(picked.map((c) => c.oid));
   };
+  /** Drop all selected commits of the current branch at once. */
+  const dropManyEntry = (): MenuEntry => {
+    const problem = picked.map((c) => rewriteProblem(c.oid)).find((p) => p !== null) ?? null;
+    const oldest = picked[0];
+    return {
+      id: "drop-many",
+      label: `Drop ${picked.length} commits…`,
+      description: problem ?? `Remove them from ${current}, keep the commits after them`,
+      icon: <Trash2 size={16} />,
+      danger: true,
+      disabled: !!problem || busyOp,
+      onSelect: () =>
+        integrate.dropCommits(
+          picked.map((c) => c.oid),
+          oldest!.parents[0]!,
+        ),
+    };
+  };
   const multiMenu = (): MenuEntry[] => [
     {
       id: "cherry-pick-many",
@@ -380,6 +422,7 @@ export function HistoryView({
       disabled: !!pickProblem,
       onSelect: pickMany,
     },
+    dropManyEntry(),
     { type: "separator", id: "sep-multi" },
     {
       id: "copy-many",
@@ -395,6 +438,103 @@ export function HistoryView({
       onSelect: clearSelection,
     },
   ];
+  /** Why a commit cannot be rewritten (edited, moved or dropped) on its own, or null. */
+  const rewriteProblem = (oid: string) => {
+    const commit = data?.commits.find((c) => c.oid === oid);
+    return !current
+      ? "Switch to a branch first"
+      : !commit || !onCurrentBranch(oid)
+        ? `Not a commit of ${current}`
+        : commit.parents.length === 0
+          ? "The first commit cannot be changed here"
+          : commit.parents.length > 1
+            ? "Merge commits cannot be changed here"
+            : null;
+  };
+
+  /** Edit the message, move up or down, drop: one commit of the current branch, without the plan. */
+  const rewriteEntries = (oid: string): MenuEntry[] => {
+    const commit = data?.commits.find((c) => c.oid === oid);
+    const why = rewriteProblem(oid);
+    const parent = commit && data?.commits.find((c) => c.oid === commit.parents[0]);
+    const downWhy =
+      why ??
+      (!parent
+        ? "The commit before it is not loaded"
+        : parent.parents.length !== 1
+          ? "The commit before it cannot be moved"
+          : null);
+    const upWhy = why ?? (oid === headOid ? `It is the newest commit of ${current}` : null);
+    return [
+      {
+        id: "reword",
+        label: "Edit commit message…",
+        description: why ?? undefined,
+        icon: <Pencil size={16} />,
+        disabled: !!why || busyOp,
+        onSelect: () => integrate.reword(oid, commit!.parents[0]!),
+      },
+      {
+        id: "move-up",
+        label: "Move commit up",
+        description: upWhy ?? "Swap it with the newer commit above it",
+        icon: <ArrowUp size={16} />,
+        disabled: !!upWhy || busyOp,
+        onSelect: () => integrate.move(oid, "up", commit!.parents[0]!),
+      },
+      {
+        id: "move-down",
+        label: "Move commit down",
+        description: downWhy ?? "Swap it with the older commit below it",
+        icon: <ArrowDown size={16} />,
+        disabled: !!downWhy || busyOp,
+        onSelect: () => integrate.move(oid, "down", parent!.parents[0]!),
+      },
+      {
+        id: "drop",
+        label: "Drop commit…",
+        description: why ?? `Remove it from ${current}, keep the commits after it`,
+        icon: <Trash2 size={16} />,
+        danger: true,
+        disabled: !!why || busyOp,
+        onSelect: () => integrate.dropCommits([oid], commit!.parents[0]!),
+      },
+    ];
+  };
+
+  /** Reset the current branch to this commit, soft, mixed or hard. */
+  const resetEntry = (oid: string): MenuEntry => {
+    const target = current ?? "HEAD";
+    return {
+      type: "submenu",
+      id: "reset",
+      label: `Reset ${target} to this commit`,
+      icon: <RotateCcw size={16} />,
+      disabled: busyOp || repo.head.kind === "unborn",
+      entries: [
+        {
+          id: "reset-soft",
+          label: "Soft",
+          description: "Keep the changes staged",
+          onSelect: () => integrate.resetTo(oid, "soft"),
+        },
+        {
+          id: "reset-mixed",
+          label: "Mixed",
+          description: "Keep the changes, unstaged",
+          onSelect: () => integrate.resetTo(oid, "mixed"),
+        },
+        {
+          id: "reset-hard",
+          label: "Hard",
+          description: "Discard all changes",
+          danger: true,
+          onSelect: () => integrate.resetTo(oid, "hard"),
+        },
+      ],
+    };
+  };
+
   const commitMenu = (oid: string): MenuEntry[] => {
     const short = oid.slice(0, 7);
     const localBranches = (data?.refsByOid.get(oid) ?? []).filter((r) => r.kind === "branch");
@@ -528,6 +668,9 @@ export function HistoryView({
         disabled: busyOp || repo.head.kind === "unborn",
         onSelect: () => integrate.revert(oid),
       },
+      resetEntry(oid),
+      { type: "separator", id: "sep-rewrite" },
+      ...rewriteEntries(oid),
       { type: "separator", id: "sep-tag" },
       {
         id: "tag",

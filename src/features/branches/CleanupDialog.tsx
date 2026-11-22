@@ -11,14 +11,16 @@ import "./CleanupDialog.css";
 /** Why a gone branch is kept, or null when it can go. */
 export function keptBecause(b: GoneBranch): string | null {
   if (b.inUse) return "checked out";
-  if (b.localOnly > 0) return `${plural(b.localOnly, "commit")} only on this computer`;
+  if (b.localOnly > 0 && !b.mergedInto)
+    return `${plural(b.localOnly, "commit")} only on this computer`;
   return null;
 }
 
 /**
  * "Clean up branches": local branches whose upstream was deleted on the remote. Those whose
- * commits are all on the remote can go (checked); the others are listed and kept. Branches that
- * were never published never show up here.
+ * changes are all on the remote (also when squashed or rebased into another branch) can go
+ * (checked); those with commits only here are offered unchecked; checked-out ones are kept.
+ * Branches that were never published, or still have their upstream, never show up here.
  */
 export function CleanupDialog({
   repoPath,
@@ -33,7 +35,8 @@ export function CleanupDialog({
   version: unknown;
   fetching: boolean;
   onFetch: (() => void) | null;
-  onDelete: (names: string[]) => Promise<GitError | null>;
+  /** `withLocalCommits`: of `names`, those whose local commits the user chose to lose. */
+  onDelete: (names: string[], withLocalCommits: string[]) => Promise<GitError | null>;
   onCancel: () => void;
 }) {
   const [loaded, setLoaded] = useState<{
@@ -42,6 +45,15 @@ export function CleanupDialog({
     error?: GitError;
   } | null>(null);
   const [unchecked, setUnchecked] = useState<Set<string>>(new Set());
+  // Branches with commits only here: off unless the user ticks them.
+  const [withLocal, setWithLocal] = useState<Set<string>>(new Set());
+  const toggle = (set: typeof setUnchecked, name: string, on: boolean) =>
+    set((u) => {
+      const next = new Set(u);
+      if (on) next.add(name);
+      else next.delete(name);
+      return next;
+    });
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -57,14 +69,21 @@ export function CleanupDialog({
 
   const list = loaded?.list ?? [];
   const removable = list.filter((b) => !keptBecause(b));
-  const kept = list.filter((b) => keptBecause(b));
-  const chosen = removable.filter((b) => !unchecked.has(b.name)).map((b) => b.name);
+  // Only local commits keep these: they can go when the user chooses.
+  const optional = list.filter((b) => !b.inUse && keptBecause(b));
+  const kept = list.filter((b) => b.inUse);
+  const chosenLocal = optional.filter((b) => withLocal.has(b.name)).map((b) => b.name);
+  const chosen = [
+    ...removable.filter((b) => !unchecked.has(b.name)).map((b) => b.name),
+    ...chosenLocal,
+  ];
+  const lost = optional.filter((b) => withLocal.has(b.name)).reduce((n, b) => n + b.localOnly, 0);
   const loading = !loaded || loaded.version !== version;
 
   const submit = async () => {
     if (!chosen.length || busy) return;
     setBusy(true);
-    const error = await onDelete(chosen);
+    const error = await onDelete(chosen, chosenLocal);
     setBusy(false);
     if (!error) onCancel();
   };
@@ -131,16 +150,36 @@ export function CleanupDialog({
                       <input
                         type="checkbox"
                         checked={!unchecked.has(b.name)}
-                        onChange={(e) =>
-                          setUnchecked((u) => {
-                            const next = new Set(u);
-                            if (e.target.checked) next.delete(b.name);
-                            else next.add(b.name);
-                            return next;
-                          })
-                        }
+                        onChange={(e) => toggle(setUnchecked, b.name, !e.target.checked)}
                       />
                       <Row b={b} />
+                      {b.mergedInto && (
+                        <span className="bl-cleanup__why text-small">
+                          squashed or rebased into {b.mergedInto}
+                        </span>
+                      )}
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            </fieldset>
+          )}
+          {optional.length > 0 && (
+            <fieldset className="bl-cleanup__group">
+              <legend className="bl-section-label">
+                With commits only on this computer: kept unless you tick them
+              </legend>
+              <ul className="bl-cleanup__list">
+                {optional.map((b) => (
+                  <li key={b.name}>
+                    <label className="bl-cleanup__row">
+                      <input
+                        type="checkbox"
+                        checked={withLocal.has(b.name)}
+                        onChange={(e) => toggle(setWithLocal, b.name, e.target.checked)}
+                      />
+                      <Row b={b} />
+                      <span className="bl-cleanup__why text-small">{keptBecause(b)}</span>
                     </label>
                   </li>
                 ))}
@@ -159,6 +198,12 @@ export function CleanupDialog({
                 ))}
               </ul>
             </section>
+          )}
+          {lost > 0 && (
+            <p className="bl-cleanup__warning text-small" role="status">
+              {plural(lost, "commit")} that only exist on this computer will be deleted with{" "}
+              {chosenLocal.length === 1 ? "that branch" : "those branches"}.
+            </p>
           )}
           <p className="text-small text-muted">
             Undo puts deleted branches back on the same commit, without their old upstream.

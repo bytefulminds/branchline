@@ -1,6 +1,6 @@
 import type { ChangeKind, ConflictKind, FileChange } from "../../types/git";
 
-export type ChangeArea = "conflicted" | "unstaged" | "staged";
+export type ChangeArea = "conflicted" | "unstaged" | "staged" | "untracked";
 export type StatusCode = ChangeKind | "conflicted";
 
 export interface ChangeEntry {
@@ -18,15 +18,19 @@ export interface GroupedChanges {
   conflicted: ChangeEntry[];
   unstaged: ChangeEntry[];
   staged: ChangeEntry[];
+  /** New files Git does not track yet. */
+  untracked: ChangeEntry[];
 }
 
-// Staged first, under conflicts: what goes into the next commit is on top.
-export const AREA_ORDER: ChangeArea[] = ["conflicted", "staged", "unstaged"];
+// Staged first, under conflicts: what goes into the next commit is on top. New files that
+// Git does not track yet come last.
+export const AREA_ORDER: ChangeArea[] = ["conflicted", "staged", "unstaged", "untracked"];
 
 export const AREA_LABEL: Record<ChangeArea, string> = {
   conflicted: "Conflicts",
   unstaged: "Unstaged changes",
   staged: "Staged changes",
+  untracked: "Untracked files",
 };
 
 export interface StatusMeta {
@@ -72,13 +76,14 @@ function entry(change: FileChange, area: ChangeArea, status: StatusCode): Change
 
 /** Split Git's per-path status into the lists the UI shows. Order from Git is preserved. */
 export function groupChanges(changes: FileChange[]): GroupedChanges {
-  const groups: GroupedChanges = { conflicted: [], unstaged: [], staged: [] };
+  const groups: GroupedChanges = { conflicted: [], unstaged: [], staged: [], untracked: [] };
   for (const c of changes) {
     if (c.conflict) {
       groups.conflicted.push(entry(c, "conflicted", "conflicted"));
       continue;
     }
-    if (c.worktreeStatus) groups.unstaged.push(entry(c, "unstaged", c.worktreeStatus));
+    if (c.worktreeStatus === "untracked") groups.untracked.push(entry(c, "untracked", "untracked"));
+    else if (c.worktreeStatus) groups.unstaged.push(entry(c, "unstaged", c.worktreeStatus));
     if (c.indexStatus) groups.staged.push(entry(c, "staged", c.indexStatus));
   }
   return groups;
@@ -93,5 +98,24 @@ export function filterGroups(groups: GroupedChanges, query: string): GroupedChan
     conflicted: groups.conflicted.filter(match),
     unstaged: groups.unstaged.filter(match),
     staged: groups.staged.filter(match),
+    untracked: groups.untracked.filter(match),
   };
+}
+
+/**
+ * The number of entries in the Conflicts, Staged and Unstaged lists together, so it matches
+ * what those lists show: a file with staged and unstaged changes is in both and counts twice.
+ * Untracked files are left out: they are new files Git does not know yet, often build output
+ * or notes.
+ */
+export function trackedChangeCount(changes: FileChange[]): number {
+  let n = 0;
+  for (const c of changes) {
+    if (c.conflict) n += 1;
+    else {
+      if (c.indexStatus) n += 1;
+      if (c.worktreeStatus && c.worktreeStatus !== "untracked") n += 1;
+    }
+  }
+  return n;
 }

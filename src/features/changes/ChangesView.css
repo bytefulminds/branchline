@@ -158,3 +158,14 @@
   flex-wrap: wrap;
   gap: var(--space-2);
 }
+
+/* The filter and the list/tree switch share a row. */
+.bl-changes__filter {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+.bl-changes__filter .bl-search {
+  flex: 1;
+  min-width: 0;
+}

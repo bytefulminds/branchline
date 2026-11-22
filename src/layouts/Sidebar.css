@@ -113,3 +113,14 @@
   font-size: 10px;
   line-height: 16px;
 }
+
+/* Untracked files: a quiet "+2" after the Changes count, left out when the sidebar is icons. */
+.bl-count--extra {
+  margin-left: calc(var(--space-1) * -1);
+  border: 1px dashed var(--color-border-strong);
+  background: transparent;
+  color: var(--color-text-muted);
+}
+.bl-sidebar--collapsed .bl-nav-item .bl-count--extra {
+  display: none;
+}

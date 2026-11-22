@@ -318,6 +318,7 @@ fn cleans_up_branches_whose_upstream_was_deleted_and_that_lose_nothing() {
     assert_eq!(by("merged").upstream, "origin/merged");
     // Deleted on the server without being merged: both its commits now exist only here.
     assert_eq!(by("extra").local_only, 2);
+    assert_eq!(by("extra").merged_into, None);
     assert!(!by("extra").removable());
     assert!(by("current").in_use);
 
@@ -326,7 +327,7 @@ fn cleans_up_branches_whose_upstream_was_deleted_and_that_lose_nothing() {
         .iter()
         .map(|n| n.to_string())
         .collect();
-    let deleted = delete_gone_branches(&repo, &all).unwrap();
+    let deleted = delete_gone_branches(&repo, &all, &[]).unwrap();
     assert_eq!(deleted.len(), 1);
     assert_eq!(deleted[0].name, "merged");
     let left: Vec<_> = list_branches(d)
@@ -351,4 +352,75 @@ fn cleans_up_branches_whose_upstream_was_deleted_and_that_lose_nothing() {
     )
     .unwrap();
     assert_eq!(git(d, &["rev-parse", "merged"]), deleted[0].oid);
+}
+
+#[test]
+fn squashed_or_rebased_branches_count_as_merged_and_local_commits_go_when_chosen() {
+    let t = repo();
+    let d = t.path();
+    let server = TempDir::new().unwrap();
+    git(server.path(), &["init", "-q", "--bare", "-b", "main"]);
+    git(d, &["remote", "add", "origin", &s(server.path())]);
+    git(d, &["push", "-q", "-u", "origin", "main"]);
+    git(d, &["remote", "set-head", "origin", "main"]);
+
+    // squashed: two commits, merged on the server as one squashed commit.
+    git(d, &["switch", "-q", "-c", "squashed"]);
+    commit(d, "s1.txt", "1\n", "squash one");
+    commit(d, "s2.txt", "2\n", "squash two");
+    git(d, &["push", "-q", "-u", "origin", "squashed"]);
+    // rebased: merged on the server commit by commit, as new commits.
+    git(d, &["switch", "-q", "-c", "rebased", "main"]);
+    commit(d, "r.txt", "r\n", "rebase me");
+    git(d, &["push", "-q", "-u", "origin", "rebased"]);
+    // abandoned: deleted on the server without being merged.
+    git(d, &["switch", "-q", "-c", "abandoned", "main"]);
+    commit(d, "abandoned.txt", "a\n", "never merged");
+    git(d, &["push", "-q", "-u", "origin", "abandoned"]);
+
+    // The server's main gets the squashed and rebased versions.
+    git(d, &["switch", "-q", "main"]);
+    git(d, &["merge", "-q", "--squash", "squashed"]);
+    git(d, &["commit", "-q", "-m", "Squashed merge"]);
+    git(d, &["cherry-pick", "rebased"]);
+    git(d, &["push", "-q", "origin", "main"]);
+    git(d, &["reset", "-q", "--hard", "HEAD~2"]);
+    for b in ["squashed", "rebased", "abandoned"] {
+        git(server.path(), &["branch", "-D", b]);
+    }
+    git(d, &["fetch", "-q", "--prune", "origin"]);
+
+    let repo = s(d);
+    let gone = gone_branches(&repo).unwrap();
+    let by = |n: &str| gone.iter().find(|b| b.name == n).unwrap().clone();
+    assert_eq!(by("squashed").local_only, 2);
+    assert_eq!(by("squashed").merged_into.as_deref(), Some("origin/main"));
+    assert!(by("squashed").removable());
+    assert_eq!(by("rebased").merged_into.as_deref(), Some("origin/main"));
+    assert!(by("rebased").removable());
+    assert_eq!(by("abandoned").merged_into, None);
+    assert!(!by("abandoned").removable());
+
+    // The abandoned one only goes when chosen with its local commits.
+    let names = vec!["squashed".to_string(), "abandoned".to_string()];
+    let deleted = delete_gone_branches(&repo, &names, &[]).unwrap();
+    assert_eq!(
+        deleted.iter().map(|b| b.name.as_str()).collect::<Vec<_>>(),
+        ["squashed"]
+    );
+    let deleted = delete_gone_branches(
+        &repo,
+        &["abandoned".to_string()],
+        &["abandoned".to_string()],
+    )
+    .unwrap();
+    assert_eq!(deleted[0].name, "abandoned");
+    let left: Vec<_> = list_branches(d)
+        .unwrap()
+        .local
+        .into_iter()
+        .map(|b| b.name)
+        .collect();
+    assert!(left.contains(&"rebased".to_string()));
+    assert!(!left.contains(&"abandoned".to_string()));
 }

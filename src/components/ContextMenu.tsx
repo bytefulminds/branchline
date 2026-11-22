@@ -72,15 +72,17 @@ function ContextMenu({ menu, onClose }: { menu: OpenMenu; onClose: () => void })
     if (!el) return;
     const r = el.getBoundingClientRect();
     const left = Math.max(4, Math.min(menu.x, window.innerWidth - r.width - 4));
-    const top =
-      menu.y + r.height > window.innerHeight - 4 ? Math.max(4, menu.y - r.height) : menu.y;
+    // Move up only as far as needed to fit, so the menu stays next to the pointer.
+    const top = Math.max(4, Math.min(menu.y, window.innerHeight - r.height - 4));
     if (left !== menu.x || top !== menu.y) setPos({ left, top });
   }, [menu.x, menu.y]);
 
   useEffect(() => {
     menuItems(ref.current)[0]?.focus();
     const onPointer = (e: PointerEvent) => {
-      if (!ref.current?.contains(e.target as Node)) close(false);
+      const t = e.target as Element;
+      // A submenu lives outside the menu element (see SubmenuItem).
+      if (!ref.current?.contains(t) && !t.closest?.(".bl-menu--sub")) close(false);
     };
     const onBlur = () => close(false);
     document.addEventListener("pointerdown", onPointer);

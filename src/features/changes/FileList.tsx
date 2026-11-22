@@ -2,6 +2,7 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
+  Folder,
   FolderGit2,
   GitMerge,
   Minus,
@@ -20,6 +21,7 @@ import {
   type ChangeEntry,
   type GroupedChanges,
 } from "./changeModel";
+import { fileTree, folderOf } from "./fileTree";
 import "./FileList.css";
 
 export type FileAction = "stage" | "unstage" | "discard";
@@ -33,13 +35,26 @@ export interface FileListProps {
   onOpenMerge?: (entry: ChangeEntry) => void;
   /** Disable actions while a write operation runs. */
   busy?: boolean;
+  /** Show the files of each group as a tree of folders instead of a flat list. */
+  tree?: boolean;
 }
 
 export const ROW_HEIGHT = 28;
 
 type Row =
   | { type: "header"; area: ChangeArea; count: number }
-  | { type: "entry"; entry: ChangeEntry; index: number; area: ChangeArea };
+  | {
+      type: "folder";
+      area: ChangeArea;
+      path: string;
+      name: string;
+      depth: number;
+      entries: ChangeEntry[];
+    }
+  | { type: "entry"; entry: ChangeEntry; index: number; area: ChangeArea; depth: number };
+
+/** Indent per tree level, in pixels. */
+const INDENT = 14;
 
 /** The action Space/Enter performs for an entry. */
 export function primaryAction(entry: ChangeEntry): FileAction {
@@ -86,6 +101,42 @@ function RowAction({
   );
 }
 
+/** Mouse shortcuts for every file in a folder: stage or unstage, and discard or delete. */
+function FolderActions({
+  area,
+  entries,
+  busy,
+  onAction,
+}: {
+  area: ChangeArea;
+  entries: ChangeEntry[];
+  busy?: boolean;
+  onAction: FileListProps["onAction"];
+}) {
+  if (area === "conflicted") return null;
+  return (
+    <span className="bl-file-row__actions" aria-hidden="true">
+      {(area === "unstaged" || area === "untracked") && (
+        <RowAction
+          label={area === "untracked" ? "Delete these files" : "Discard changes in this folder"}
+          danger
+          disabled={busy}
+          onClick={() => onAction("discard", entries)}
+        >
+          <Undo2 size={14} aria-hidden />
+        </RowAction>
+      )}
+      <RowAction
+        label={area === "staged" ? "Unstage folder" : "Stage folder"}
+        disabled={busy}
+        onClick={() => onAction(area === "staged" ? "unstage" : "stage", entries)}
+      >
+        {area === "staged" ? <Minus size={14} aria-hidden /> : <Plus size={14} aria-hidden />}
+      </RowAction>
+    </span>
+  );
+}
+
 function RowActions({
   entry,
   busy,
@@ -121,9 +172,9 @@ function RowActions({
   }
   return (
     <span className="bl-file-row__actions" aria-hidden="true">
-      {entry.area === "unstaged" && (
+      {(entry.area === "unstaged" || entry.area === "untracked") && (
         <RowAction
-          label="Discard changes"
+          label={entry.area === "untracked" ? "Delete file" : "Discard changes"}
           danger
           disabled={busy}
           onClick={() => onAction("discard", [entry])}
@@ -146,7 +197,8 @@ function RowActions({
  * Changed files grouped by area in a single, virtualized, keyboard-navigable listbox.
  *
  * Keys: arrows, Home/End, PageUp/PageDown move; Space or Enter stages/unstages;
- * Delete or Backspace discards unstaged changes.
+ * Delete or Backspace discards unstaged changes. With Shift, Space, Enter and Delete act on
+ * every file in the selected file's folder.
  */
 export function FileList({
   groups,
@@ -155,12 +207,24 @@ export function FileList({
   onAction,
   onOpenMerge,
   busy,
+  tree = false,
 }: FileListProps) {
   const baseId = useId();
+  // Collapsed folders, as "area:path".
+  const [closedFolders, setClosedFolders] = useState<ReadonlySet<string>>(new Set());
+  const toggleFolder = (area: ChangeArea, path: string) =>
+    setClosedFolders((c) => {
+      const next = new Set(c);
+      const key = `${area}:${path}`;
+      if (!next.delete(key)) next.add(key);
+      return next;
+    });
   const [collapsed, setCollapsed] = useState<Record<ChangeArea, boolean>>({
     conflicted: false,
     unstaged: false,
     staged: false,
+    // New files are often build output or notes: shown when you open the group.
+    untracked: true,
   });
   const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
 
@@ -172,13 +236,34 @@ export function FileList({
       if (list.length === 0) continue;
       rows.push({ type: "header", area, count: list.length });
       if (collapsed[area]) continue;
-      for (const entry of list) {
-        rows.push({ type: "entry", entry, index: entries.length, area });
-        entries.push(entry);
+      if (!tree) {
+        for (const entry of list) {
+          rows.push({ type: "entry", entry, index: entries.length, area, depth: 0 });
+          entries.push(entry);
+        }
+        continue;
+      }
+      const prefix = `${area}:`;
+      const closed = new Set(
+        [...closedFolders].filter((k) => k.startsWith(prefix)).map((k) => k.slice(prefix.length)),
+      );
+      for (const line of fileTree(list, closed)) {
+        if (line.type === "folder") {
+          rows.push({ ...line, area });
+        } else {
+          rows.push({
+            type: "entry",
+            entry: line.entry,
+            index: entries.length,
+            area,
+            depth: line.depth,
+          });
+          entries.push(line.entry);
+        }
       }
     }
     return { rows, entries };
-  }, [groups, collapsed]);
+  }, [groups, collapsed, tree, closedFolders]);
 
   const virtual = useVirtualRows(scrollEl, rows.length, ROW_HEIGHT);
   const activeIndex = entries.findIndex((e) => e.id === selectedId);
@@ -191,16 +276,39 @@ export function FileList({
   }, [activeRow, scrollToRow]);
 
   const onKeyDown = (e: React.KeyboardEvent) => {
+    // Down from the last file opens a collapsed group below it (Untracked files starts closed).
+    if (e.key === "ArrowDown" && activeIndex === entries.length - 1) {
+      const lastArea = entries[activeIndex]?.area;
+      const after = lastArea ? AREA_ORDER.slice(AREA_ORDER.indexOf(lastArea) + 1) : AREA_ORDER;
+      const area = after.find((a) => collapsed[a] && groups[a].length > 0);
+      if (area) {
+        e.preventDefault();
+        setCollapsed((c) => ({ ...c, [area]: false }));
+        onSelect(groups[area][0]!);
+        return;
+      }
+    }
     if (entries.length === 0) return;
     const current = entries[activeIndex];
+    // With Shift, the action covers every file in the selected file's folder.
+    const targets = (c: ChangeEntry) => {
+      if (!e.shiftKey) return [c];
+      const folder = folderOf(c, groups[c.area]);
+      return folder.length ? folder : [c];
+    };
     if ((e.key === " " || e.key === "Enter") && current) {
       e.preventDefault();
-      if (!busy) onAction(primaryAction(current), [current]);
+      if (!busy)
+        onAction(
+          primaryAction(current),
+          current.area === "conflicted" ? [current] : targets(current),
+        );
       return;
     }
     if ((e.key === "Delete" || e.key === "Backspace") && current) {
       e.preventDefault();
-      if (!busy && current.area === "unstaged") onAction("discard", [current]);
+      if (!busy && (current.area === "unstaged" || current.area === "untracked"))
+        onAction("discard", targets(current));
       return;
     }
     let next: number;
@@ -288,7 +396,33 @@ export function FileList({
         </div>
       );
     }
-    const { entry, index } = row;
+    if (row.type === "folder") {
+      const open = !closedFolders.has(`${row.area}:${row.path}`);
+      return (
+        <div
+          key={`f-${row.area}:${row.path}`}
+          aria-hidden="true"
+          className="bl-file-row bl-folder-row"
+          style={{
+            transform: `translateY(${top}px)`,
+            paddingLeft: `calc(var(--space-1) + ${row.depth * INDENT}px)`,
+          }}
+          title={row.path}
+          onClick={() => toggleFolder(row.area, row.path)}
+        >
+          {open ? (
+            <ChevronDown size={14} aria-hidden className="bl-folder-row__chevron" />
+          ) : (
+            <ChevronRight size={14} aria-hidden className="bl-folder-row__chevron" />
+          )}
+          <Folder size={14} aria-hidden className="bl-folder-row__icon" />
+          <span className="bl-file-row__name truncate">{row.name}</span>
+          <span className="bl-folder-row__count">{row.entries.length.toLocaleString()}</span>
+          <FolderActions area={row.area} entries={row.entries} busy={busy} onAction={onAction} />
+        </div>
+      );
+    }
+    const { entry, index, depth } = row;
     const { name, dir } = splitPath(entry.path);
     const selected = entry.id === selectedId;
     return (
@@ -300,7 +434,11 @@ export function FileList({
         aria-setsize={entries.length}
         aria-posinset={index + 1}
         className="bl-file-row"
-        style={{ transform: `translateY(${top}px)` }}
+        style={{
+          transform: `translateY(${top}px)`,
+          // In the tree, a file sits under its folder: one level in, past the chevron.
+          paddingLeft: tree ? `calc(var(--space-2) + ${depth * INDENT + 18}px)` : undefined,
+        }}
         title={entry.originalPath ? `${entry.originalPath} → ${entry.path}` : entry.path}
         onClick={() => onSelect(entry)}
       >
@@ -309,7 +447,7 @@ export function FileList({
           <FolderGit2 size={14} aria-label="Submodule" className="bl-file-row__sub" />
         )}
         <span className="bl-file-row__name truncate">{name}</span>
-        {dir && <span className="bl-file-row__dir truncate">{dir}</span>}
+        {dir && !tree && <span className="bl-file-row__dir truncate">{dir}</span>}
         <RowActions entry={entry} busy={busy} onAction={onAction} onOpenMerge={onOpenMerge} />
       </div>
     );

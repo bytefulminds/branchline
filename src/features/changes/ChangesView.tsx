@@ -1,4 +1,13 @@
-import { Archive, CircleCheck, Search, TriangleAlert, X, Sparkles } from "lucide-react";
+import {
+  Archive,
+  CircleCheck,
+  List,
+  ListTree,
+  Search,
+  TriangleAlert,
+  X,
+  Sparkles,
+} from "lucide-react";
 import { Button, IconButton } from "../../components/Button";
 import { useStashActions } from "../stash/StashActions";
 import { useCallback, useMemo, useState } from "react";
@@ -7,6 +16,7 @@ import { EmptyState } from "../../components/EmptyState";
 import { Splitter } from "../../components/Splitter";
 import { useToast } from "../../components/Toast";
 import { plural, splitPath } from "../../lib/format";
+import { usePersistentFlag } from "../../lib/usePersistentFlag";
 import { usePersistentNumber } from "../../lib/usePersistentNumber";
 import { gitService } from "../../services/git";
 import type {
@@ -54,6 +64,10 @@ export function nextSelection(
   const index = before.findIndex((e) => e.id === selectedId);
   const old = before[index];
   if (!old) return null;
+  // Part of an untracked file was staged: the rest of it is now an unstaged change.
+  const rest =
+    old.area === "untracked" && after.find((e) => e.path === old.path && e.area === "unstaged");
+  if (rest) return rest.id;
   const sameArea = before.filter((e) => e.area === old.area);
   const pos = sameArea.indexOf(old);
   const candidate =
@@ -78,13 +92,17 @@ export function ChangesView({
   const askDiscard = useSettings().settings.safety.confirmDiscard;
   const stash = useStashActions();
   const [query, setQuery] = useState("");
+  const [tree, setTree] = usePersistentFlag("branchline.changes.tree", true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [mergePath, setMergePath] = useState<string | null>(null);
   const [listWidth, setListWidth] = usePersistentNumber("branchline.layout.fileListWidth", 380);
 
   const groups = useMemo(() => groupChanges(repo.changes), [repo.changes]);
   const filtered = useMemo(() => filterGroups(groups, query), [groups, query]);
-  const all = useMemo(() => [...groups.conflicted, ...groups.unstaged, ...groups.staged], [groups]);
+  const all = useMemo(
+    () => [...groups.conflicted, ...groups.unstaged, ...groups.staged, ...groups.untracked],
+    [groups],
+  );
 
   // Follow the selection when the list changes underneath it (adjusting state during render).
   const [previousAll, setPreviousAll] = useState(all);
@@ -97,7 +115,10 @@ export function ChangesView({
 
   const selected = all.find((e) => e.id === selectedId) ?? null;
   const filteredCount =
-    filtered.conflicted.length + filtered.unstaged.length + filtered.staged.length;
+    filtered.conflicted.length +
+    filtered.unstaged.length +
+    filtered.staged.length +
+    filtered.untracked.length;
   const busy = controller.operation !== null;
 
   const reportError = useCallback(
@@ -120,11 +141,15 @@ export function ChangesView({
         const ok = await confirm({
           title: one
             ? `${untracked ? "Delete" : "Discard changes to"} ${one}?`
-            : `Discard changes to ${entries.length} files?`,
+            : untracked
+              ? `Delete ${entries.length} untracked files?`
+              : `Discard changes to ${entries.length} files?`,
           description: untracked
-            ? "The untracked file is deleted from disk. This cannot be undone."
+            ? one
+              ? "The untracked file is deleted from disk. This cannot be undone."
+              : "The untracked files are deleted from disk. This cannot be undone."
             : "Unstaged changes are lost; staged changes are kept. This cannot be undone.",
-          confirmLabel: untracked ? "Delete file" : "Discard changes",
+          confirmLabel: untracked ? (one ? "Delete file" : "Delete files") : "Discard changes",
           destructive: true,
         });
         if (!ok) return;
@@ -172,6 +197,7 @@ export function ChangesView({
     groups.conflicted.length && plural(groups.conflicted.length, "conflict"),
     groups.staged.length && `${groups.staged.length.toLocaleString()} staged`,
     groups.unstaged.length && `${groups.unstaged.length.toLocaleString()} unstaged`,
+    groups.untracked.length && `${groups.untracked.length.toLocaleString()} untracked`,
   ].filter(Boolean);
 
   const reviewBranch = useSelfReview(repo);
@@ -208,29 +234,39 @@ export function ChangesView({
             )}
           </div>
           {repo.totalChanges > 0 && (
-            <label className="bl-search">
-              <Search size={14} aria-hidden className="bl-search__icon" />
-              <span className="visually-hidden">Filter changed files</span>
-              <input
-                type="search"
-                placeholder="Filter files"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                onKeyDown={(e) => e.key === "Escape" && setQuery("")}
-                spellCheck={false}
-                autoComplete="off"
+            <div className="bl-changes__filter">
+              <label className="bl-search">
+                <Search size={14} aria-hidden className="bl-search__icon" />
+                <span className="visually-hidden">Filter changed files</span>
+                <input
+                  type="search"
+                  placeholder="Filter files"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  onKeyDown={(e) => e.key === "Escape" && setQuery("")}
+                  spellCheck={false}
+                  autoComplete="off"
+                />
+                {query && (
+                  <button
+                    type="button"
+                    className="bl-search__clear"
+                    aria-label="Clear filter"
+                    onClick={() => setQuery("")}
+                  >
+                    <X size={12} aria-hidden />
+                  </button>
+                )}
+              </label>
+              <IconButton
+                label={tree ? "Show as a list" : "Show as a tree of folders"}
+                icon={tree ? <List size={16} aria-hidden /> : <ListTree size={16} aria-hidden />}
+                size="sm"
+                aria-pressed={tree}
+                onClick={() => setTree(!tree)}
+                data-tooltip-align="end"
               />
-              {query && (
-                <button
-                  type="button"
-                  className="bl-search__clear"
-                  aria-label="Clear filter"
-                  onClick={() => setQuery("")}
-                >
-                  <X size={12} aria-hidden />
-                </button>
-              )}
-            </label>
+            </div>
           )}
         </div>
 
@@ -260,6 +296,7 @@ export function ChangesView({
           />
         ) : (
           <FileList
+            tree={tree}
             groups={filtered}
             selectedId={selected?.id ?? null}
             onSelect={(e) => setSelectedId(e.id)}

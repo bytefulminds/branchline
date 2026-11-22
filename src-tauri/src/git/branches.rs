@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use super::log::validate_oid;
 use super::ops::write_lock;
 use super::repository::resolve_root;
-use super::runner::{run_git, DEFAULT_TIMEOUT};
+use super::runner::{run_git, run_git_with, RunOptions, DEFAULT_TIMEOUT};
 use crate::error::GitError;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -188,15 +188,104 @@ pub struct GoneBranch {
     pub tip_time: i64,
     /// Commits on it that no remote branch has. With 0, deleting it loses nothing.
     pub local_only: u32,
+    /// Those commits are on the remote all the same, as other commits: the remote branch
+    /// (such as `origin/main`) its changes were squashed or rebased into.
+    pub merged_into: Option<String>,
     /// Checked out here or in another worktree, so it cannot be deleted.
     pub in_use: bool,
 }
 
 impl GoneBranch {
-    /// Deleting it loses nothing and nothing has it checked out.
+    /// Deleting it loses nothing (its changes are on the remote) and nothing has it checked
+    /// out.
     pub fn removable(&self) -> bool {
-        self.local_only == 0 && !self.in_use
+        (self.local_only == 0 || self.merged_into.is_some()) && !self.in_use
     }
+}
+
+/// Remote branches a merge request usually goes into: what `origin/HEAD` points at, then
+/// main, master, develop and trunk on each remote.
+fn merge_targets(root: &Path) -> Result<Vec<String>, GitError> {
+    let out = run_git(
+        root,
+        &[
+            "for-each-ref",
+            "--format=%(refname:short)%00%(symref:short)",
+            "refs/remotes",
+        ],
+        DEFAULT_TIMEOUT,
+    )?;
+    let text = out.stdout_string();
+    let mut heads = Vec::new();
+    let mut named = Vec::new();
+    for line in text.lines() {
+        let (name, target) = line.split_once('\0').unwrap_or((line, ""));
+        if !target.is_empty() {
+            heads.push(target.to_string());
+        } else if let Some((_, branch)) = name.split_once('/') {
+            if ["main", "master", "develop", "trunk"].contains(&branch) {
+                named.push(name.to_string());
+            }
+        }
+    }
+    for n in named {
+        if !heads.contains(&n) {
+            heads.push(n);
+        }
+    }
+    Ok(heads)
+}
+
+/// The remote branch among `targets` that already holds the changes of `oid`, merged as one
+/// squashed commit or rebased commit by commit. Their commits differ from the branch's own,
+/// which is why they count as "only on this computer" otherwise.
+fn merged_elsewhere(
+    root: &Path,
+    oid: &str,
+    targets: &[String],
+) -> Result<Option<String>, GitError> {
+    let quiet = RunOptions {
+        ok_codes: &[0, 1, 128],
+        ..RunOptions::default()
+    };
+    for target in targets {
+        let base = run_git_with(root, &["merge-base", target, oid], &quiet)?;
+        let base = base.stdout_string().trim().to_string();
+        if base.is_empty() {
+            continue;
+        }
+        // Rebased: Git finds an equal change on the target for every commit ("-" lines).
+        let cherry = run_git_with(root, &["cherry", target, oid, &base], &quiet)?.stdout_string();
+        if !cherry.trim().is_empty() && cherry.lines().all(|l| l.starts_with('-')) {
+            return Ok(Some(target.clone()));
+        }
+        // Squashed: the branch's whole change as one commit, compared the same way. The
+        // commit is only written to the object store (no branch points at it).
+        let tree = format!("{oid}^{{tree}}");
+        let squashed = run_git_with(
+            root,
+            &["commit-tree", &tree, "-p", &base, "-m", "squash"],
+            &RunOptions {
+                ok_codes: &[0, 128],
+                env: &[
+                    ("GIT_AUTHOR_NAME", "Branchline"),
+                    ("GIT_AUTHOR_EMAIL", "branchline@localhost"),
+                    ("GIT_COMMITTER_NAME", "Branchline"),
+                    ("GIT_COMMITTER_EMAIL", "branchline@localhost"),
+                ],
+                ..RunOptions::default()
+            },
+        )?;
+        let squashed = squashed.stdout_string().trim().to_string();
+        if squashed.is_empty() {
+            continue;
+        }
+        let cherry = run_git_with(root, &["cherry", target, &squashed, &base], &quiet)?;
+        if cherry.stdout_string().trim().starts_with('-') {
+            return Ok(Some(target.clone()));
+        }
+    }
+    Ok(None)
 }
 
 /// Local branches whose upstream is gone, with how many of their commits exist only here.
@@ -210,6 +299,7 @@ pub fn gone_branches(repo: &str) -> Result<Vec<GoneBranch>, GitError> {
 fn gone_at(root: &Path) -> Result<Vec<GoneBranch>, GitError> {
     let list = list_branches_with_worktrees(root)?;
     let mut out = Vec::new();
+    let mut targets: Option<Vec<String>> = None;
     for b in list.local {
         let Some(upstream) = b.upstream.clone().filter(|_| b.upstream_gone) else {
             continue;
@@ -225,7 +315,16 @@ fn gone_at(root: &Path) -> Result<Vec<GoneBranch>, GitError> {
             .trim()
             .parse()
             .unwrap_or(u32::MAX);
+        let merged_into = if local_only == 0 {
+            None
+        } else {
+            if targets.is_none() {
+                targets = Some(merge_targets(root)?);
+            }
+            merged_elsewhere(root, &b.oid, targets.as_deref().unwrap_or_default())?
+        };
         out.push(GoneBranch {
+            merged_into,
             in_use: b.is_current || b.worktree_path.is_some(),
             name: b.name,
             upstream,
@@ -239,9 +338,14 @@ fn gone_at(root: &Path) -> Result<Vec<GoneBranch>, GitError> {
 }
 
 /// Delete these branches, if each is still a gone branch that loses nothing (checked again
-/// here, whatever the window asked). Returns the deleted ones, with their commits, so they
-/// can be put back.
-pub fn delete_gone_branches(repo: &str, names: &[String]) -> Result<Vec<GoneBranch>, GitError> {
+/// here, whatever the window asked). Branches in `with_local_commits` may also have commits
+/// only on this computer: the user chose to delete those too. Branches with an upstream are
+/// never deleted here. Returns the deleted ones, with their commits, so they can be put back.
+pub fn delete_gone_branches(
+    repo: &str,
+    names: &[String],
+    with_local_commits: &[String],
+) -> Result<Vec<GoneBranch>, GitError> {
     let root = resolve_root(repo)?;
     let _guard = write_lock();
     let gone = gone_at(&root)?;
@@ -250,7 +354,7 @@ pub fn delete_gone_branches(repo: &str, names: &[String]) -> Result<Vec<GoneBran
         let Some(b) = gone.iter().find(|b| &b.name == name) else {
             continue;
         };
-        if !b.removable() {
+        if !b.removable() && !(with_local_commits.contains(name) && !b.in_use) {
             continue;
         }
         // -D: its commits are on the remote, even when not merged into the current branch.

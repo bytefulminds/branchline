@@ -228,6 +228,7 @@ pub fn rebase(
             "Switch to a branch first; a detached HEAD cannot be rebased.".into(),
         ));
     }
+    super::rewrite::remember_before_rewrite(&root)?;
     if matches!(onto, StartPoint::Head) {
         return Err(GitError::Unsupported(
             "Choose a branch or commit to rebase onto.".into(),
@@ -358,6 +359,41 @@ pub fn revert(repo: &str, oid: &str) -> Result<IntegrateOutcome, GitError> {
         });
     }
     conclude(repo, &out)
+}
+
+/// How far `reset_to` goes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ResetMode {
+    /// Only the branch moves; the changes of the commits after it stay staged.
+    Soft,
+    /// The branch and the index move; those changes stay in the working tree, unstaged.
+    Mixed,
+    /// The branch, the index and the working tree move; uncommitted changes are lost.
+    Hard,
+}
+
+/// Point the current branch (or a detached HEAD) at `oid` with `git reset`.
+pub fn reset_to(repo: &str, oid: &str, mode: ResetMode) -> Result<(), GitError> {
+    let root = resolve_root(repo)?;
+    validate_oid(oid)?;
+    let _guard = write_lock();
+    ready(repo)?;
+    super::rewrite::remember_before_rewrite(&root)?;
+    let flag = match mode {
+        ResetMode::Soft => "--soft",
+        ResetMode::Mixed => "--mixed",
+        ResetMode::Hard => "--hard",
+    };
+    // The id is checked to be hexadecimal, so it can never be read as an option.
+    let out = git(&root, &["reset", "-q", flag, oid])?;
+    if out.code != 0 {
+        return Err(GitError::GitFailed {
+            code: out.code,
+            stderr: text(&out),
+        });
+    }
+    Ok(())
 }
 
 /// Continue, skip or abort the operation in progress.

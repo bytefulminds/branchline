@@ -53,15 +53,15 @@ describe("staging", () => {
       repo: REPO.path,
       paths: ["src/app.ts"],
     });
-    await screen.findByText("2 staged · 1 unstaged");
+    await screen.findByText("2 staged · 1 untracked");
   });
 
-  it("lists staged changes above unstaged ones", async () => {
+  it("lists staged changes above unstaged ones, and untracked files last", async () => {
     const { list } = await openRepo();
     const groups = within(list)
       .getAllByRole("group")
       .map((g) => g.getAttribute("aria-label")?.replace(/ \(\d+\)$/, ""));
-    expect(groups).toEqual(["Staged changes", "Unstaged changes"]);
+    expect(groups).toEqual(["Staged changes", "Unstaged changes", "Untracked files"]);
   });
 
   it("stages and unstages the selected file with Space", async () => {
@@ -74,9 +74,9 @@ describe("staging", () => {
     await user.keyboard("{ArrowDown}{ArrowDown}");
     expect(option(list, "app.ts")).toHaveAttribute("aria-selected", "true");
     await user.keyboard(" ");
-    await screen.findByText("2 staged · 1 unstaged");
-    // The selection moved to the next unstaged file.
-    expect(option(list, "new file.md")).toHaveAttribute("aria-selected", "true");
+    await screen.findByText("2 staged · 1 untracked");
+    // No unstaged file is left: the selection follows the file to the staged ones.
+    expect(option(list, "app.ts")).toHaveAttribute("aria-selected", "true");
     expect(calls.filter((c) => c.cmd === "stage_files")).toHaveLength(1);
   });
 
@@ -151,6 +151,7 @@ describe("staging", () => {
     const { user, calls, list } = await openRepo((cmd) =>
       cmd === "apply_lines" ? STAGED : undefined,
     );
+    await user.click(within(list).getByText("Untracked files"));
     await user.click(option(list, "new file.md"));
     const diff = await screen.findByRole("region", { name: "Changes in notes/new file.md" });
     const [line] = await within(diff).findAllByText(/^new$/);
@@ -223,6 +224,7 @@ describe("staging", () => {
     render(<App />);
     await user.click(openButton());
     const list = await screen.findByRole("listbox", { name: "Changed files" });
+    await user.click(within(list).getByText("Untracked files"));
     const rendered = within(list).getAllByRole("option");
     expect(rendered.length).toBeLessThan(100);
     expect(rendered[0]).toHaveAttribute("aria-setsize", "5000");

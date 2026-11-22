@@ -27,11 +27,16 @@ describe("App", () => {
     });
     const list = screen.getByRole("listbox", { name: "Changed files" });
     expect(within(list).getByText("app.ts")).toBeInTheDocument();
-    expect(within(list).getByText("new file.md")).toBeInTheDocument();
     expect(within(list).getAllByRole("img", { name: "Modified" })).toHaveLength(1);
-    expect(within(list).getAllByRole("img", { name: "Untracked" })).toHaveLength(1);
     expect(within(list).getAllByRole("img", { name: "Renamed" })).toHaveLength(1);
-    expect(screen.getByText("1 staged · 2 unstaged")).toBeInTheDocument();
+    expect(screen.getByText("1 staged · 1 unstaged · 1 untracked")).toBeInTheDocument();
+    // Untracked files have their own group, closed until you open it.
+    expect(within(list).queryByText("new file.md")).not.toBeInTheDocument();
+    await user.click(within(list).getByText("Untracked files"));
+    expect(within(list).getByText("new file.md")).toBeInTheDocument();
+    expect(within(list).getAllByRole("img", { name: "Untracked" })).toHaveLength(1);
+    // The Changes count in the sidebar leaves untracked files out.
+    expect(screen.getByRole("button", { name: /^Changes/ })).toHaveTextContent("2");
     // Branch is visible in the title bar and status bar.
     expect(screen.getAllByText("main").length).toBeGreaterThanOrEqual(2);
     // The opened repository is remembered.
@@ -58,8 +63,10 @@ describe("App", () => {
     // Staged files come first.
     await screen.findByRole("region", { name: "Changes in lib/b.rs" });
 
+    // Down from the last file opens the closed Untracked files group.
     await user.keyboard("{ArrowDown}{ArrowDown}");
     const options = within(list).getAllByRole("option");
+    expect(options).toHaveLength(3);
     expect(options[2]).toHaveAttribute("aria-selected", "true");
     await screen.findByRole("region", { name: "Changes in notes/new file.md" });
   });

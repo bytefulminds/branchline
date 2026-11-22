@@ -29,6 +29,16 @@ export type HeadState =
   | { kind: "detached"; oid: string }
   | { kind: "unborn"; name: string };
 
+/** Mirrors `RewriteInfo` in `src-tauri/src/git/rewrite.rs`. */
+export interface RewriteInfo {
+  /** The upstream commit the branch was rewritten from: the lease for the force push. */
+  lease: string;
+  /** Pushed commits that are no longer part of the branch. */
+  replaced: number;
+  /** Commits pushed by someone else after the rewrite (known from the last fetch). */
+  pushedSince: number;
+}
+
 export interface UpstreamInfo {
   name: string;
   ahead: number;
@@ -52,6 +62,8 @@ export interface RepositoryInfo {
   gitDir: string;
   head: HeadState;
   upstream: UpstreamInfo | null;
+  /** The branch was rewritten in Branchline after it was pushed: it needs a force push. */
+  rewrite?: RewriteInfo | null;
   headCommit: CommitSummary | null;
   operation: RepoOperation | null;
   changes: FileChange[];
@@ -285,6 +297,8 @@ export interface GoneBranch {
   tipTime: number;
   /** Commits that no remote branch has; with 0 deleting it loses nothing. */
   localOnly: number;
+  /** Those commits' changes are on this remote branch anyway (squashed or rebased in). */
+  mergedInto?: string | null;
   /** Checked out here or in another worktree. */
   inUse: boolean;
 }
@@ -347,6 +361,8 @@ export interface PushRequest {
   setUpstream: boolean;
   /** Force with lease. */
   force: boolean;
+  /** With `force`: the only remote commit the push may replace. */
+  lease?: string | null;
 }
 
 export interface RemoteOutcome {
@@ -498,6 +514,9 @@ export interface RebaseSuggestion {
 }
 
 export type PlanAction = "pick" | "reword" | "squash" | "fixup" | "drop";
+
+/** Mirrors `ResetMode` in `src-tauri/src/git/integrate.rs`. */
+export type ResetMode = "soft" | "mixed" | "hard";
 
 export interface PlanStep {
   oid: string;

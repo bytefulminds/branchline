@@ -30,6 +30,7 @@ import type {
   StashResult,
   TagInfo,
   RepositoryInfo,
+  ResetMode,
   StartPoint,
   WorktreeInfo,
   WorktreeTarget,
@@ -133,8 +134,13 @@ export const gitService = {
   /** Local branches whose upstream was deleted on the remote. */
   goneBranches: (repo: string) => call<GoneBranch[]>("gone_branches", { repo }),
   /** Delete those that lose nothing (checked again in the backend); returns the deleted ones. */
-  deleteGoneBranches: (repo: string, names: string[]) =>
-    call<[GoneBranch[], RepositoryInfo]>("delete_gone_branches", { repo, names }),
+  /** `withLocalCommits`: of `names`, those the user chose to delete with their local commits. */
+  deleteGoneBranches: (repo: string, names: string[], withLocalCommits: string[] = []) =>
+    call<[GoneBranch[], RepositoryInfo]>("delete_gone_branches", {
+      repo,
+      names,
+      withLocalCommits,
+    }),
   listRemotes: (repo: string) => call<RemoteInfo[]>("list_remotes", { repo }),
   /** Fetch `remote`, or every remote when null. `opId` identifies it for `cancelRemote`. */
   fetchRemote: (
@@ -249,10 +255,15 @@ export const gitService = {
   ) => call<IntegrateResult>("merge_into_current", { repo, request: { source, ...options } }),
   rebaseCurrent: (repo: string, onto: StartPoint, autostash: boolean) =>
     call<IntegrateResult>("rebase_current", { repo, onto, autostash }),
+  /** Apply the commits pushed after a rewrite on top of the rewritten branch. */
+  bringInPushed: (repo: string) => call<IntegrateResult>("bring_in_pushed", { repo }),
   cherryPick: (repo: string, oid: string) => call<IntegrateResult>("cherry_pick", { repo, oid }),
   /** Cherry-pick several commits in the order given (oldest first). */
   cherryPickMany: (repo: string, oids: string[]) =>
     call<IntegrateResult>("cherry_pick_many", { repo, oids }),
+  /** Move the current branch to a commit: soft keeps the changes staged, mixed unstaged, hard drops them. */
+  resetToCommit: (repo: string, oid: string, mode: ResetMode) =>
+    call<RepositoryInfo>("reset_to_commit", { repo, oid, mode }),
   revertCommit: (repo: string, oid: string) =>
     call<IntegrateResult>("revert_commit", { repo, oid }),
   /** Commits after `base` on the current branch, oldest first. */

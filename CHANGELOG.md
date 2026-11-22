@@ -7,6 +7,44 @@ description on GitLab.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-21
+
+History becomes a place to tidy up your branch: reset it to a commit, edit a message, move a
+commit up or down, or drop one or several, straight from the commit menu. After rewriting a
+pushed branch, Push turns into a force push that never overwrites what someone else pushed.
+Changes shows your files as a tree of folders that you can stage at once, with untracked files
+in a group of their own, and Clean up branches now recognizes squash-merged branches.
+
+### Added
+
+- Drop a commit from the History menu: it is removed from the current branch and the commits
+  after it are applied again, without opening the rebase window. Select several commits to
+  drop them together.
+- Reset the current branch to a commit from its menu: soft, mixed or hard.
+- Edit a commit's message, or move it up or down, from its menu in History.
+- After rewriting a pushed branch, Push becomes Force push, pinned to the commit you rewrote
+  from: commits someone pushed after your rewrite are never overwritten, and Branchline offers
+  to bring them in on top of your rewrite first.
+- Clean up branches recognizes branches that were squashed or rebased into main on the
+  server, and offers branches with commits only on this computer unticked, to delete them
+  anyway when you choose.
+- Changed files are shown as a tree of folders, and a whole folder can be staged, unstaged or
+  discarded at once. A button switches back to a flat list.
+
+### Changed
+
+- Stashing no longer takes untracked files along by default. "Stash and switch" only stashes
+  them when one is in the way of the switch, and the stash dialog leaves them out unless you
+  tick "Include untracked files".
+- Untracked files have their own group in Changes, closed until you open it. The Changes
+  count in the sidebar now adds up the Conflicts, Staged and Unstaged lists, with the number
+  of untracked files shown apart, as "+2".
+
+### Fixed
+
+- Bitbucket: Reviews no longer offers "All projects" for pull requests to review, which
+  Bitbucket cannot list, and showed an error.
+
 ## [0.3.5] - 2026-11-16
 
 The graph gets easier to read: main keeps its own lane and color, so it no longer disappears
