@@ -157,6 +157,21 @@ describe("tags", () => {
     expect(await screen.findByText("Created tag old-release")).toBeInTheDocument();
   });
 
+  it("shows the tagged commit in History", async () => {
+    const commits = makeHistory(20);
+    const tagged = commits[12]!;
+    const { user, list } = await openTags((cmd) => {
+      if (cmd === "list_tags") return [{ ...TAGS[1]!, target: tagged.oid }];
+      if (cmd === "log_page") return { commits, hasMore: false, total: commits.length };
+      if (cmd === "list_refs") return [];
+    });
+    await user.click(within(row(list, "v1.0.0")).getByRole("button", { name: /More actions/ }));
+    await user.click(await screen.findByRole("menuitem", { name: "Show in History" }));
+    const commitList = await screen.findByRole("listbox", { name: "Commits" });
+    const shown = await within(commitList).findByText("Commit number 12");
+    expect(shown.closest('[role="option"]')).toHaveAttribute("aria-selected", "true");
+  });
+
   it("deletes a local tag after confirmation", async () => {
     const { user, calls, list } = await openTags((cmd) => {
       if (cmd === "delete_tag") return REPO;

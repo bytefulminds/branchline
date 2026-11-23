@@ -53,6 +53,7 @@ import { cherryPickProblem, MultiSelectionPanel } from "./MultiSelectionPanel";
 import { EMPTY_SELECTION, nextSelection, oldestFirst, single, type SelectMode } from "./selection";
 import { EMPTY_FILTER, isFiltering, useHistory, type HistoryData } from "./useHistory";
 import { TRUNK_SEGMENT } from "./graph";
+import { MergedFoldedIcon, MergedShownIcon } from "./graphIcons";
 import "./HistoryView.css";
 
 const NO_OIDS: ReadonlySet<string> = new Set();
@@ -95,9 +96,20 @@ export function showFileHistory(repoPath: string, path: string) {
   savedFilters.set(repoPath, { filter: { ...EMPTY_FILTER, path }, open: true });
 }
 
+/** A commit to select and scroll to the next time History opens, per repository. */
+const pendingReveal = new Map<string, string>();
+
+/** Make History open on this commit, selected and in view, with any search cleared. */
+export function showCommitInHistory(repoPath: string, oid: string) {
+  const open = savedFilters.get(repoPath)?.open ?? false;
+  savedFilters.set(repoPath, { filter: EMPTY_FILTER, open });
+  pendingReveal.set(repoPath, oid);
+}
+
 /** Test helper: forget searches. */
 export function resetHistoryFilters() {
   savedFilters.clear();
+  pendingReveal.clear();
 }
 
 /** The columns after Description, which can be resized and hidden. */
@@ -202,6 +214,12 @@ export function HistoryView({
   onShowChanges: () => void;
 }) {
   const saved = savedFilters.get(repo.path);
+  // Read once: the commit that "Show in History" asked for.
+  const [shownCommit] = useState(() => {
+    const oid = pendingReveal.get(repo.path) ?? null;
+    pendingReveal.delete(repo.path);
+    return oid;
+  });
   const [filter, setFilter] = useState<LogFilter>(saved?.filter ?? EMPTY_FILTER);
   const [filtersOpen, setFiltersOpen] = useState(saved?.open ?? false);
   useEffect(() => {
@@ -263,7 +281,9 @@ export function HistoryView({
   }, []);
   const branchActions = useBranchActions();
   const showMenu = useContextMenu();
-  const [selection, setSelection] = useState(EMPTY_SELECTION);
+  const [selection, setSelection] = useState(() =>
+    shownCommit ? single(shownCommit) : EMPTY_SELECTION,
+  );
   const [openFile, setOpenFile] = useState<{ oid: string; file: CommitFile } | null>(null);
   const [detailsWidth, setDetailsWidth] = usePersistentNumber(
     "branchline.layout.commitDetailsWidth",
@@ -289,7 +309,7 @@ export function HistoryView({
   const appliedKey = JSON.stringify(applied);
   const [selectionFor, setSelectionFor] = useState(appliedKey);
   // A commit to show in the middle of the list once it is loaded.
-  const [reveal, setReveal] = useState<string | null>(null);
+  const [reveal, setReveal] = useState<string | null>(shownCommit);
   if (selectionFor !== appliedKey) {
     setSelectionFor(appliedKey);
     // Clearing the search keeps the commit picked from the results, among its neighbours.
@@ -816,13 +836,8 @@ export function HistoryView({
               />
               <IconButton
                 label={collapseMerged ? "Show merged branches" : "Collapse merged branches"}
-                icon={
-                  collapseMerged ? (
-                    <ChevronsUpDown size={16} aria-hidden />
-                  ) : (
-                    <ChevronsDownUp size={16} aria-hidden />
-                  )
-                }
+                // The icon shows the current state: branches shown, or folded with more to show.
+                icon={collapseMerged ? <MergedFoldedIcon /> : <MergedShownIcon />}
                 aria-pressed={collapseMerged}
                 disabled={isFiltering(applied)}
                 onClick={() => setCollapseMerged(!collapseMerged)}

@@ -15,7 +15,7 @@ import { InitDialog } from "./features/repository/InitDialog";
 import { separatorOf } from "./features/worktrees/WorktreeDialog";
 import { BranchActionsProvider } from "./features/branches/BranchActions";
 import { BranchesView } from "./features/branches/BranchesView";
-import { HistoryView, showFileHistory } from "./features/history/HistoryView";
+import { HistoryView, showCommitInHistory, showFileHistory } from "./features/history/HistoryView";
 import { FileHistoryProvider } from "./features/history/fileHistory";
 import { IntegrateActionsProvider } from "./features/integrate/IntegrateActions";
 import { RemoteActionsProvider } from "./features/remote/RemoteActions";
@@ -245,7 +245,15 @@ function Workspace() {
         ) : shownView === "worktrees" ? (
           <WorktreesView repo={state.repo} busy={controller.operation !== null} />
         ) : shownView === "tags" ? (
-          <TagsView key={state.repo.path} repo={state.repo} busy={controller.operation !== null} />
+          <TagsView
+            key={state.repo.path}
+            repo={state.repo}
+            busy={controller.operation !== null}
+            onShowInHistory={(oid) => {
+              showCommitInHistory(state.repo.path, oid);
+              setView("history");
+            }}
+          />
         ) : shownView === "stashes" ? (
           <StashesView
             key={state.repo.path}

@@ -56,6 +56,7 @@ fn req(message: &str, amend: bool) -> CommitRequest {
     CommitRequest {
         message: message.into(),
         amend,
+        skip_hooks: false,
     }
 }
 
@@ -363,5 +364,13 @@ fn failing_hook_is_reported_with_its_output() {
         let err = commit(&s(d), &req("x", false)).unwrap_err();
         assert_eq!(err.kind(), "commitFailed");
         assert!(err.detail().unwrap().contains("lint failed"));
+
+        // With hooks off the same commit goes through.
+        let skip = CommitRequest {
+            skip_hooks: true,
+            ..req("x", false)
+        };
+        commit(&s(d), &skip).unwrap();
+        assert_eq!(git(d, &["log", "-1", "--format=%s"]).trim(), "x");
     }
 }

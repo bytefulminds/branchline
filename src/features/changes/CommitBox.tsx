@@ -30,9 +30,13 @@ interface Message {
 /** Unsent messages per repository; `prefilled` is the prepared message Branchline filled in. */
 const drafts = new Map<string, Message & { amend: boolean; prefilled: string | null }>();
 
-/** Test helper: forget unsent messages. */
+/** Repositories where the user turned Run Git hooks off; kept until Branchline closes. */
+const hooksOff = new Set<string>();
+
+/** Test helper: forget unsent messages and hook choices. */
 export function resetCommitDrafts() {
   drafts.clear();
+  hooksOff.clear();
 }
 
 export function splitMessage(message: string): Message {
@@ -78,6 +82,12 @@ export function CommitBox({
   const saved = drafts.get(repo.path);
   const [message, setMessage] = useState<Message>(saved ?? { summary: "", description: "" });
   const [amend, setAmend] = useState(saved?.amend ?? false);
+  const [runHooks, setRunHooks] = useState(!hooksOff.has(repo.path));
+  const toggleHooks = (on: boolean) => {
+    setRunHooks(on);
+    if (on) hooksOff.delete(repo.path);
+    else hooksOff.add(repo.path);
+  };
   const [draft, setDraft] = useState<CommitDraft | null>(null);
   // The prepared (merge, cherry-pick, ...) message Branchline filled in, if still there.
   const prefilled = useRef<string | null>(saved?.prefilled ?? null);
@@ -237,7 +247,7 @@ export function CommitBox({
     setError(null);
     const text = joinMessage(message);
     const failure = await controller.run(amend ? "Amending" : "Committing", (path) =>
-      gitService.createCommit(path, text, amend),
+      gitService.createCommit(path, text, amend, !runHooks),
     );
     if (failure) {
       setError(failure);
@@ -347,34 +357,54 @@ export function CommitBox({
             />
             <span>Amend last commit</span>
           </label>
-          {settings.ai.enabled &&
-            settings.ai.commitSuggestions &&
-            (suggesting ? (
-              <Button
-                size="sm"
-                variant="ghost"
-                icon={<Square size={12} aria-hidden />}
-                onClick={stopSuggesting}
-                title="Stop (Esc)"
-              >
-                Stop
-              </Button>
-            ) : (
-              <Button
-                size="sm"
-                variant="ghost"
-                icon={<Sparkles size={14} aria-hidden />}
-                disabled={staged === 0 || busy}
-                title={
-                  staged === 0
-                    ? "Stage changes first"
-                    : `Write a message for the staged changes with ${providerModel(settings.ai) || PROVIDERS[settings.ai.provider].name}`
-                }
-                onClick={() => void suggest()}
-              >
-                Suggest message
-              </Button>
-            ))}
+          <div className="bl-commit-box__options">
+            <label
+              className="bl-commit-box__hooks"
+              title={
+                runHooks
+                  ? "Your pre-commit and commit-msg hooks run before committing"
+                  : "Commits skip the pre-commit and commit-msg hooks (git commit --no-verify)"
+              }
+            >
+              <input
+                type="checkbox"
+                role="switch"
+                className="bl-switch bl-switch--sm"
+                checked={runHooks}
+                disabled={busy}
+                onChange={(e) => toggleHooks(e.target.checked)}
+              />
+              <span>Run Git hooks</span>
+            </label>
+            {settings.ai.enabled &&
+              settings.ai.commitSuggestions &&
+              (suggesting ? (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  icon={<Square size={12} aria-hidden />}
+                  onClick={stopSuggesting}
+                  title="Stop (Esc)"
+                >
+                  Stop
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  icon={<Sparkles size={14} aria-hidden />}
+                  disabled={staged === 0 || busy}
+                  title={
+                    staged === 0
+                      ? "Stage changes first"
+                      : `Write a message for the staged changes with ${providerModel(settings.ai) || PROVIDERS[settings.ai.provider].name}`
+                  }
+                  onClick={() => void suggest()}
+                >
+                  Suggest message
+                </Button>
+              ))}
+          </div>
         </div>
 
         {error && (

@@ -4,6 +4,7 @@ import {
   CloudOff,
   Copy,
   GitBranchPlus,
+  History,
   MoreHorizontal,
   Search,
   Tag,
@@ -23,7 +24,16 @@ import { useRemoteActions } from "../remote/RemoteActions";
 import { useTagActions } from "./TagActions";
 import "../branches/BranchesView.css";
 
-export function TagsView({ repo, busy }: { repo: RepositoryInfo; busy: boolean }) {
+export function TagsView({
+  repo,
+  busy,
+  onShowInHistory,
+}: {
+  repo: RepositoryInfo;
+  busy: boolean;
+  /** Open History with this commit selected. */
+  onShowInHistory: (oid: string) => void;
+}) {
   const { tags, create, remove } = useTagActions();
   const branches = useBranchActions();
   const remote = useRemoteActions();
@@ -43,6 +53,14 @@ export function TagsView({ repo, busy }: { repo: RepositoryInfo; busy: boolean }
   const noRemote = remote.remotes.length === 0;
 
   const menu = (t: TagInfo): MenuEntry[] => [
+    {
+      id: "history",
+      label: "Show in History",
+      icon: <History size={16} />,
+      disabled: !t.isCommit,
+      onSelect: () => onShowInHistory(t.target),
+    },
+    { type: "separator", id: "sep-history" },
     {
       id: "checkout",
       label: "Check out",

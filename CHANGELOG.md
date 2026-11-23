@@ -7,6 +7,28 @@ description on GitLab.
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-11-23
+
+A few small additions: commit without running your Git hooks when you need to, jump from a tag
+straight to its commit in History, and a clearer button for folding merged branches.
+
+### Added
+
+- A "Run Git hooks" switch in the commit box, on by default. Turned off, commits skip the
+  pre-commit and commit-msg hooks (git commit --no-verify). The choice is kept per repository
+  until Branchline closes.
+- "Show in History" in the menu of a tag opens History with the tagged commit selected and in
+  view.
+
+### Changed
+
+- The button that collapses merged branches shows the graph's state: a branch beside the main
+  line while merged branches are shown, and a commit with a plus while they are folded.
+
+### Fixed
+
+- The Refresh button gets its keyboard focus back right away when a refresh finishes.
+
 ## [0.4.0] - 2026-11-21
 
 History becomes a place to tidy up your branch: reset it to a commit, edit a message, move a

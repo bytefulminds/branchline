@@ -85,6 +85,27 @@ describe("commit box", () => {
     expect(within(form).getByLabelText("Commit summary")).toHaveValue("");
   });
 
+  it("skips Git hooks when Run Git hooks is turned off", async () => {
+    const { user, calls, form } = await openRepo(REPO, (cmd) =>
+      cmd === "create_commit" ? CLEAN : undefined,
+    );
+    const hooks = within(form).getByRole("switch", { name: "Run Git hooks" });
+    expect(hooks).toBeChecked();
+    await user.click(hooks);
+    expect(hooks).not.toBeChecked();
+    await user.type(within(form).getByLabelText("Commit summary"), "WIP");
+    await user.click(within(form).getByRole("button", { name: /Commit 1 file/ }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.cmd === "create_commit")?.args.request).toEqual({
+        message: "WIP",
+        amend: false,
+        skipHooks: true,
+      }),
+    );
+    // The choice stays for this repository after committing.
+    expect(within(form).getByRole("switch", { name: "Run Git hooks" })).not.toBeChecked();
+  });
+
   it("submits with Ctrl+Enter", async () => {
     const { user, calls, form } = await openRepo(REPO, (cmd) =>
       cmd === "create_commit" ? CLEAN : undefined,
