@@ -7,7 +7,7 @@
 **See the flow of your code: a fast, friendly Git desktop client that shows what Git is
 doing and lets you do it with a click.**
 
-**Version 0.4.0** · [download](https://gitlab.com/bytefulminds/branchline/-/releases) for Windows, macOS and Linux
+**Version 0.4.1** · [download](https://gitlab.com/bytefulminds/branchline/-/releases) for Windows, macOS and Linux
 
 [![pipeline](https://gitlab.com/bytefulminds/branchline/badges/main/pipeline.svg)](https://gitlab.com/bytefulminds/branchline/-/pipelines)
 ![license: MIT](https://img.shields.io/badge/license-MIT-00D1A0)
@@ -103,7 +103,8 @@ both, or type the result yourself.
 The Git console (Ctrl+J) shows every Git command Branchline runs, with its exit code, timing
 and output. When a commit hook such as Husky or lint-staged says no, "Show Git output" takes
 you straight to the reason. Hooks find the same tools as in your terminal, also when you
-start Branchline from the Dock.
+start Branchline from the Dock, and when you need to commit past them, turn off "Run Git
+hooks" in the commit box.
 
 <p align="center">
   <img src="docs/screenshots/git-console.png" alt="A commit stopped by a pre-commit hook, and the Git console showing the failed command with the linter's messages" width="900">
@@ -161,11 +162,11 @@ Branchline lists every open-source package it is built with, with its license.
 </p>
 
 And more: clone or create repositories, fetch, pull and push with live progress and Cancel,
-stashes (also "stash, pull and reapply" when local changes are in the way), tags, worktrees,
-cherry-pick and revert (several commits at once), file history, a file system watcher that
-picks up changes from your editor within a second, full keyboard control with screen reader
-support, and automatic updates when you agree (on Linux, a note with a link to the new
-release).
+stashes (also "stash, pull and reapply" when local changes are in the way), tags (one click
+takes you to their commit in History), worktrees, cherry-pick and revert (several commits at
+once), file history, a file system watcher that picks up changes from your editor within a
+second, full keyboard control with screen reader support, and automatic updates when you
+agree (on Linux, a note with a link to the new release).
 
 ## Getting started
 
