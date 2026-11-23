@@ -37,6 +37,9 @@ pub struct CommitRequest {
     pub message: String,
     #[serde(default)]
     pub amend: bool,
+    /// Skip the pre-commit and commit-msg hooks (`--no-verify`).
+    #[serde(default)]
+    pub skip_hooks: bool,
 }
 
 /// Parse `git var GIT_AUTHOR_IDENT` output: `Name <email> 1700000000 +0100`.
@@ -154,6 +157,9 @@ pub fn commit(repo: &str, req: &CommitRequest) -> Result<String, GitError> {
     if req.amend {
         args.push("--amend");
         super::rewrite::remember_before_rewrite(&root)?;
+    }
+    if req.skip_hooks {
+        args.push("--no-verify");
     }
     let input = format!("{message}\n");
     let result = run_git_with(

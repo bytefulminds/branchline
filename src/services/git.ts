@@ -113,8 +113,12 @@ export const gitService = {
     force = false,
   ) => call<FileDiff>("commit_file_diff", { repo, oid, path, originalPath, force }),
   commitDraft: (repo: string) => call<CommitDraft>("commit_draft", { repo }),
-  createCommit: (repo: string, message: string, amend: boolean) =>
-    call<RepositoryInfo>("create_commit", { repo, request: { message, amend } }),
+  /** `skipHooks` commits with `--no-verify`, so the pre-commit and commit-msg hooks do not run. */
+  createCommit: (repo: string, message: string, amend: boolean, skipHooks = false) =>
+    call<RepositoryInfo>("create_commit", {
+      repo,
+      request: { message, amend, ...(skipHooks ? { skipHooks } : {}) },
+    }),
   listBranches: (repo: string) => call<BranchList>("list_branches", { repo }),
   /** Resolves to a reason the name is invalid, or null when it is fine. */
   checkBranchName: (repo: string, name: string) =>

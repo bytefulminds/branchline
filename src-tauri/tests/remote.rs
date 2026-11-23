@@ -548,6 +548,7 @@ fn autostash_during_a_conflicted_merge_is_held_until_the_merge_is_committed() {
         &branchline_lib::git::commit::CommitRequest {
             message: "Merge".into(),
             amend: false,
+            skip_hooks: false,
         },
     )
     .unwrap();

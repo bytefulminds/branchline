@@ -36,7 +36,28 @@
 .bl-commit-box__row {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   justify-content: space-between;
+  gap: var(--space-1) var(--space-2);
+}
+/* In a narrow panel the options move to their own line instead of squeezing Amend. */
+.bl-commit-box__row > .bl-checkbox {
+  white-space: nowrap;
+}
+.bl-commit-box__options {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+.bl-commit-box__hooks {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text-secondary);
+  font-size: var(--text-small-size);
+  white-space: nowrap;
+  cursor: pointer;
 }
 /* Commit and Commit and push side by side; in a narrow file list they wrap onto two lines. */
 .bl-commit-box__actions {
