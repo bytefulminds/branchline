@@ -836,8 +836,8 @@ export function HistoryView({
               />
               <IconButton
                 label={collapseMerged ? "Show merged branches" : "Collapse merged branches"}
-                // The icon shows what a click gives: branches folded away, or shown again.
-                icon={collapseMerged ? <MergedShownIcon /> : <MergedFoldedIcon />}
+                // The icon shows the current state: branches shown, or folded with more to show.
+                icon={collapseMerged ? <MergedFoldedIcon /> : <MergedShownIcon />}
                 aria-pressed={collapseMerged}
                 disabled={isFiltering(applied)}
                 onClick={() => setCollapseMerged(!collapseMerged)}
